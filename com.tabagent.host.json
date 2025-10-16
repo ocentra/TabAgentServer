@@ -1,0 +1,14 @@
+{
+  "_template_warning": "⚠️ TEMPLATE FILE: DO NOT EDIT VALUES MANUALLY - Installer will replace placeholders",
+  "_template_info": "This is a template that gets dynamically configured by installers (install-gui.ps1, install.sh, etc.)",
+  "_template_instructions": "See README-MANIFEST-TEMPLATE.md for full documentation",
+  "name": "com.tabagent.host",
+  "description": "Tab Agent Native Host",
+  "_comment_path": "TEMPLATE: Installer replaces this with actual executable path (e.g., C:\\Users\\[user]\\AppData\\Local\\TabAgent\\tabagent-host.exe)",
+  "path": "TEMPLATE_PATH_PLACEHOLDER",
+  "type": "stdio",
+  "_comment_origins": "TEMPLATE: Installer replaces this with actual extension ID (e.g., chrome-extension://olfenbdhbkdmgcjheocfocpnjglbghjk/)",
+  "allowed_origins": [
+    "TEMPLATE_EXTENSION_ID_PLACEHOLDER"
+  ]
+}

@@ -1,0 +1,60 @@
+# TabAgent Server Requirements
+
+# IMPORTANT: Python Version Support
+# - Full support: Python 3.9, 3.10, 3.11, 3.12
+# - Limited: Python 3.13 (MediaPipe not yet supported)
+# - Recommended: Python 3.11 or 3.12
+
+# Core dependencies
+pydantic>=2.0.0
+requests>=2.31.0
+
+# API Server
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+typing-extensions>=4.5.0
+
+# Hardware detection (required)
+torch>=2.0.0  # For CUDA detection
+wmi>=1.5.1; platform_system=="Windows"  # For Windows hardware detection
+
+# Model management
+huggingface-hub>=0.20.0  # For HuggingFace model downloads
+
+# Backend implementations (ONNX Runtime builds - choose ONE)
+# Option 1: CPU only (lightweight)
+# onnxruntime>=1.16.0
+
+# Option 2: DirectML (BEST for Windows - supports GPU/NPU/AMD Ryzen AI)
+onnxruntime-directml>=1.16.0; platform_system=="Windows"
+
+# Option 3: CUDA (NVIDIA GPU on Linux/Windows)
+# onnxruntime-gpu>=1.16.0
+
+# Option 4: Fallback CPU for non-Windows
+onnxruntime>=1.16.0; platform_system!="Windows"
+
+# MediaPipe (Python 3.9-3.12 ONLY, NOT 3.13)
+mediapipe>=0.10.0; python_version<"3.13"
+
+# Backend implementations (continued)
+transformers>=4.30.0  # For ONNX tokenization
+
+# Embedding utilities
+numpy>=1.24.0  # For embedding math
+scikit-learn>=1.3.0  # For clustering, evaluation metrics
+
+# Storage - ArangoDB (multi-model: document + graph + vector)
+python-arango>=7.9.0  # Matches IndexedDB architecture on client
+
+# Backend dependencies
+# BitNet - uses subprocess + binaries from CI/CD (no Python deps)
+# llama.cpp - uses subprocess + binaries from CI/CD (no Python deps)
+# ONNX Runtime - uses onnxruntime-directml + transformers
+# MediaPipe - uses mediapipe package (Python 3.9-3.12 only)
+
+# Testing dependencies
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+httpx>=0.24.0  # For async testing

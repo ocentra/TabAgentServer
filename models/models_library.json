@@ -1,0 +1,99 @@
+{
+  "meta_info": {
+    "version": "1.0.0",
+    "last_updated": "2025-01-14",
+    "description": "Curated model library for TabAgent"
+  },
+  "models": {
+    "Llama-3.2-1B-Instruct": {
+      "repo": "bartowski/Llama-3.2-1B-Instruct-GGUF",
+      "type": "gguf_regular",
+      "variants": ["Q4_K_M", "Q4_K_S", "Q8_0", "IQ4_XS", "IQ3_M"],
+      "description": "Fast, capable 1B instruction-tuned model with 128K context",
+      "size_gb": 0.8,
+      "context_length": 131072,
+      "recommended": true,
+      "use_cases": ["chat", "code", "general"],
+      "license": "llama3"
+    },
+    "Llama-3.2-3B-Instruct": {
+      "repo": "bartowski/Llama-3.2-3B-Instruct-GGUF",
+      "type": "gguf_regular",
+      "variants": ["Q4_K_M", "Q4_K_S", "Q8_0", "Q6_K"],
+      "description": "Balanced 3B instruction model with excellent performance",
+      "size_gb": 2.0,
+      "context_length": 131072,
+      "recommended": true,
+      "use_cases": ["chat", "code", "general"],
+      "license": "llama3"
+    },
+    "Phi-4": {
+      "repo": "bartowski/Phi-4-GGUF",
+      "type": "gguf_regular",
+      "variants": ["Q4_K_M", "Q5_K_M", "Q8_0", "Q6_K"],
+      "description": "Microsoft's excellent 14B model with strong reasoning",
+      "size_gb": 8.5,
+      "context_length": 16384,
+      "recommended": true,
+      "use_cases": ["chat", "reasoning", "general"],
+      "license": "mit"
+    },
+    "Qwen2.5-Coder-7B-Instruct": {
+      "repo": "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
+      "type": "gguf_regular",
+      "variants": ["Q4_K_M", "Q5_K_M", "Q8_0", "Q6_K"],
+      "description": "Best coding model at 7B size, excellent for development",
+      "size_gb": 4.5,
+      "context_length": 32768,
+      "recommended": true,
+      "use_cases": ["code", "chat"],
+      "license": "apache-2.0"
+    },
+    "Qwen2.5-14B-Instruct": {
+      "repo": "Qwen/Qwen2.5-14B-Instruct-GGUF",
+      "type": "gguf_regular",
+      "variants": ["Q4_K_M", "Q5_K_M", "Q8_0"],
+      "description": "Powerful general-purpose 14B model with strong capabilities",
+      "size_gb": 8.8,
+      "context_length": 32768,
+      "recommended": true,
+      "use_cases": ["chat", "reasoning", "general"],
+      "license": "apache-2.0"
+    },
+    "Mistral-7B-Instruct-v0.3": {
+      "repo": "TheBloke/Mistral-7B-Instruct-v0.3-GGUF",
+      "type": "gguf_regular",
+      "variants": ["Q4_K_M", "Q5_K_M", "Q8_0"],
+      "description": "Popular 7B instruction model with strong performance",
+      "size_gb": 4.4,
+      "context_length": 32768,
+      "recommended": false,
+      "use_cases": ["chat", "general"],
+      "license": "apache-2.0"
+    },
+    "Gemma-2-2B-Instruct": {
+      "repo": "bartowski/gemma-2-2b-it-GGUF",
+      "type": "gguf_regular",
+      "variants": ["Q4_K_M", "Q5_K_M", "Q8_0"],
+      "description": "Google's efficient 2B instruction model",
+      "size_gb": 1.5,
+      "context_length": 8192,
+      "recommended": false,
+      "use_cases": ["chat", "general"],
+      "license": "gemma"
+    },
+    "BitNet-3B-1.58": {
+      "repo": "microsoft/bitnet-b1.58-3b",
+      "type": "bitnet_1.58",
+      "variants": ["i2_s", "tl1", "tl2"],
+      "description": "Efficient 1.58-bit quantized model with low memory usage",
+      "size_gb": 3.5,
+      "context_length": 4096,
+      "recommended": false,
+      "use_cases": ["experimental", "low-resource"],
+      "license": "mit",
+      "notes": "Requires BitNet backend"
+    }
+  }
+}
+

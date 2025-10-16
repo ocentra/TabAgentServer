@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.log
+
+# Virtual environments
+venv/
+venv-py*/
+bitnet-gpu-env/
+wsl-bitnet-env/
+
+# Reference repositories (for learning, not for committing)
+lemonade-reference/
+BitNet/
+arangodb-reference/
+qdrant-reference/
+petgraph-reference/
+
+# Rust build artifacts (embedded database)
+embedded-db-rs/target/
+embedded-db-rs/Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
