@@ -1,6 +1,17 @@
 # Rust build artifacts
-/target
+/target/
+**/*.rs.bk
 Cargo.lock
+
+# Sled database files
+*.db/
+*.sled/
+
+# Test artifacts - sled database folders
+test_db*/
+temp_db*/
+my_database/
+*_database/
 
 # IDE
 .vscode/
@@ -8,8 +19,4 @@ Cargo.lock
 *.swp
 *.swo
 *~
-
-# OS
-.DS_Store
-Thumbs.db
 
