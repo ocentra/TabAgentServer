@@ -1,7 +1,11 @@
 """
 llama.cpp inference backend manager.
 
-Manages llama-server subprocess with multiple acceleration backends.
+DEPRECATED: This Python subprocess approach will be replaced by direct Rust FFI.
+See: tabagent-rs/crates/model-loader for the new implementation.
+
+This manager spawns llama-server as a subprocess and communicates via HTTP.
+The Rust implementation will use direct FFI to llama.dll for 10-50x lower latency.
 """
 
 import logging

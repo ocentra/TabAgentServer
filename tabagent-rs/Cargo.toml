@@ -1,0 +1,61 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hardware",
+    "crates/model-loader",
+    "crates/python-bindings",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["TabAgent Team"]
+license = "MIT"
+repository = "https://github.com/ocentra/TabAgent"
+
+[workspace.dependencies]
+# Shared dependencies across all crates
+thiserror = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Platform-specific system info
+sysinfo = "0.30"
+
+# FFI
+libloading = "0.8"
+
+# Python bindings
+pyo3 = { version = "0.21", features = ["extension-module"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+# CPU-specific build profiles for distribution
+[profile.release-zen2]
+inherits = "release"
+
+[profile.release-zen3]
+inherits = "release"
+
+[profile.release-zen4]
+inherits = "release"
+
+[profile.release-zen5]
+inherits = "release"
+
+[profile.release-alderlake]
+inherits = "release"
+
+[profile.release-skylake]
+inherits = "release"
+
+[profile.release-portable]
+inherits = "release"
+

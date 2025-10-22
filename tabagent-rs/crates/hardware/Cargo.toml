@@ -1,0 +1,30 @@
+[package]
+name = "tabagent-hardware"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sysinfo.workspace = true
+
+# Platform-specific dependencies
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.56", features = [
+    "Win32_Foundation",
+    "Win32_System_SystemInformation",
+    "Win32_System_SystemServices",
+] }
+winreg = "0.52"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Linux-specific if needed
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# macOS-specific if needed
+
+[dev-dependencies]
