@@ -113,15 +113,14 @@ class BitNetManager:
             f"(quant: {quant_type.value if quant_type else 'unknown'})"
         )
         
-        # Get binary path from BitNet/Release/
+        # Get optimal binary path from BitNet/BitnetRelease/ (CPU architecture-specific)
         binary_path = self._get_binary_path()
         
         if not binary_path.exists():
             raise FileNotFoundError(
                 f"BitNet binary not found: {binary_path}\n"
-                f"Expected: llama-server-bitnet\n"
-                f"Build with: cd BitNet && ./build-all-{platform.system().lower()}.sh\n"
-                f"Or check: BitNet/Release/cpu/{platform.system().lower()}/"
+                f"Expected: llama-server (from BitnetRelease/)\n"
+                f"Initialize submodule: git submodule update --init --recursive"
             )
         
         logger.info(
@@ -153,15 +152,15 @@ class BitNetManager:
                 self.config = config
                 self.model_path = path
                 self.backend_type = self._map_backend_type(config.backend)
-                logger.info(f"llama-server-bitnet ready on port {config.port}")
+                logger.info(f"BitNet llama-server ready on port {config.port}")
                 return True
             else:
-                logger.error("llama-server-bitnet failed to start")
+                logger.error("BitNet llama-server failed to start")
                 self.server = None
                 return False
                 
         except Exception as e:
-            logger.error(f"Failed to start llama-server-bitnet: {e}")
+            logger.error(f"Failed to start BitNet llama-server: {e}")
             self.server = None
             return False
     
@@ -183,11 +182,11 @@ class BitNetManager:
             self.model_path = None
             self.backend_type = None
             
-            logger.info("llama-server-bitnet stopped and model unloaded")
+            logger.info("BitNet llama-server stopped and model unloaded")
             return True
             
         except Exception as e:
-            logger.error(f"Error stopping llama-server-bitnet: {e}")
+            logger.error(f"Error stopping BitNet llama-server: {e}")
             return False
     
     async def generate(
@@ -225,7 +224,7 @@ class BitNetManager:
             "stream": False,
         }
         
-        # Send request to llama-server-bitnet
+        # Send request to BitNet llama-server
         try:
             url = f"http://{self.config.host}:{self.config.port}/v1/chat/completions"
             response = requests.post(
@@ -440,26 +439,77 @@ class BitNetManager:
     @staticmethod
     def _get_binary_path() -> Path:
         """
-        Get path to llama-server-bitnet binary from BitNet/Release/.
+        Get path to optimal llama-server-bitnet binary from BitNet/BitnetRelease/.
+        
+        Uses CPU architecture detection to select the optimal binary variant
+        (zen2, zen3, alderlake, etc.) for 2-5x speedup over portable builds.
         
         Returns:
             Path to binary
+            
+        Raises:
+            FileNotFoundError: If binary not found
         """
+        from hardware.cpu_architecture import CPUArchitectureDetector, get_optimal_binary_path
+        
         # Determine platform
         system_name = platform.system().lower()
         
-        # Binary name
+        # Binary name (same for all variants)
         if system_name == "windows":
-            binary_name = "llama-server-bitnet.exe"
+            binary_name = "llama-server.exe"
         else:
-            binary_name = "llama-server-bitnet"
+            binary_name = "llama-server"
         
-        # Path to BitNet/Release/cpu/{platform}/
-        # backends/bitnet/ -> backends/ -> Server/ -> BitNet/Release/
+        # Path to BitnetRelease/ directory
+        # backends/bitnet/ -> backends/ -> Server/ -> BitNet/BitnetRelease/
         backend_dir = Path(__file__).parent.parent.parent
-        binary_path = backend_dir / "BitNet" / "Release" / "cpu" / system_name / binary_name
+        bitnet_release_dir = backend_dir / "BitNet" / "BitnetRelease"
         
-        return binary_path
+        if not bitnet_release_dir.exists():
+            logger.error(f"BitnetRelease directory not found: {bitnet_release_dir}")
+            # Fallback to old path for backwards compatibility
+            bitnet_release_dir = backend_dir / "BitNet" / "Release"
+            if not bitnet_release_dir.exists():
+                raise FileNotFoundError(
+                    f"BitNet release directory not found. Expected at:\n"
+                    f"  {backend_dir / 'BitNet' / 'BitnetRelease'}\n"
+                    f"Initialize submodule: git submodule update --init --recursive"
+                )
+        
+        # Detect optimal CPU variant
+        try:
+            binary_path = get_optimal_binary_path(
+                bitnet_release_dir,
+                binary_name=binary_name,
+                compute_type="cpu"
+            )
+            
+            if binary_path and binary_path.exists():
+                logger.info(f"Selected BitNet variant: {binary_path.parent.name}")
+                return binary_path
+            
+        except Exception as e:
+            logger.warning(f"CPU detection failed: {e}, using portable fallback")
+        
+        # Fallback to portable if detection fails
+        portable_path = bitnet_release_dir / "cpu" / system_name / "bitnet-portable" / binary_name
+        if portable_path.exists():
+            logger.warning("Using portable BitNet binary (slower, but compatible)")
+            return portable_path
+        
+        # Last resort: try standard
+        standard_path = bitnet_release_dir / "cpu" / system_name / "standard" / binary_name
+        if standard_path.exists():
+            logger.warning("Using standard binary")
+            return standard_path
+        
+        # Nothing found
+        raise FileNotFoundError(
+            f"BitNet binary not found. Searched:\n"
+            f"  CPU-optimized variants in: {bitnet_release_dir / 'cpu' / system_name}\n"
+            f"  Expected binary name: {binary_name}"
+        )
     
     @staticmethod
     def _build_server_args(model_path: str, config: BitNetConfig) -> List[str]:

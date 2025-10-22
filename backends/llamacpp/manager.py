@@ -95,21 +95,44 @@ class LlamaCppManager:
         if not path.exists():
             raise FileNotFoundError(f"Model file not found: {model_path}")
         
-        # Use llama-server-standard from bitnet Binary/ folder
-        # (Both bitnet and standard binaries are there)
+        # Get optimal llama-server from BitNet/BitnetRelease/
+        # Uses CPU architecture detection for 2-5x speedup
+        from hardware.cpu_architecture import get_optimal_binary_path
+        
         system_name = platform.system().lower()
-        binary_name = "llama-server-standard.exe" if system_name == "windows" else "llama-server-standard"
+        binary_name = "llama-server.exe" if system_name == "windows" else "llama-server"
         
-        # Point to bitnet/Binary (shares binaries with BitNetManager)
-        backend_dir = Path(__file__).parent.parent / "bitnet"
-        binary_path = backend_dir / "Binary" / system_name / "cpu" / binary_name
+        # Path to BitnetRelease/ directory
+        backend_dir = Path(__file__).parent.parent.parent
+        bitnet_release_dir = backend_dir / "BitNet" / "BitnetRelease"
         
-        if not binary_path.exists():
+        if not bitnet_release_dir.exists():
             raise FileNotFoundError(
-                f"Binary not found: {binary_path}\n"
-                f"Expected: llama-server-standard\n"
-                f"Copy from: BitNet/Release/cpu/{system_name}/"
+                f"BitnetRelease directory not found: {bitnet_release_dir}\n"
+                f"Initialize submodule: git submodule update --init --recursive"
             )
+        
+        # Detect optimal CPU variant (same logic as BitNet manager)
+        try:
+            binary_path = get_optimal_binary_path(
+                bitnet_release_dir,
+                binary_name=binary_name,
+                compute_type="cpu"
+            )
+            
+            if binary_path and binary_path.exists():
+                logger.info(f"Selected llama.cpp variant: {binary_path.parent.name}")
+            else:
+                raise FileNotFoundError(f"Binary not found at {binary_path}")
+                
+        except Exception as e:
+            logger.warning(f"CPU detection failed: {e}, trying standard fallback")
+            # Fallback to standard
+            binary_path = bitnet_release_dir / "cpu" / system_name / "standard" / binary_name
+            if not binary_path.exists():
+                raise FileNotFoundError(
+                    f"llama.cpp binary not found at {binary_path}"
+                )
         
         logger.info(
             f"Loading model with llama.cpp: {model_path} "
@@ -121,7 +144,7 @@ class LlamaCppManager:
         
         # Create server configuration
         server_config = ServerConfig(
-            executable=config.binary_path,
+            executable=str(binary_path),
             args=args,
             port=config.port,
             health_check_url=f"http://{config.host}:{config.port}/health",
