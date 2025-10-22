@@ -15,12 +15,12 @@ members = [
     
     # ML & Model handling
     "ml-bridge",
-    "crates/hardware",
-    "crates/model-loader",
+    "hardware",
+    "model-loader",
     
     # Python bindings
-    "bindings",             # Database bindings
-    "crates/model-bindings", # Model loader bindings
+    "bindings",         # Database bindings
+    "model-bindings",   # Model loader bindings
 ]
 
 [workspace.package]
@@ -58,8 +58,8 @@ sysinfo = "0.30"
 # FFI & Dynamic loading
 libloading = "0.8"
 
-# Python bindings
-pyo3 = { version = "0.21", features = ["extension-module"] }
+# Python bindings (features added per-crate as needed)
+pyo3 = "0.21"
 
 # Async runtime
 async-trait = "0.1"
@@ -70,6 +70,8 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 # Utils
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.6", features = ["v4", "serde"] }
+tempfile = "3.8"
+num_cpus = "1.16"
 
 [profile.release]
 opt-level = 3

@@ -9,7 +9,7 @@ common = { path = "../common" }
 weaver = { path = "../weaver" }
 
 # PyO3 for Python bindings
-pyo3 = { version = "0.20", features = ["auto-initialize"] }
+pyo3 = { workspace = true, features = ["auto-initialize"] }
 
 # Async
 tokio = { workspace = true }
