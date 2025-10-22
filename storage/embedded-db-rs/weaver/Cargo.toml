@@ -1,0 +1,34 @@
+[package]
+name = "weaver"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Workspace crates
+common = { path = "../common" }
+storage = { path = "../storage" }
+indexing = { path = "../indexing" }
+query = { path = "../query" }
+task-scheduler = { path = "../task-scheduler" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Logging
+log = "0.4"
+
+# Utilities
+uuid = { version = "1.6", features = ["v4"] }
+async-trait = "0.1"
+num_cpus = "1.16"
+
+[dev-dependencies]
+tempfile = "3.8"
+env_logger = "0.11"

@@ -17,10 +17,12 @@ wsl-bitnet-env/
 
 # Reference repositories (for learning, not for committing)
 lemonade-reference/
-BitNet/
 arangodb-reference/
 qdrant-reference/
 petgraph-reference/
+
+# BitNet submodule and binaries (managed separately)
+BitNet/
 
 # Rust build artifacts (embedded database)
 embedded-db-rs/target/
@@ -37,3 +39,4 @@ embedded-db-rs/Cargo.lock
 .DS_Store
 Thumbs.db
 
+/lemonade

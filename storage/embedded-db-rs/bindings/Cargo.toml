@@ -1,0 +1,41 @@
+[package]
+name = "bindings"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "embedded_db"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Workspace crates
+common = { path = "../common" }
+storage = { path = "../storage" }
+indexing = { path = "../indexing" }
+query = { path = "../query" }
+weaver = { path = "../weaver" }
+task-scheduler = { path = "../task-scheduler" }
+ml-bridge = { path = "../ml-bridge" }
+
+# PyO3 for Python bindings
+pyo3 = { version = "0.20", features = ["extension-module", "abi3-py39"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Async (for Weaver integration)
+tokio = { workspace = true }
+
+# Logging
+log = "0.4"
+pyo3-log = "0.9"
+
+# UUID generation
+uuid = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.8"

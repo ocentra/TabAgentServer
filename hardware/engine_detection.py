@@ -12,7 +12,7 @@ Detects available inference engines and hardware acceleration capabilities:
 import subprocess
 import logging
 import importlib.util
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
 from dataclasses import dataclass
 

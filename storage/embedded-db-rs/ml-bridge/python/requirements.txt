@@ -1,0 +1,12 @@
+# ML Bridge Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core ML libraries
+sentence-transformers>=2.2.0  # For embeddings (all-MiniLM-L6-v2)
+spacy>=3.7.0                  # For NER
+transformers>=4.35.0          # For summarization (BART)
+torch>=2.1.0                  # Backend for models
+
+# Required for specific models
+# Run after install: python -m spacy download en_core_web_sm
+
