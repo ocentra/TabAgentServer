@@ -19,9 +19,8 @@ wsl-bitnet-env/
 /references
 
 # External submodules (managed separately)
-/external/BitNet/
-/external/mediapipe/
-/external/onnxruntime/
+/external/
+
 
 # Rust build artifacts (embedded database)
 embedded-db-rs/target/
@@ -38,4 +37,4 @@ embedded-db-rs/Cargo.lock
 .DS_Store
 Thumbs.db
 
-/lemonade
+
