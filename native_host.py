@@ -12,7 +12,7 @@ import os
 from typing import Dict, Any, Optional
 
 # Import typed message definitions from core
-from core.message_types import (
+from Python.core.message_types import (
     ActionType,
     EventType,
     BackendType,
@@ -27,17 +27,17 @@ from core.message_types import (
 )
 
 # Import shared inference service (DRY - used by both HTTP and stdin)
-from core.inference_service import get_inference_service
+from Python.core.inference_service import get_inference_service
 
 # Import backend implementations
-from backends.bitnet import BitNetManager, BitNetConfig, GGUFValidator
-from backends.lmstudio import LMStudioManager
+from Python.backends.bitnet import BitNetManager, BitNetConfig, GGUFValidator
+from Python.backends.lmstudio import LMStudioManager
 
 # Import specialized pipelines (NEW - compose model-cache + model-loader)
-from backends.pipelines import create_pipeline, BasePipeline
+from Python.backends.pipelines import create_pipeline, BasePipeline
 
 # Import HuggingFace authentication
-from core.hf_auth import (
+from Python.core.hf_auth import (
     get_hf_token,
     set_hf_token,
     clear_hf_token,
@@ -157,7 +157,7 @@ except ImportError as e:
     RUST_UNIFIED_API_AVAILABLE = False
     logging.error(f"Rust native handler not available: {e}")
     logging.error("GGUF/BitNet models will FAIL without Rust handler!")
-    logging.error("Install: pip install -e Server/tabagent-rs/native-handler")
+    logging.error("Install: pip install -e Server/Rust/native-handler")
     logging.error("The old Python subprocess approach (llama-server.exe) is deprecated and removed.")
 
 # Try to import Rust model cache (Required for ALL models)
@@ -1033,7 +1033,7 @@ def handle_delete_model(message: Dict[str, Any]) -> Dict[str, Any]:
         Status response
     """
     try:
-        from models import ModelManager
+        from Python.models import ModelManager
         
         model_name = message.get("model_name") or message.get("model")
         
@@ -1628,14 +1628,14 @@ def main():
                     # The old Python subprocess approach (llama-server.exe) is deprecated and 10-50x slower.
                     # Rust uses direct FFI to llama.dll for optimal performance.
                     logging.error(f"Rust handler REQUIRED for GGUF/BitNet model: {model_path}")
-                    logging.error("Install with: pip install -e Server/tabagent-rs/native-handler")
+                    logging.error("Install with: pip install -e Server/Rust/native-handler")
                     response = {
                         "status": "error",
                         "message": (
                             f"Rust native handler is REQUIRED for GGUF/BitNet models.\n"
                             f"The old Python subprocess approach is deprecated.\n\n"
                             f"Install the Rust handler:\n"
-                            f"  1. cd Server/tabagent-rs/native-handler\n"
+                            f"  1. cd Server/Rust/native-handler\n"
                             f"  2. pip install -e .\n\n"
                             f"Model: {model_path}"
                         )

@@ -1,9 +1,9 @@
-[submodule "external/BitNet"]
-	path = external/BitNet
+[submodule "External/BitNet"]
+	path = External/BitNet
 	url = https://github.com/ocentra/BitNet.git
-[submodule "external/onnxruntime"]
-	path = external/onnxruntime
+[submodule "External/onnxruntime"]
+	path = External/onnxruntime
 	url = https://github.com/ocentra/onnxruntime
-[submodule "external/mediapipe"]
-	path = external/mediapipe
+[submodule "External/mediapipe"]
+	path = External/mediapipe
 	url = https://github.com/ocentra/mediapipe.git

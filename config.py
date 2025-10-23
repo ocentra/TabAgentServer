@@ -1,10 +1,10 @@
 """
 Configuration shim for backward compatibility.
-Imports all configuration from core.config module.
+Imports all configuration from Python.core.config module.
 """
 
-from core.config import *
+from Python.core.config import *
 
 # This file exists for backward compatibility
-# All configuration is now in core/config.py
+# All configuration is now in Python/core/config.py
 
