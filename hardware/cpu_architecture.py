@@ -12,6 +12,9 @@ import platform
 import subprocess
 import logging
 import re
+import shutil
+import urllib.request
+import zipfile
 from typing import Optional, Dict, Any
 from enum import Enum
 from dataclasses import dataclass
@@ -554,6 +557,12 @@ class CPUArchitectureDetector:
         Returns:
             Path to optimal variant folder
         """
+        # Check if BitNet directory exists at all
+        bitnet_root = base_path.parent  # e.g., Server/BitNet/ or Server/external/BitNet/
+        if not base_path.exists():
+            logger.warning(f"BitNet release not found at {base_path}")
+            self._download_bitnet_release(bitnet_root)
+        
         arch_info = self.detect()
         
         # Build path: BitnetRelease/{compute_type}/{platform}/{variant}/
@@ -577,6 +586,55 @@ class CPUArchitectureDetector:
         
         logger.info(f"Selected variant: {variant_path}")
         return variant_path
+    
+    def _download_bitnet_release(self, bitnet_root: Path) -> None:
+        """
+        Download BitNet release from GitHub if not present.
+        
+        Args:
+            bitnet_root: Root BitNet directory (e.g., Server/BitNet/)
+        """
+        release_url = "https://github.com/ocentra/BitNet/releases/latest/download/BitNet-Release.zip"
+        logger.info(f"🔽 Downloading BitNet release from {release_url}...")
+        
+        try:
+            # Download to temp location
+            zip_path = bitnet_root.parent / "BitNet-Release.zip"
+            urllib.request.urlretrieve(release_url, zip_path)
+            logger.info(f"✅ Downloaded to {zip_path}")
+            
+            # Extract to temp location
+            temp_extract = bitnet_root.parent / "BitNet-Release-temp"
+            logger.info(f"📦 Extracting to {temp_extract}...")
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_extract)
+            
+            # Move extracted contents to correct location
+            # Zip contains "BitNet-Release/" but code expects "BitnetRelease/"
+            extracted_release = temp_extract / "BitNet-Release"
+            target_release = bitnet_root / "BitnetRelease"
+            
+            if extracted_release.exists():
+                # Create parent if needed
+                bitnet_root.mkdir(parents=True, exist_ok=True)
+                # Move and rename
+                extracted_release.rename(target_release)
+                logger.info(f"✅ Moved to {target_release}")
+            
+            # Cleanup
+            zip_path.unlink()
+            if temp_extract.exists():
+                shutil.rmtree(temp_extract)
+            
+            logger.info(f"✅ BitNet release ready (CPU + GPU) at {target_release}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to download BitNet release: {e}")
+            logger.error(
+                "Please manually run: git submodule update --init --recursive\n"
+                f"Or download from: {release_url}"
+            )
+            raise RuntimeError(f"BitNet binaries not available: {e}")
 
 
 def get_optimal_binary_path(
@@ -639,7 +697,7 @@ if __name__ == "__main__":
         print(f"  Stepping: {info.stepping}")
     
     # Test path resolution
-    base_path = Path(__file__).parent.parent / "BitNet" / "BitnetRelease"
+    base_path = Path(__file__).parent.parent / "external" / "BitNet" / "BitnetRelease"
     if base_path.exists():
         detector = CPUArchitectureDetector()
         variant_path = detector.get_optimal_variant_path(base_path, "cpu")

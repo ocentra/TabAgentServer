@@ -21,6 +21,10 @@ wmi>=1.5.1; platform_system=="Windows"  # For Windows hardware detection
 # Model management
 huggingface-hub>=0.20.0  # For HuggingFace model downloads
 
+# Security & Authentication
+keyring>=24.0.0  # Secure token storage (OS credential store)
+cryptography>=41.0.0  # Fallback encrypted storage
+
 # Backend implementations (ONNX Runtime builds - choose ONE)
 # Option 1: CPU only (lightweight)
 # onnxruntime>=1.16.0
@@ -37,8 +41,12 @@ onnxruntime>=1.16.0; platform_system!="Windows"
 # MediaPipe (Python 3.9-3.12 ONLY, NOT 3.13)
 mediapipe>=0.10.0; python_version<"3.13"
 
-# Backend implementations (continued)
-transformers>=4.30.0  # For ONNX tokenization
+# HuggingFace Transformers (PyTorch/SafeTensors models)
+transformers>=4.30.0  # For SafeTensors/PyTorch model inference + ONNX tokenization
+accelerate>=0.20.0  # For optimized model loading (device_map, quantization)
+bitsandbytes>=0.41.0; platform_system=="Linux" or platform_system=="Windows"  # For 4-bit/8-bit quantization (CUDA required)
+sentencepiece>=0.1.99  # For certain tokenizers (LLaMA, T5)
+protobuf>=3.20.0  # For tokenizer compatibility
 
 # Embedding utilities
 numpy>=1.24.0  # For embedding math

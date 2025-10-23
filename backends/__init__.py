@@ -2,36 +2,50 @@
 Backend implementations for different model types and inference engines.
 
 TabAgent supports multiple powerful backends:
-- BitNet: 1.58-bit quantized models (CPU/GPU)
-- ONNX Runtime: Multi-provider support (CPU/CUDA/DirectML/NPU)
-- llama.cpp: GGUF models with multiple accelerations
-- MediaPipe: On-device Gemma models (.task bundles)
+- GGUF/BitNet: [RUST FFI] tabagent-rs/model-loader (llama.dll)
+- ONNX Runtime: [Python → Rust migration] Multi-provider support
+- MediaPipe: [Python → Rust migration] On-device models
+- Transformers: [Python] PyTorch/SafeTensors (HuggingFace)
+- LM Studio: [Python] External API proxy
 """
 
-from .bitnet import BitNetManager, BitNetConfig
+from .base_backend import (
+    BaseInferenceBackend,
+    TextGenerationBackend,
+    EmbeddingBackend,
+    MultimodalBackend
+)
+from .transformers_backend import (
+    TransformersTextGenBackend,
+    TransformersEmbeddingBackend
+)
+# Legacy Python wrappers removed - now handled by Rust:
+# - BitNetManager (→ Rust model-loader via FFI)
+# - LlamaCppManager (→ Rust model-loader via FFI)
 from .onnxrt import ONNXRuntimeManager, ONNXRTConfig
-from .llamacpp import LlamaCppManager, LlamaCppConfig
 from .mediapipe import MediaPipeManager, MediaPipeConfig
 from .lmstudio import LMStudioManager
 
 __all__ = [
-    # BitNet backend
-    'BitNetManager',
-    'BitNetConfig',
+    # Base backend classes
+    'BaseInferenceBackend',
+    'TextGenerationBackend',
+    'EmbeddingBackend',
+    'MultimodalBackend',
     
-    # ONNX Runtime backend
+    # Transformers backend (PyTorch/SafeTensors) - Python permanent
+    'TransformersTextGenBackend',
+    'TransformersEmbeddingBackend',
+    
+    # ONNX Runtime backend - Python temporary (migrating to Rust)
     'ONNXRuntimeManager',
     'ONNXRTConfig',
     
-    # llama.cpp backend
-    'LlamaCppManager',
-    'LlamaCppConfig',
-    
-    # MediaPipe backend
+    # MediaPipe backend - Python temporary (migrating to Rust)
     'MediaPipeManager',
     'MediaPipeConfig',
     
-    # LM Studio backend
+    # LM Studio backend - External API proxy
     'LMStudioManager',
 ]
 

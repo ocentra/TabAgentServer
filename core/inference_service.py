@@ -1,11 +1,14 @@
 """
-Inference Service - Shared Logic Layer
+Inference Service - Unified Router for ALL Communication Channels
 
-Extracted from native_host.py to be used by BOTH:
-- HTTP API (FastAPI)
-- Native messaging (stdin/stdout)
+Delegates to native_host.py unified pipeline architecture.
+Used by THREE channels (DRY - single implementation):
+1. HTTP API (FastAPI) 
+2. Native messaging (stdin/stdout Chrome extension)
+3. WebRTC (future)
 
-DRY principle: Single source of truth for inference logic.
+All channels speak the same language via core.message_types.
+All channels route through the same pipeline loading logic.
 """
 
 import logging
@@ -37,234 +40,96 @@ class InferenceService:
     """
     
     def __init__(self):
-        """Initialize inference service"""
-        self.bitnet_manager: Optional[Any] = None
+        """
+        Initialize inference service.
+        
+        NOTE: This is now a THIN ROUTER that delegates to native_host.py
+        All actual loading/generation logic lives in native_host.py
+        """
+        # Legacy manager references (kept for backward compatibility with get_active_manager)
+        # Note: BitNet and llama.cpp are now handled by Rust (model-loader via FFI)
         self.lmstudio_manager: Optional[Any] = None
-        self.llamacpp_manager: Optional[Any] = None
         self.onnx_manager: Optional[Any] = None
         self.mediapipe_manager: Optional[Any] = None
         
-        logger.info("InferenceService initialized")
+        # Track last loaded model for HTTP API
+        self._last_loaded_source: Optional[str] = None
+        self._last_backend_type: Optional[str] = None
+        
+        logger.info("InferenceService initialized (delegates to native_host.py unified pipeline)")
     
     def load_model(
         self,
         model_path: str,
-        progress_callback: Optional[ProgressCallback] = None
+        progress_callback: Optional[ProgressCallback] = None,
+        auth_token: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Load model - routes to appropriate backend.
+        Load model using UNIFIED PIPELINE ARCHITECTURE.
         
-        Auto-detects model type and selects best backend.
-        Supports: BitNet (.gguf bitnet), ONNX (.onnx), llama.cpp (.gguf), MediaPipe (.task)
+        Delegates to native_host.load_model_unified() for:
+        - Rust-based detection (model-cache::detect_model_py)
+        - Task detection (image-to-text, speech-to-text, text-generation)
+        - Pipeline routing (Florence2, Whisper, TextGen, CLIP, etc.)
+        - Specialized backends (transformers-based pipelines)
+        
+        This ensures ALL channels (HTTP, Native Messaging, WebRTC) use SAME code!
         
         Args:
-            model_path: Path to model file
-            progress_callback: Optional progress callback
+            model_path: Path to model file or HuggingFace repo
+            progress_callback: Optional progress callback (not used in pipeline flow yet)
+            auth_token: Optional HuggingFace token for private models
             
         Returns:
             Response dict with status and payload
         """
-        from backends.bitnet.validator import GGUFValidator
-        from backends.bitnet import BitNetManager, BitNetConfig
-        from backends.onnxrt import ONNXRuntimeManager
-        from backends.llamacpp import LlamaCppManager
-        from backends.llamacpp.config import LlamaCppConfig, LlamaCppBackend
-        from pathlib import Path
-        
         try:
-            path = Path(model_path)
-            file_extension = path.suffix.lower()
+            logger.info(f"[InferenceService] Loading model via unified pipeline: {model_path}")
             
-            logger.info(f"Loading model: {model_path} (extension: {file_extension})")
+            # Import from native_host (DRY - single source of truth!)
+            from native_host import load_model_unified, _loaded_pipelines
             
-            # Route based on file extension
-            if file_extension == ".onnx":
-                # ONNX Runtime backend
-                logger.info("Detected ONNX model, using ONNX Runtime")
-                
-                if self.onnx_manager is None:
-                    self.onnx_manager = ONNXRuntimeManager()
-                
-                # Auto-detect best acceleration
-                from core.message_types import AccelerationBackend
-                from hardware.engine_detection import AccelerationDetector
-                
-                detector = AccelerationDetector()
-                backends = detector.detect_all()
-                
-                # Priority: CUDA > DirectML > NPU > CPU
-                if backends.get(AccelerationBackend.CUDA, False):
-                    acceleration = AccelerationBackend.CUDA
-                    logger.info("Using CUDA acceleration for ONNX")
-                elif backends.get(AccelerationBackend.DIRECTML, False):
-                    acceleration = AccelerationBackend.DIRECTML
-                    logger.info("Using DirectML acceleration for ONNX")
-                elif backends.get(AccelerationBackend.NPU, False):
-                    acceleration = AccelerationBackend.NPU
-                    logger.info("Using NPU acceleration for ONNX")
-                else:
-                    acceleration = AccelerationBackend.CPU
-                    logger.info("Using CPU for ONNX (no GPU/NPU detected)")
-                
-                success = self.onnx_manager.load_model(
-                    model_path,
-                    acceleration=acceleration
-                )
-                
-                if success:
-                    return {
-                        "status": "success",
-                        "type": EventType.WORKER_READY.value,
-                        "payload": {
-                            "backend": "onnx_runtime",
-                            "modelPath": model_path,
-                            "executionProvider": "onnx_cpu"
-                        }
-                    }
-                else:
-                    return {
-                        "status": "error",
-                        "message": "Failed to load ONNX model"
-                    }
+            # Call unified pipeline loader
+            result = load_model_unified(
+                source=model_path,
+                auth_token=auth_token
+            )
             
-            elif file_extension == ".gguf":
-                # Detect if BitNet or standard GGUF
-                model_type = GGUFValidator.detect_model_type(model_path)
-                logger.info(f"Detected GGUF model type: {model_type.value}")
+            if result["status"] == "success":
+                # Track loaded model
+                self._last_loaded_source = model_path
+                self._last_backend_type = result.get("backend", "unknown")
                 
-                if model_type == ModelType.BITNET:
-                    # BitNet backend
-                    logger.info("Using BitNet backend")
-                    
-                    if self.bitnet_manager is None:
-                        self.bitnet_manager = BitNetManager(BitNetConfig())
-                    
-                    has_gpu = GGUFValidator.detect_cuda_available()
-                    backend_type = GGUFValidator.get_backend_for_model(model_type, has_gpu=has_gpu)
-                    
-                    self.bitnet_manager.load_model(model_path, progress_callback)
-                    
-                    return {
-                        "status": "success",
-                        "type": EventType.WORKER_READY.value,
-                        "payload": {
-                            "backend": backend_type.value,
-                            "modelPath": model_path,
-                            "executionProvider": backend_type.value
-                        }
-                    }
+                logger.info(f"[InferenceService] Model loaded successfully: {self._last_backend_type}")
                 
-                else:
-                    # Standard GGUF - use llama.cpp
-                    logger.info("Using llama.cpp backend")
-                    
-                    if self.llamacpp_manager is None:
-                        self.llamacpp_manager = LlamaCppManager()
-                    
-                    # Auto-detect best backend for llama.cpp
-                    from hardware.engine_detection import AccelerationDetector
-                    
-                    detector = AccelerationDetector()
-                    backends = detector.detect_all()
-                    
-                    # Priority: CUDA > Vulkan > ROCm > Metal > CPU
-                    if backends.get(AccelerationBackend.CUDA, False):
-                        llama_backend = LlamaCppBackend.CUDA
-                        logger.info("Using CUDA backend for llama.cpp")
-                    elif backends.get(AccelerationBackend.VULKAN, False):
-                        llama_backend = LlamaCppBackend.VULKAN
-                        logger.info("Using Vulkan backend for llama.cpp")
-                    elif backends.get(AccelerationBackend.ROCM, False):
-                        llama_backend = LlamaCppBackend.ROCM
-                        logger.info("Using ROCm backend for llama.cpp")
-                    elif backends.get(AccelerationBackend.METAL, False):
-                        llama_backend = LlamaCppBackend.METAL
-                        logger.info("Using Metal backend for llama.cpp")
-                    else:
-                        llama_backend = LlamaCppBackend.CPU
-                        logger.info("Using CPU for llama.cpp (no GPU detected)")
-                    
-                    config = LlamaCppConfig(
-                        backend=llama_backend,
-                        port=8766  # Different from BitNet
-                    )
-                    
-                    success = self.llamacpp_manager.load_model(model_path, config)
-                    
-                    if success:
-                        return {
-                            "status": "success",
-                            "type": EventType.WORKER_READY.value,
-                            "payload": {
-                                "backend": "llama_cpp",
-                                "modelPath": model_path,
-                                "executionProvider": "llama_cpp_cpu"
-                            }
-                        }
-                    else:
-                        return {
-                            "status": "error",
-                            "message": "Failed to load llama.cpp model"
-                        }
-            
-            elif file_extension == ".task":
-                # MediaPipe backend
-                logger.info("Detected MediaPipe .task bundle, using MediaPipe")
+                # Update legacy manager references if needed for backward compatibility
+                backend_type = result.get("backend", "")
+                if backend_type == "python-pipeline":
+                    # Pipeline-based backend - check _loaded_pipelines
+                    if model_path in _loaded_pipelines:
+                        # Store reference for get_active_manager()
+                        pipeline = _loaded_pipelines[model_path]
+                        # Map to legacy manager slots based on pipeline type
+                        pipeline_type = result.get("task", "")
+                        if "image" in pipeline_type or "vision" in pipeline_type:
+                            self.mediapipe_manager = pipeline  # Reuse slot for vision models
+                        else:
+                            self.onnx_manager = pipeline  # Default slot
                 
-                if self.mediapipe_manager is None:
-                    from backends.mediapipe import MediaPipeManager
-                    self.mediapipe_manager = MediaPipeManager()
+                elif "gguf" in backend_type.lower() or "llama" in backend_type.lower():
+                    # GGUF/llama.cpp - manager already set by load_model_unified
+                    pass
+                elif "bitnet" in backend_type.lower():
+                    # BitNet - manager already set
+                    pass
                 
-                # Auto-detect delegate (GPU > CPU)
-                from backends.mediapipe.config import MediaPipeDelegate
-                from hardware.engine_detection import AccelerationDetector
-                
-                detector = AccelerationDetector()
-                backends = detector.detect_all()
-                
-                # Priority: GPU > NPU > CPU for MediaPipe
-                if backends.get(AccelerationBackend.CUDA, False) or backends.get(AccelerationBackend.DIRECTML, False):
-                    delegate = MediaPipeDelegate.GPU
-                    logger.info("Using GPU delegate for MediaPipe")
-                elif backends.get(AccelerationBackend.NPU, False):
-                    delegate = MediaPipeDelegate.NPU
-                    logger.info("Using NPU delegate for MediaPipe")
-                else:
-                    delegate = MediaPipeDelegate.CPU
-                    logger.info("Using CPU delegate for MediaPipe")
-                
-                success = self.mediapipe_manager.load_model(model_path, delegate)
-                
-                if success:
-                    return {
-                        "status": "success",
-                        "type": EventType.WORKER_READY.value,
-                        "payload": {
-                            "backend": "mediapipe",
-                            "modelPath": model_path,
-                            "executionProvider": f"mediapipe_{delegate.value}"
-                        }
-                    }
-                else:
-                    return {
-                        "status": "error",
-                        "message": "Failed to load MediaPipe model"
-                    }
-            
+                return result
             else:
-                return {
-                    "status": "error",
-                    "message": f"Unsupported model format: {file_extension}"
-                }
+                logger.error(f"[InferenceService] Model load failed: {result.get('message', 'Unknown error')}")
+                return result
         
-        except FileNotFoundError as e:
-            logger.error(f"Model file not found: {e}")
-            return {
-                "status": "error",
-                "message": str(e)
-            }
         except Exception as e:
-            logger.error(f"Error loading model: {e}")
+            logger.error(f"[InferenceService] Load error: {e}", exc_info=True)
             return {
                 "status": "error",
                 "message": f"Failed to load model: {str(e)}"
@@ -277,9 +142,10 @@ class InferenceService:
         stream_callback: Optional[StreamCallback] = None
     ) -> Dict[str, Any]:
         """
-        Generate text - routes to active backend.
+        Generate text using UNIFIED PIPELINE ARCHITECTURE.
         
-        Routes to: BitNet, ONNX, llama.cpp, MediaPipe, or external service.
+        Delegates to native_host.generate_via_pipeline() for pipeline-based backends.
+        Falls back to direct manager calls for legacy backends (BitNet, llama.cpp).
         
         Args:
             messages: Chat messages
@@ -293,31 +159,54 @@ class InferenceService:
             settings = InferenceSettings()
         
         try:
-            # Determine which backend to use (priority order)
+            logger.info(f"[InferenceService] Generate request ({len(messages)} messages)")
+            
+            # Check if we have a pipeline-loaded model
+            if self._last_loaded_source and self._last_backend_type == "python-pipeline":
+                # Use unified pipeline generation
+                from native_host import generate_via_pipeline
+                
+                # Convert ChatMessage to dict format expected by pipelines
+                input_data = {
+                    "messages": [{"role": msg.role, "content": msg.content} for msg in messages],
+                    "settings": settings.__dict__ if hasattr(settings, '__dict__') else {}
+                }
+                
+                result = generate_via_pipeline(
+                    source=self._last_loaded_source,
+                    input_data=input_data
+                )
+                
+                if result["status"] == "success":
+                    generated_text = result.get("output", result.get("text", ""))
+                    return {
+                        "status": "success",
+                        "type": EventType.GENERATION_COMPLETE.value,
+                        "payload": {
+                            "output": generated_text,
+                            "generatedText": generated_text
+                        }
+                    }
+                else:
+                    return result
+            
+            # Otherwise fall back to legacy manager routing
             backend_name = None
             manager = None
             use_async = False
             
             # Check ONNX Runtime
-            if self.onnx_manager is not None and self.onnx_manager.is_model_loaded():
-                backend_name = "ONNX Runtime"
-                manager = self.onnx_manager
-                use_async = True
+            if self.onnx_manager is not None and hasattr(self.onnx_manager, 'is_model_loaded'):
+                # Could be legacy ONNX or pipeline stored in slot
+                if hasattr(self.onnx_manager, 'generate'):
+                    backend_name = "ONNX Runtime"
+                    manager = self.onnx_manager
+                    use_async = True
             
-            # Check llama.cpp
-            elif self.llamacpp_manager is not None and self.llamacpp_manager.is_model_loaded():
-                backend_name = "llama.cpp"
-                manager = self.llamacpp_manager
-                use_async = True
-            
-            # Check BitNet
-            elif self.bitnet_manager is not None and self.bitnet_manager.is_model_loaded:
-                backend_name = "BitNet"
-                manager = self.bitnet_manager
-                use_async = False  # BitNet uses sync generation
+            # llama.cpp and BitNet now handled by Rust (no manager needed)
             
             # Check MediaPipe
-            elif self.mediapipe_manager is not None and hasattr(self.mediapipe_manager, 'is_model_loaded') and self.mediapipe_manager.is_model_loaded():
+            elif self.mediapipe_manager is not None and hasattr(self.mediapipe_manager, 'is_model_loaded'):
                 backend_name = "MediaPipe"
                 manager = self.mediapipe_manager
                 use_async = True
@@ -334,11 +223,11 @@ class InferenceService:
                     "message": "No model loaded. Load a model first."
                 }
             
-            logger.info(f"Generate request using {backend_name} ({len(messages)} messages)")
+            logger.info(f"[InferenceService] Using {backend_name}")
             
             # Generate text using active backend
             if use_async:
-                # Async backends (ONNX, llama.cpp, MediaPipe)
+                # Async backends (ONNX, llama.cpp, MediaPipe, pipelines)
                 generated_text = await manager.generate(
                     messages=messages,
                     settings=settings
@@ -369,7 +258,7 @@ class InferenceService:
             }
         
         except Exception as e:
-            logger.error(f"Generation error: {e}")
+            logger.error(f"[InferenceService] Generation error: {e}", exc_info=True)
             return {
                 "status": "error",
                 "type": EventType.GENERATION_ERROR.value,
@@ -385,13 +274,10 @@ class InferenceService:
         Returns:
             Active manager or None
         """
-        # Priority order: ONNX > llama.cpp > BitNet > MediaPipe > External
+        # Priority order: ONNX > MediaPipe > External
+        # Note: GGUF/BitNet handled by Rust (no manager)
         if self.onnx_manager and self.onnx_manager.is_model_loaded():
             return self.onnx_manager
-        elif self.llamacpp_manager and self.llamacpp_manager.is_model_loaded():
-            return self.llamacpp_manager
-        elif self.bitnet_manager and self.bitnet_manager.is_model_loaded:
-            return self.bitnet_manager
         elif self.mediapipe_manager and hasattr(self.mediapipe_manager, 'is_model_loaded') and self.mediapipe_manager.is_model_loaded():
             return self.mediapipe_manager
         elif self.lmstudio_manager and hasattr(self.lmstudio_manager, 'is_server_running') and self.lmstudio_manager.is_server_running:

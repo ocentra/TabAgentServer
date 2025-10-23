@@ -1,8 +1,8 @@
 """
 Backend Adapter
 
-Thin adapter that wraps core.inference_service for HTTP API.
-Reuses ALL existing logic from native_host.py via InferenceService.
+Direct pipeline adapter for HTTP API.
+Uses pipelines directly - no middleman!
 """
 
 import logging
@@ -13,7 +13,6 @@ from core.message_types import (
     InferenceSettings,
     BackendType,
 )
-from core.inference_service import get_inference_service
 from .backend_manager import BackendInterface
 from .types import PerformanceStats
 
@@ -22,27 +21,32 @@ logger = logging.getLogger(__name__)
 
 class InferenceServiceAdapter(BackendInterface):
     """
-    Adapter that wraps InferenceService.
-    Reuses ALL logic from native_host.py via shared service.
+    Pipeline adapter for FastAPI.
+    Uses pipelines directly (same as native_host.py)
     """
     
     def __init__(self):
-        """Initialize adapter with shared service"""
-        self._service = get_inference_service()
+        """Initialize adapter"""
+        from native_host import _loaded_pipelines
+        self._pipelines = _loaded_pipelines  # Reference to native_host's pipeline registry
     
     def is_loaded(self) -> bool:
         """Check if model is loaded"""
-        return self._service.is_model_loaded()
+        return len(self._pipelines) > 0 and any(p.is_loaded() for p in self._pipelines.values())
     
     def get_backend_type(self) -> Optional[BackendType]:
         """Get current backend type"""
-        return self._service.get_backend_type()
+        # Return first loaded pipeline's type
+        for pipeline in self._pipelines.values():
+            if pipeline.is_loaded():
+                return BackendType.PYTHON  # Generic type
+        return None
     
     def get_model_path(self) -> Optional[str]:
         """Get loaded model path"""
-        manager = self._service.get_active_manager()
-        if manager and hasattr(manager, 'current_model_path'):
-            return manager.current_model_path
+        for pipeline in self._pipelines.values():
+            if pipeline.is_loaded() and pipeline.model_id:
+                return pipeline.model_id
         return None
     
     async def generate(
@@ -52,7 +56,7 @@ class InferenceServiceAdapter(BackendInterface):
     ) -> str:
         """
         Generate non-streaming response.
-        Uses existing InferenceService.generate()
+        Uses pipeline directly.
         
         Args:
             messages: Chat messages
@@ -61,13 +65,25 @@ class InferenceServiceAdapter(BackendInterface):
         Returns:
             Generated text
         """
-        # Call shared service (now async - updated to support all backends)
-        result = await self._service.generate(messages, settings)
+        # Get first loaded pipeline
+        pipeline = next((p for p in self._pipelines.values() if p.is_loaded()), None)
+        if not pipeline:
+            raise RuntimeError("No model loaded")
+        
+        # Convert messages to text (simple concatenation for now)
+        text = "\n".join([f"{m.role}: {m.content}" for m in messages])
+        
+        # Call pipeline generate
+        result = pipeline.generate({
+            "text": text,
+            "max_new_tokens": settings.max_new_tokens,
+            "temperature": settings.temperature,
+        })
         
         if result["status"] == "success":
-            return result["payload"]["generatedText"]
+            return result.get("text", "")
         else:
-            raise RuntimeError(result["message"])
+            raise RuntimeError(result.get("message", "Generation failed"))
     
     async def generate_stream(
         self,
@@ -84,57 +100,19 @@ class InferenceServiceAdapter(BackendInterface):
         Yields:
             Generated tokens
         """
-        # Get active manager
-        manager = self._service.get_active_manager()
-        
-        if not manager:
+        # Get first loaded pipeline
+        pipeline = next((p for p in self._pipelines.values() if p.is_loaded()), None)
+        if not pipeline:
             raise RuntimeError("No model loaded")
         
-        # Check if manager supports async streaming
-        if hasattr(manager, 'generate_stream'):
-            # Async backends (ONNX, llama.cpp, MediaPipe)
-            async for token in manager.generate_stream(messages, settings):
-                yield token
-        
-        elif hasattr(manager, 'generate'):
-            # Sync backends with callback (BitNet, external services)
-            tokens: list[str] = []
-            
-            def stream_callback(token: str, tps: Optional[str], num_tokens: int):
-                tokens.append(token)
-            
-            # Generate with callback
-            if hasattr(manager, 'proxy_chat_completion'):
-                # External service (has proxy method)
-                result = manager.proxy_chat_completion(messages, settings, stream_callback)
-            else:
-                # BitNet or similar
-                result = manager.generate(messages, settings, stream_callback)
-            
-            # Yield collected tokens
-            for token in tokens:
-                yield token
-        
-        else:
-            raise RuntimeError(f"Manager {type(manager).__name__} does not support generation")
+        # TODO: Implement streaming via pipeline
+        # For now, fall back to non-streaming
+        text = await self.generate(messages, settings)
+        yield text
     
     def get_stats(self) -> Optional[PerformanceStats]:
         """Get performance statistics"""
-        manager = self._service.get_active_manager()
-        if not manager:
-            return None
-        
-        # Get stats from active manager
-        if hasattr(manager, 'get_state'):
-            state = manager.get_state()
-            if state:
-                return PerformanceStats(
-                    time_to_first_token=state.get("time_to_first_token"),
-                    tokens_per_second=state.get("tokens_per_second"),
-                    input_tokens=state.get("input_tokens"),
-                    output_tokens=state.get("output_tokens"),
-                )
-        
+        # TODO: Implement stats tracking in pipelines
         return None
 
 

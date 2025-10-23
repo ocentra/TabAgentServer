@@ -46,6 +46,11 @@ class ActionType(str, Enum):
     SELECT_ACTIVE_MODEL = "select_active_model"
     ESTIMATE_MODEL_SIZE = "estimate_model_size"
     
+    # HuggingFace Authentication
+    SET_HF_TOKEN = "set_hf_token"
+    GET_HF_TOKEN_STATUS = "get_hf_token_status"
+    CLEAR_HF_TOKEN = "clear_hf_token"
+    
     # Chat history & sync (hybrid storage)
     CREATE_CONVERSATION = "create_conversation"
     GET_CONVERSATION = "get_conversation"

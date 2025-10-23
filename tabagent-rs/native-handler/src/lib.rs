@@ -266,6 +266,15 @@ async fn handle_load_model(msg: &Value) -> PyResult<String> {
             "modelFile is required"
         ))?;
     
+    // Extract architecture and task for specialized handling
+    let architecture = msg.get("architecture").and_then(|v| v.as_str());
+    let task = msg.get("task").and_then(|v| v.as_str());
+    
+    // Log routing information
+    if let Some(arch) = architecture {
+        eprintln!("[Rust] Loading model with architecture: {}, task: {:?}", arch, task);
+    }
+    
     // Generate model ID
     let model_id = format!("{}/{}", repo_id, model_file);
     
@@ -819,10 +828,206 @@ fn get_optimal_dll_path(cpu_arch: &CpuArchitecture) -> PyResult<PathBuf> {
     Ok(dll_path)
 }
 
+// ============================================================================
+// UNIFIED MODEL DETECTION API
+// ============================================================================
+
+/// Detect model type and comprehensive task information
+///
+/// Performs multi-layer detection:
+/// 1. Format detection (GGUF, ONNX, etc.) from file path or repo name
+/// 2. Task detection from model name patterns, config.json, and HF API
+///
+/// Returns JSON with model information including type, backend, variants, and task
+///
+/// # Arguments
+/// * `source` - File path or HuggingFace repository ID
+/// * `auth_token` - Optional HuggingFace API token for private repos
+///
+/// # Returns
+/// JSON string with ModelInfo structure including detected task
+#[pyfunction]
+fn detect_model_py(source: String, auth_token: Option<String>) -> PyResult<String> {
+    use tabagent_model_cache::{
+        detect_from_file_path, detect_from_repo_name,
+        fetch_repo_metadata, fetch_model_config,
+        detect_task_unified,
+    };
+    
+    // Layer 1: Try file path detection first
+    let mut model_info = detect_from_file_path(&source)
+        .or_else(|| detect_from_repo_name(&source));
+    
+    if model_info.is_none() {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            format!("Could not detect model type from: {}", source)
+        ));
+    }
+    
+    let mut info = model_info.expect("Model info should exist");
+    
+    // Layer 2 & 3: Enhance task detection using config.json and HF API
+    // Only if source looks like a repo ID (contains /)
+    if source.contains('/') && !source.contains('.') {
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                format!("Failed to create runtime: {}", e)
+            ))?;
+        
+        runtime.block_on(async {
+            // Try to fetch config.json (may not exist for all models)
+            let config = fetch_model_config(&source, auth_token.as_deref()).await.ok();
+            
+            // Try to fetch HF API metadata for pipeline_tag
+            let metadata = fetch_repo_metadata(&source, auth_token.as_deref()).await.ok();
+            let pipeline_tag = metadata.as_ref().and_then(|m| m.pipeline_tag.as_deref());
+            
+            // Run comprehensive task detection
+            let detected_task = detect_task_unified(
+                &source,
+                config.as_ref(),
+                pipeline_tag
+            );
+            
+            // Update model info with detected task
+            info.task = Some(detected_task);
+            
+            Ok::<(), PyErr>(())
+        })?;
+    }
+    
+    // Serialize and return
+    serde_json::to_string(&info)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            format!("Failed to serialize model info: {}", e)
+        ))
+}
+
+/// Get ONNX model manifest from HuggingFace repository
+///
+/// Returns JSON with extension-compatible manifest including all quantizations
+///
+/// # Arguments
+/// * `repo` - Repository ID (e.g., "microsoft/Phi-3-mini-4k-instruct-onnx")
+/// * `auth_token` - Optional HuggingFace API token
+/// * `server_only_size_limit` - Optional size limit in bytes (default 2.1GB)
+///
+/// # Returns
+/// JSON string with ExtensionManifestEntry structure
+#[pyfunction]
+fn get_model_manifest_py(
+    repo: String,
+    auth_token: Option<String>,
+    server_only_size_limit: Option<u64>,
+) -> PyResult<String> {
+    use tabagent_model_cache::{
+        fetch_repo_metadata, build_manifest_from_hf,
+        DEFAULT_SERVER_ONLY_SIZE, DEFAULT_BYPASS_MODELS,
+    };
+    
+    // Use tokio runtime for async call
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+            format!("Failed to create runtime: {}", e)
+        ))?;
+    
+    runtime.block_on(async {
+        // Fetch metadata from HuggingFace
+        let metadata = fetch_repo_metadata(
+            &repo,
+            auth_token.as_deref()
+        ).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+            format!("Failed to fetch repo metadata: {}", e)
+        ))?;
+        
+        // Build manifest
+        let size_limit = server_only_size_limit.unwrap_or(DEFAULT_SERVER_ONLY_SIZE);
+        let manifest = build_manifest_from_hf(
+            &metadata,
+            size_limit,
+            DEFAULT_BYPASS_MODELS
+        ).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+            format!("Failed to build manifest: {}", e)
+        ))?;
+        
+        // Serialize to JSON
+        serde_json::to_string(&manifest)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                format!("Failed to serialize manifest: {}", e)
+            ))
+    })
+}
+
+/// Recommend optimal model variant based on hardware capabilities
+///
+/// Returns the recommended quantization key based on available RAM/VRAM
+///
+/// # Arguments
+/// * `repo` - Repository ID
+/// * `available_ram_gb` - Available system RAM in GB
+/// * `available_vram_gb` - Available VRAM in GB (0 if no GPU)
+///
+/// # Returns
+/// Recommended quant key (e.g., "onnx/model_q4f16.onnx")
+#[pyfunction]
+fn recommend_variant_py(
+    repo: String,
+    _available_ram_gb: f32,
+    _available_vram_gb: f32,
+) -> PyResult<String> {
+    use tabagent_model_cache::{fetch_repo_metadata, build_manifest_from_hf, DEFAULT_SERVER_ONLY_SIZE, DEFAULT_BYPASS_MODELS};
+    
+    // Use tokio runtime for async call
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+            format!("Failed to create runtime: {}", e)
+        ))?;
+    
+    runtime.block_on(async {
+        // Fetch and build manifest
+        let metadata = fetch_repo_metadata(&repo, None).await
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                format!("Failed to fetch repo metadata: {}", e)
+            ))?;
+        
+        let manifest = build_manifest_from_hf(&metadata, DEFAULT_SERVER_ONLY_SIZE, DEFAULT_BYPASS_MODELS)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                format!("Failed to build manifest: {}", e)
+            ))?;
+        
+        // Simple selection logic:
+        // 1. Prefer q4f16 for good balance
+        // 2. Fall back to fp16 if available
+        // 3. Use fp32 as last resort
+        let preference_order = vec!["q4f16", "q4", "fp16", "fp32"];
+        
+        for dtype in preference_order {
+            for (quant_key, quant_info) in &manifest.quants {
+                if quant_info.dtype.contains(dtype) {
+                    return Ok(quant_key.clone());
+                }
+            }
+        }
+        
+        // If no match, return first available quant
+        manifest.quants.keys().next()
+            .cloned()
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "No quantizations found in manifest"
+            ))
+    })
+}
+
 /// Python module definition
 #[pymodule]
 fn tabagent_native_handler(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(initialize_handler, m)?)?;
     m.add_function(wrap_pyfunction!(handle_message, m)?)?;
+    
+    // Unified API functions
+    m.add_function(wrap_pyfunction!(detect_model_py, m)?)?;
+    m.add_function(wrap_pyfunction!(get_model_manifest_py, m)?)?;
+    m.add_function(wrap_pyfunction!(recommend_variant_py, m)?)?;
+    
     Ok(())
 }

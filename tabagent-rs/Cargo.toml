@@ -18,6 +18,7 @@ members = [
     "hardware",
     "model-loader",
     "model-cache",
+    "pipeline",                # Pipeline interfaces (type-safe)
     
     # Python bindings (Python calls Rust)
     "db-bindings",             # Database bindings

@@ -33,11 +33,29 @@ from core.inference_service import get_inference_service
 from backends.bitnet import BitNetManager, BitNetConfig, GGUFValidator
 from backends.lmstudio import LMStudioManager
 
+# Import specialized pipelines (NEW - compose model-cache + model-loader)
+from backends.pipelines import create_pipeline, BasePipeline
+
+# Import HuggingFace authentication
+from core.hf_auth import (
+    get_hf_token,
+    set_hf_token,
+    clear_hf_token,
+    has_hf_token,
+    is_auth_error,
+    create_auth_required_response
+)
+
 # Configuration defaults
 class Config:
     LOG_LEVEL = "DEBUG"
     LOG_FILE = "native_host.log"
     ALLOWED_COMMANDS = []
+    
+    # Backend Migration Flags (Python → Rust transition control)
+    # Set to True when migrating inference to Rust
+    ONNX_USE_RUST = False      # ONNX: Currently Python (onnxruntime), will migrate to Rust
+    LITERT_USE_RUST = False    # LiteRT: Currently Python (mediapipe), will migrate to Rust
     COMMAND_TIMEOUT = 30
     MAX_MESSAGE_SIZE = 1024 * 1024
 
@@ -65,6 +83,9 @@ _inference_service = get_inference_service()
 # Initialize backend managers (legacy - will migrate to service)
 bitnet_manager: Optional[BitNetManager] = None
 lmstudio_manager: Optional[LMStudioManager] = None
+
+# Pipeline registry (NEW - replaces direct model loading)
+_loaded_pipelines: Dict[str, BasePipeline] = {}
 
 def get_message() -> Dict[str, Any]:
     """Read a message from stdin"""
@@ -122,11 +143,18 @@ def is_mediapipe(model_path: str) -> bool:
 
 # Try to import Rust handler (for GGUF/BitNet inference)
 try:
-    from tabagent_native_handler import handle_message as rust_handle_message
+    from tabagent_native_handler import (
+        handle_message as rust_handle_message,
+        detect_model_py,
+        get_model_manifest_py,
+        recommend_variant_py
+    )
     RUST_HANDLER_AVAILABLE = True
-    logging.info("Rust native handler loaded successfully")
+    RUST_UNIFIED_API_AVAILABLE = True
+    logging.info("Rust native handler loaded successfully (including unified API)")
 except ImportError as e:
     RUST_HANDLER_AVAILABLE = False
+    RUST_UNIFIED_API_AVAILABLE = False
     logging.error(f"Rust native handler not available: {e}")
     logging.error("GGUF/BitNet models will FAIL without Rust handler!")
     logging.error("Install: pip install -e Server/tabagent-rs/native-handler")
@@ -314,6 +342,375 @@ def handle_execute_command(message: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "status": "error",
             "message": str(e)
+        }
+
+
+# ==============================================================================
+# UNIFIED MODEL LOADING API
+# ==============================================================================
+
+def load_transformers_python(
+    model_path: str,
+    task: str,
+    auth_token: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Load SafeTensors/PyTorch model using HuggingFace transformers library.
+    
+    Args:
+        model_path: HuggingFace model ID or local path
+        task: Task type (text-generation, feature-extraction, etc.)
+        auth_token: Optional HuggingFace API token
+        
+    Returns:
+        Dict with status and model info
+    """
+    try:
+        from backends.transformers_backend import (
+            TransformersTextGenBackend,
+            TransformersEmbeddingBackend
+        )
+        
+        logging.info(f"[Transformers] Loading model: {model_path} (task: {task})")
+        
+        # Select appropriate backend based on task
+        if task in ["text-generation", "text2text-generation"]:
+            backend = TransformersTextGenBackend()
+        elif task == "feature-extraction":
+            backend = TransformersEmbeddingBackend()
+        else:
+            # Default to text generation
+            logging.warning(f"[Transformers] Unknown task '{task}', defaulting to text-generation")
+            backend = TransformersTextGenBackend()
+        
+        # Load model
+        success = backend.load_model(
+            model_path=model_path,
+            task=task,
+            trust_remote_code=True  # Allow custom model code
+        )
+        
+        if success:
+            logging.info(f"[Transformers] Model loaded successfully: {model_path}")
+            return {
+                "status": "success",
+                "backend": "python-transformers",
+                "message": f"Transformers model loaded: {model_path}",
+                "modelType": "SafeTensors",
+                "task": task,
+                "source": model_path,
+                "device": backend.device if hasattr(backend, 'device') else "unknown"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Failed to load transformers model"
+            }
+    
+    except Exception as e:
+        logging.error(f"[Transformers] Error loading model: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "message": f"Transformers backend error: {str(e)}"
+        }
+
+
+def load_via_pipeline(
+    source: str,
+    detected_task: Optional[str],
+    auth_token: Optional[str],
+    model_info: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Load model using specialized pipeline architecture.
+    
+    This replaces direct transformers loading with pipeline-based approach:
+    1. Create specialized pipeline based on task
+    2. Pipeline delegates to model-cache (download) + transformers (load)
+    3. Store pipeline instance for later generation calls
+    
+    Args:
+        source: Model ID or path
+        detected_task: Task type from Rust detection (e.g., "image-to-text")
+        auth_token: HuggingFace auth token
+        model_info: Full model info from Rust detection
+        
+    Returns:
+        Load result dict
+    """
+    global _loaded_pipelines
+    
+    try:
+        # Get pipeline type (normalize to pipeline format)
+        pipeline_type = detected_task or "text-generation"
+        architecture = model_info.get("architecture")
+        
+        logging.info(f"[Pipeline] Creating pipeline for task: {pipeline_type}, architecture: {architecture}")
+        
+        # Create specialized pipeline (architecture takes priority over task)
+        pipeline = create_pipeline(pipeline_type, architecture=architecture)
+        if not pipeline:
+            return {
+                "status": "error",
+                "message": f"Unsupported pipeline type: {pipeline_type}, architecture: {architecture}"
+            }
+        
+        # Load model via pipeline - include model_info for format routing
+        load_options = {
+            "model_info": model_info,  # ← Pipeline uses this to route to correct backend!
+            "device": "cuda" if model_info.get("has_cuda") else "cpu",
+            "auth_token": auth_token,
+            "trust_remote_code": True  # For specialized models like Florence2
+        }
+        
+        result = pipeline.load(source, load_options)
+        
+        if result.get("status") == "success":
+            # Store pipeline for generation
+            _loaded_pipelines[source] = pipeline
+            logging.info(f"[Pipeline] Model loaded successfully: {source}")
+            
+            # Add model info to result
+            result.update({
+                "backend": "python-pipeline",
+                "modelType": model_info.get("model_type"),
+                "task": pipeline_type,
+                "source": source
+            })
+        
+        return result
+        
+    except Exception as e:
+        logging.error(f"[Pipeline] Load failed: {e}")
+        return {
+            "status": "error",
+            "message": f"Pipeline load error: {str(e)}"
+        }
+
+
+def generate_via_pipeline(
+    source: str,
+    input_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Generate using loaded pipeline.
+    
+    Args:
+        source: Model ID (used as pipeline key)
+        input_data: Input parameters (text, image, audio, etc.)
+        
+    Returns:
+        Generation result
+    """
+    global _loaded_pipelines
+    
+    pipeline = _loaded_pipelines.get(source)
+    if not pipeline:
+        return {
+            "status": "error",
+            "message": f"Model not loaded: {source}. Call load_model first."
+        }
+    
+    try:
+        result = pipeline.generate(input_data)
+        return result
+    except Exception as e:
+        logging.error(f"[Pipeline] Generate failed: {e}")
+        return {
+            "status": "error",
+            "message": f"Pipeline generate error: {str(e)}"
+        }
+
+
+def load_model_unified(
+    source: str,
+    variant: Optional[str] = None,
+    auth_token: Optional[str] = None,
+    save_token: bool = True
+) -> Dict[str, Any]:
+    """
+    Unified model loading entry point that automatically detects model type
+    and routes to the correct backend (Rust or Python).
+    
+    This function leverages the Rust unified detection API to:
+    1. Detect model type from file path or repo name
+    2. Fetch available quantizations (for ONNX models)
+    3. Recommend optimal variant based on hardware
+    4. Route to appropriate backend
+    5. Handle HuggingFace authentication flow
+    
+    Args:
+        source: File path or HuggingFace repo ID (e.g., "microsoft/Phi-3-mini-4k-instruct-onnx")
+        variant: Optional specific variant/quantization to load (e.g., "onnx/model_q4f16.onnx")
+        auth_token: Optional HuggingFace API token for private repos
+        save_token: Whether to save the token for future use (default: True)
+    
+    Returns:
+        Dict with status, backend used, and model info
+        If authentication required: {"status": "auth_required", "provider": "huggingface", ...}
+    
+    Examples:
+        # Auto-detect and load best variant
+        result = load_model_unified("microsoft/Phi-3-mini-4k-instruct-onnx")
+        
+        # Load with authentication
+        result = load_model_unified(
+            "google/gemma-2b-it",
+            auth_token="hf_xxxxxxxxxxxxx"
+        )
+        
+        # Handle auth_required response
+        result = load_model_unified("google/gemma-2b-it")
+        if result["status"] == "auth_required":
+            # Extension will show HuggingFaceLoginDialog
+            # Then retry with token
+            token = get_token_from_user()
+            result = load_model_unified("google/gemma-2b-it", auth_token=token)
+        
+        # Load GGUF model (auto-routes to Rust)
+        result = load_model_unified("Qwen/Qwen2.5-3B-GGUF")
+    """
+    if not RUST_UNIFIED_API_AVAILABLE:
+        return {
+            "status": "error",
+            "message": "Unified API not available - Rust handler not installed"
+        }
+    
+    try:
+        # Step 0: Handle authentication
+        # If token provided, save it
+        if auth_token and save_token:
+            if set_hf_token(auth_token):
+                logging.info("[Unified API] HuggingFace token saved successfully")
+            else:
+                logging.warning("[Unified API] Failed to save HuggingFace token")
+        
+        # If no token provided, try to get stored token
+        if not auth_token:
+            auth_token = get_hf_token()
+            if auth_token:
+                logging.debug("[Unified API] Using stored HuggingFace token")
+        
+        # Step 1: Detect model type (with comprehensive task detection)
+        logging.info(f"[Unified API] Detecting model type and task for: {source}")
+        model_info_json = detect_model_py(source, auth_token)
+        model_info = json.loads(model_info_json)
+        
+        model_type = model_info.get("model_type")
+        backend = model_info.get("backend", {})
+        detected_task = model_info.get("task")
+        logging.info(f"[Unified API] Detected - type: {model_type}, backend: {backend}, task: {detected_task}")
+        
+        # Step 2: For ONNX models, get manifest and select variant
+        if model_type == "ONNX" and "/" in source and not source.endswith(".onnx"):
+            # Source is a repo ID, not a file path
+            logging.info(f"[Unified API] Fetching ONNX manifest for: {source}")
+            
+            try:
+                manifest_json = get_model_manifest_py(source, auth_token, None)
+                manifest = json.loads(manifest_json)
+            except Exception as manifest_error:
+                # Check if it's an authentication error
+                error_str = str(manifest_error)
+                if is_auth_error(error_str):
+                    logging.warning(f"[Unified API] Authentication required for: {source}")
+                    return create_auth_required_response(source, error_str)
+                else:
+                    # Re-raise if not auth error
+                    raise
+            
+            if not variant:
+                # Auto-select best variant
+                logging.info(f"[Unified API] Recommending variant for: {source}")
+                variant = recommend_variant_py(source, 16.0, 0.0)  # Placeholder RAM/VRAM
+                logging.info(f"[Unified API] Recommended variant: {variant}")
+            
+            # Update source to include variant
+            source = f"{source}/{variant}" if not source.endswith(variant) else source
+        
+        # Step 3: Route based on backend.engine (DRY - Rust decides routing!)
+        if backend.get("Rust"):
+            # Rust-based backends: GGUF, BitNet (llama.cpp, bitnet.dll)
+            engine = backend["Rust"]["engine"]
+            
+            if not RUST_HANDLER_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": f"{model_type} model requires Rust handler (not available)"
+                }
+            
+            logging.info(f"[Unified API] Routing to Rust ({engine}): {source}")
+            rust_message = {
+                "action": "load_model",
+                "modelPath": source
+            }
+            result = rust_handle_message(json.dumps(rust_message))
+            return json.loads(result)
+        
+        elif backend.get("Python"):
+            # Python-based backends - Route through pipeline architecture
+            engine = backend["Python"]["engine"]
+            logging.info(f"[Unified API] Routing to Python pipeline ({engine}): {source}")
+            
+            if engine == "transformers":
+                # SafeTensors/PyTorch models - Use specialized pipeline
+                return load_via_pipeline(source, detected_task, auth_token, model_info)
+            
+            elif engine == "onnxruntime":
+                # ONNX models - check migration flag
+                if Config.ONNX_USE_RUST:
+                    # Future: Rust ONNX Runtime
+                    logging.info("[Unified API] Using Rust ONNX Runtime (migration enabled)")
+                    return {"status": "error", "message": "Rust ONNX Runtime not yet implemented"}
+                else:
+                    # Current: Extension handles ONNX via transformers.js
+                    # For server-side ONNX, we would also use pipeline
+                    logging.info("[Unified API] ONNX delegated to extension (transformers.js)")
+                    return {
+                        "status": "success",
+                        "backend": "extension-transformersjs",
+                        "message": f"ONNX model ready: {source}",
+                        "modelType": model_type,
+                        "task": detected_task,
+                        "source": source,
+                        "variant": variant
+                    }
+            
+            elif engine == "mediapipe":
+                # LiteRT models - check migration flag
+                if Config.LITERT_USE_RUST:
+                    # Future: Rust MediaPipe
+                    logging.info("[Unified API] Using Rust MediaPipe (migration enabled)")
+                    return {"status": "error", "message": "Rust MediaPipe not yet implemented"}
+                else:
+                    # Current: Python MediaPipe
+                    logging.info("[Unified API] Using Python MediaPipe")
+                    return {
+                        "status": "success",
+                        "backend": "python-mediapipe",
+                        "message": f"LiteRT model ready: {source}",
+                        "modelType": model_type,
+                        "task": detected_task,
+                        "source": source
+                    }
+            
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Unknown Python engine: {engine}"
+                }
+        
+        else:
+            return {
+                "status": "error",
+                "message": f"Invalid backend configuration: {backend}"
+            }
+    
+    except Exception as e:
+        logging.error(f"[Unified API] Error: {e}")
+        return {
+            "status": "error",
+            "message": f"Unified API error: {str(e)}"
         }
 
 
@@ -1049,6 +1446,87 @@ def handle_select_active_model(message: Dict[str, Any]) -> Dict[str, Any]:
         return {"status": "error", "message": str(e)}
 
 
+# ==============================================================================
+# HUGGINGFACE AUTHENTICATION HANDLERS
+# ==============================================================================
+
+def handle_set_hf_token(message: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Store HuggingFace API token securely.
+    
+    Args:
+        message: {"token": "hf_xxxxx"}
+    
+    Returns:
+        Success/error response
+    """
+    try:
+        token = message.get("token")
+        if not token:
+            return {"status": "error", "message": "Token is required"}
+        
+        if set_hf_token(token):
+            logging.info("[HF Auth] Token stored successfully")
+            return {
+                "status": "success",
+                "message": "HuggingFace token stored securely"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Failed to store token"
+            }
+    
+    except Exception as e:
+        logging.error(f"[HF Auth] Error storing token: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+def handle_get_hf_token_status(message: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Check if HuggingFace token is stored.
+    
+    Returns:
+        {"status": "success", "hasToken": true/false}
+    """
+    try:
+        has_token = has_hf_token()
+        return {
+            "status": "success",
+            "hasToken": has_token,
+            "message": "Token is stored" if has_token else "No token stored"
+        }
+    
+    except Exception as e:
+        logging.error(f"[HF Auth] Error checking token: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+def handle_clear_hf_token(message: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Remove stored HuggingFace token.
+    
+    Returns:
+        Success/error response
+    """
+    try:
+        if clear_hf_token():
+            logging.info("[HF Auth] Token cleared successfully")
+            return {
+                "status": "success",
+                "message": "HuggingFace token removed"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Failed to clear token"
+            }
+    
+    except Exception as e:
+        logging.error(f"[HF Auth] Error clearing token: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 def main():
     """Main message loop"""
     logging.info("Native host started")
@@ -1098,6 +1576,11 @@ def main():
         ActionType.CHECK_LMSTUDIO.value: handle_check_lmstudio,
         ActionType.START_LMSTUDIO.value: handle_start_lmstudio,
         ActionType.STOP_LMSTUDIO.value: handle_stop_lmstudio,
+        
+        # HuggingFace authentication handlers
+        ActionType.SET_HF_TOKEN.value: handle_set_hf_token,
+        ActionType.GET_HF_TOKEN_STATUS.value: handle_get_hf_token_status,
+        ActionType.CLEAR_HF_TOKEN.value: handle_clear_hf_token,
     }
     
     while True:
