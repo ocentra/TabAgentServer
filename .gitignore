@@ -15,14 +15,13 @@ venv-py*/
 bitnet-gpu-env/
 wsl-bitnet-env/
 
-# Reference repositories (for learning, not for committing)
-lemonade-reference/
-arangodb-reference/
-qdrant-reference/
-petgraph-reference/
+# Reference repositories (moved to references/)
+/references
 
-# BitNet submodule and binaries (managed separately)
-BitNet/
+# External submodules (managed separately)
+/external/BitNet/
+/external/mediapipe/
+/external/onnxruntime/
 
 # Rust build artifacts (embedded database)
 embedded-db-rs/target/
