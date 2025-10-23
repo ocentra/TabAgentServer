@@ -127,8 +127,10 @@ try:
     logging.info("Rust native handler loaded successfully")
 except ImportError as e:
     RUST_HANDLER_AVAILABLE = False
-    logging.warning(f"Rust native handler not available: {e}")
-    logging.warning("GGUF/BitNet models will use Python fallback (deprecated)")
+    logging.error(f"Rust native handler not available: {e}")
+    logging.error("GGUF/BitNet models will FAIL without Rust handler!")
+    logging.error("Install: pip install -e Server/tabagent-rs/native-handler")
+    logging.error("The old Python subprocess approach (llama-server.exe) is deprecated and removed.")
 
 # Try to import Rust model cache (Required for ALL models)
 try:
@@ -1124,11 +1126,11 @@ def main():
             }
             
             if action in model_actions and is_gguf_or_bitnet(model_path):
-                # ===== RUST HANDLER (GGUF/BitNet) =====
+                # ===== RUST HANDLER (GGUF/BitNet) - MANDATORY =====
                 if RUST_HANDLER_AVAILABLE:
                     logging.info(f"Routing {action} for GGUF/BitNet to Rust handler")
                     try:
-                        # Call Rust handler - it MUST return a response
+                        # Call Rust handler - uses direct FFI to llama.dll (10-50x faster than subprocess)
                         response_json = rust_handle_message(json.dumps(message))
                         response = json.loads(response_json)
                         logging.debug(f"Rust handler response: {response}")
@@ -1139,15 +1141,22 @@ def main():
                             "message": f"Rust handler error: {str(e)}"
                         }
                 else:
-                    # Rust not available - log warning and use Python fallback
-                    logging.warning(f"Rust handler not available for {model_path}, using Python fallback")
-                    if action in handlers:
-                        response = handlers[action](message)
-                    else:
-                        response = {
-                            "status": "error",
-                            "message": f"Rust handler unavailable and no Python fallback for: {action}"
-                        }
+                    # RUST IS REQUIRED - No Python fallback for GGUF/BitNet!
+                    # The old Python subprocess approach (llama-server.exe) is deprecated and 10-50x slower.
+                    # Rust uses direct FFI to llama.dll for optimal performance.
+                    logging.error(f"Rust handler REQUIRED for GGUF/BitNet model: {model_path}")
+                    logging.error("Install with: pip install -e Server/tabagent-rs/native-handler")
+                    response = {
+                        "status": "error",
+                        "message": (
+                            f"Rust native handler is REQUIRED for GGUF/BitNet models.\n"
+                            f"The old Python subprocess approach is deprecated.\n\n"
+                            f"Install the Rust handler:\n"
+                            f"  1. cd Server/tabagent-rs/native-handler\n"
+                            f"  2. pip install -e .\n\n"
+                            f"Model: {model_path}"
+                        )
+                    }
             
             elif action in handlers:
                 # ===== PYTHON HANDLER (ONNX/MediaPipe/Other) =====
