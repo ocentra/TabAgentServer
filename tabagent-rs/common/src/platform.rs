@@ -61,6 +61,8 @@ fn get_windows_db_path() -> PathBuf {
 /// Get macOS-specific database path.
 ///
 /// Returns: `~/Library/Application Support/TabAgent/db/`
+#[cfg(target_os = "macos")]
+#[allow(dead_code)]
 fn get_macos_db_path() -> PathBuf {
     if let Some(home) = env::var_os("HOME") {
         PathBuf::from(home)
@@ -79,6 +81,8 @@ fn get_macos_db_path() -> PathBuf {
 /// Returns: `~/.local/share/TabAgent/db/`
 ///
 /// Follows XDG Base Directory specification.
+#[cfg(target_os = "linux")]
+#[allow(dead_code)]
 fn get_linux_db_path() -> PathBuf {
     // Try XDG_DATA_HOME first
     if let Ok(xdg_data_home) = env::var("XDG_DATA_HOME") {

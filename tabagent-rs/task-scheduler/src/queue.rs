@@ -115,10 +115,11 @@ impl Default for TaskQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common::NodeId;
     
     fn create_test_task(priority: TaskPriority) -> Task {
         Task::GenerateEmbedding {
-            node_id: "test".to_string(),
+            node_id: NodeId::from("test"),
             text: "test".to_string(),
             priority,
         }

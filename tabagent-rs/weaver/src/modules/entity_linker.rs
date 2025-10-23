@@ -4,7 +4,7 @@
 //! and creates Entity nodes and MENTIONS edges.
 
 use crate::{WeaverContext, WeaverResult};
-use common::models::{Edge, Entity as EntityNode, Node};
+use common::{NodeId, EdgeId, models::{Edge, Entity as EntityNode, Node}};
 
 /// Processes a newly created node for entity extraction and linking.
 pub async fn on_node_created(
@@ -20,7 +20,7 @@ pub async fn on_node_created(
     }
     
     // Load the node
-    let node = match context.storage.get_node(node_id)? {
+    let node = match context.coordinator.conversations_active().get_node(node_id)? {
         Some(n) => n,
         None => {
             log::warn!("Node {} not found for entity linking", node_id);
@@ -90,14 +90,14 @@ async fn create_or_find_entity(
     
     let entity_id = format!("ent_{}", uuid::Uuid::new_v4());
     let entity = EntityNode {
-        id: entity_id.clone(),
+        id: NodeId::from(entity_id.as_str()),
         label: label.to_string(),
         entity_type: entity_type.to_string(),
         embedding_id: None,
         metadata: serde_json::json!({}),
     };
     
-    context.storage.insert_node(&Node::Entity(entity))?;
+    context.coordinator.knowledge_active().insert_node(&Node::Entity(entity))?;
     
     log::debug!("Created entity node: {} ({})", label, entity_type);
     
@@ -112,9 +112,9 @@ async fn create_mentions_edge(
 ) -> WeaverResult<()> {
     let edge_id = format!("edge_{}", uuid::Uuid::new_v4());
     let edge = Edge {
-        id: edge_id,
-        from_node: from_node_id.to_string(),
-        to_node: to_entity_id.to_string(),
+        id: EdgeId::from(edge_id.as_str()),
+        from_node: NodeId::from(from_node_id),
+        to_node: NodeId::from(to_entity_id),
         edge_type: "MENTIONS".to_string(),
         created_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -123,7 +123,7 @@ async fn create_mentions_edge(
         metadata: serde_json::json!({}),
     };
     
-    context.storage.insert_edge(&edge)?;
+    context.coordinator.knowledge_active().insert_edge(&edge)?;
     
     log::debug!("Created MENTIONS edge: {} -> {}", from_node_id, to_entity_id);
     

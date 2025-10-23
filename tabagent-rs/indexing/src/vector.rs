@@ -147,8 +147,8 @@ impl VectorIndex {
                 .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
             let mut idx_to_id = self.index_to_id.write()
                 .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
-            id_to_idx.insert(id.to_string(), index);
-            idx_to_id.insert(index, id.to_string());
+            id_to_idx.insert(EmbeddingId::from(id), index);
+            idx_to_id.insert(index, EmbeddingId::from(id));
         }
         
         // Store metadata
@@ -156,7 +156,7 @@ impl VectorIndex {
             let mut meta = self.metadata.write()
                 .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
             meta.insert(
-                id.to_string(),
+                EmbeddingId::from(id),
                 VectorMetadata {
                     timestamp,
                     dimension,
@@ -179,9 +179,9 @@ impl VectorIndex {
         let mut meta = self.metadata.write()
             .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
         
-        if let Some(index) = id_to_idx.remove(id) {
+        if let Some(index) = id_to_idx.remove(&EmbeddingId::from(id)) {
             idx_to_id.remove(&index);
-            meta.remove(id);
+            meta.remove(&EmbeddingId::from(id));
             Ok(true)
         } else {
             Ok(false)
@@ -239,7 +239,7 @@ impl VectorIndex {
         self.metadata
             .read()
             .unwrap()
-            .get(id)
+            .get(&EmbeddingId::from(id))
             .map(|m| (m.timestamp, m.dimension))
     }
     
@@ -267,6 +267,7 @@ impl VectorIndex {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+    use common::EmbeddingId;
     
     fn create_test_index() -> (VectorIndex, TempDir) {
         let temp_dir = TempDir::new().unwrap();
@@ -288,8 +289,8 @@ mod tests {
         let results = index.search(&[1.0, 0.0, 0.0], 2).unwrap();
         
         assert_eq!(results.len(), 2);
-        assert_eq!(results[0].id, "v1"); // Exact match
-        assert_eq!(results[1].id, "v2"); // Similar
+        assert_eq!(results[0].id, EmbeddingId::from("v1")); // Exact match
+        assert_eq!(results[1].id, EmbeddingId::from("v2")); // Similar
     }
     
     #[test]

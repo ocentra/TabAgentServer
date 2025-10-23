@@ -27,7 +27,7 @@
 //!
 //! // Queue a task (will wait if high activity and low priority)
 //! scheduler.submit(Task::GenerateEmbedding {
-//!     node_id: "msg_123".to_string(),
+//!     node_id: NodeId::from("msg_123"),
 //!     text: "Hello world".to_string(),
 //!     priority: TaskPriority::Normal,
 //! }).await?;
@@ -237,6 +237,7 @@ impl TaskExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common::NodeId;
     
     #[tokio::test]
     async fn test_scheduler_activity_levels() {
@@ -266,7 +267,7 @@ mod tests {
         
         // Submit a normal priority task (won't execute during high activity)
         let task = Task::GenerateEmbedding {
-            node_id: "test_123".to_string(),
+            node_id: NodeId::from("test_123"),
             text: "Test message".to_string(),
             priority: TaskPriority::Normal,
         };

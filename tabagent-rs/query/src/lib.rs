@@ -55,11 +55,11 @@
 
 pub mod models;
 
-use common::{DbError, DbResult, NodeId};
+use common::{DbError, NodeId};
 use hashbrown::{HashMap, HashSet};
-use indexing::{IndexManager, SearchResult};
+use indexing::IndexManager;
 use models::*;
-use storage::StorageManager;
+use storage::DatabaseCoordinator;
 
 // Re-export key types for convenience
 pub use models::{ConvergedQuery, QueryResult};
@@ -89,8 +89,9 @@ pub type QueryResult2<T> = Result<T, QueryError>;
 /// implements the Converged Query Pipeline, executing queries in an optimized
 /// multi-stage process.
 pub struct QueryManager<'a> {
-    storage: &'a StorageManager,
+    coordinator: &'a DatabaseCoordinator,
     indexing: &'a IndexManager,
+    query_cache: HashMap<String, Vec<QueryResult>>,
 }
 
 impl<'a> QueryManager<'a> {
@@ -109,8 +110,8 @@ impl<'a> QueryManager<'a> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(storage: &'a StorageManager, indexing: &'a IndexManager) -> Self {
-        Self { storage, indexing }
+    pub fn new(coordinator: &'a DatabaseCoordinator, indexing: &'a IndexManager) -> Self {
+        Self { coordinator, indexing, query_cache: HashMap::new() }
     }
 
     /// The main entry point for all queries in the database.
@@ -294,18 +295,18 @@ impl<'a> QueryManager<'a> {
 
                 // Get edge IDs based on direction
                 let edge_ids = match filter.direction {
-                    EdgeDirection::Outbound => self.indexing.get_outgoing_edges(node_id)?,
-                    EdgeDirection::Inbound => self.indexing.get_incoming_edges(node_id)?,
+                    EdgeDirection::Outbound => self.indexing.get_outgoing_edges(node_id.as_str())?,
+                    EdgeDirection::Inbound => self.indexing.get_incoming_edges(node_id.as_str())?,
                     EdgeDirection::Both => {
-                        let mut all_edges = self.indexing.get_outgoing_edges(node_id)?;
-                        all_edges.extend(self.indexing.get_incoming_edges(node_id)?);
+                        let mut all_edges = self.indexing.get_outgoing_edges(node_id.as_str())?;
+                        all_edges.extend(self.indexing.get_incoming_edges(node_id.as_str())?);
                         all_edges
                     }
                 };
 
                 // Fetch actual Edge objects and traverse
                 for edge_id in edge_ids {
-                    let Some(edge) = self.storage.get_edge(&edge_id)? else {
+                    let Some(edge) = self.coordinator.conversations_active().get_edge(edge_id.as_str())? else {
                         continue; // Edge was deleted
                     };
 
@@ -384,7 +385,8 @@ impl<'a> QueryManager<'a> {
             .filter_map(|search_result| {
                 // Filter by candidate set if provided
                 if let Some(ref candidates) = candidates {
-                    if !candidates.contains(&search_result.id) {
+                    // Convert EmbeddingId to NodeId for comparison
+                    if !candidates.contains(&NodeId::from(search_result.id.as_str())) {
                         return None;
                     }
                 }
@@ -397,12 +399,12 @@ impl<'a> QueryManager<'a> {
                 }
 
                 // Fetch the node
-                match self.storage.get_node(&search_result.id) {
-                    Ok(Some(node)) => Some(QueryResult {
-                        node,
+                match self.coordinator.get_message(search_result.id.as_str()).ok()? {
+                    Some(msg) => Some(QueryResult {
+                        node: common::models::Node::Message(msg),
                         similarity_score: Some(search_result.distance),
                     }),
-                    _ => None,
+                    None => None,
                 }
             })
             .collect();
@@ -436,12 +438,12 @@ impl<'a> QueryManager<'a> {
             .skip(offset)
             .take(limit)
             .filter_map(|node_id| {
-                match self.storage.get_node(&node_id) {
-                    Ok(Some(node)) => Some(QueryResult {
-                        node,
+                match self.coordinator.get_message(node_id.as_str()).ok()? {
+                    Some(msg) => Some(QueryResult {
+                        node: common::models::Node::Message(msg),
                         similarity_score: None,
                     }),
-                    _ => None,
+                    None => None,
                 }
             })
             .collect();
@@ -486,8 +488,8 @@ impl<'a> QueryManager<'a> {
         let mut visited = HashSet::new();
         let mut parent_map: HashMap<NodeId, (NodeId, common::models::Edge)> = HashMap::new();
 
-        let start_node_id = start_node_id.to_string();
-        let end_node_id = end_node_id.to_string();
+        let start_node_id = NodeId::from(start_node_id);
+        let end_node_id = NodeId::from(end_node_id);
 
         queue.push_back(start_node_id.clone());
         visited.insert(start_node_id.clone());
@@ -501,10 +503,10 @@ impl<'a> QueryManager<'a> {
             }
 
             // Get all outgoing edge IDs
-            let edge_ids = self.indexing.get_outgoing_edges(&current_id)?;
+            let edge_ids = self.indexing.get_outgoing_edges(current_id.as_str())?;
 
             for edge_id in edge_ids {
-                let Some(edge) = self.storage.get_edge(&edge_id)? else {
+                let Some(edge) = self.coordinator.conversations_active().get_edge(edge_id.as_str())? else {
                     continue; // Edge was deleted
                 };
 
@@ -536,15 +538,14 @@ impl<'a> QueryManager<'a> {
 
         // Fetch all nodes in the path
         path_nodes.push(
-            self.storage
-                .get_node(&start_node_id)?
+            self.coordinator.conversations_active()
+                .get_node(start_node_id.as_str())?
                 .ok_or_else(|| QueryError::GraphTraversal("Start node not found".to_string()))?,
         );
 
         for edge in &path_edges {
-            let node = self
-                .storage
-                .get_node(&edge.to_node)?
+            let node = self.coordinator.conversations_active()
+                .get_node(edge.to_node.as_str())?
                 .ok_or_else(|| QueryError::GraphTraversal("Path node not found".to_string()))?;
             path_nodes.push(node);
         }
@@ -559,27 +560,22 @@ impl<'a> QueryManager<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common::NodeId;
     use common::models::{Chat, Node};
     use serde_json::json;
-    use tempfile::TempDir;
-
-    fn create_test_db() -> (TempDir, StorageManager) {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let db_path = temp_dir.path().join("test.db");
-        let storage = StorageManager::with_indexing(db_path.to_str().unwrap())
-            .expect("Failed to create storage");
-        (temp_dir, storage)
-    }
+    use storage::DatabaseCoordinator;
 
     #[test]
     fn test_structural_query() -> Result<(), Box<dyn std::error::Error>> {
-        let (_temp, storage) = create_test_db();
-        let indexing = storage.index_manager().unwrap();
-        let query_mgr = QueryManager::new(&storage, indexing);
+        let coordinator = DatabaseCoordinator::new()?;
+        let storage = coordinator.conversations_active();
+        let indexing = storage.index_manager()
+            .ok_or("Index manager not available")?;
+        let query_mgr = QueryManager::new(&coordinator, indexing);
 
         // Insert test data
         let chat = Node::Chat(Chat {
-            id: "chat_1".to_string(),
+            id: NodeId::from("chat_1"),
             title: "Test Chat".to_string(),
             topic: "Testing".to_string(),
             created_at: 1234567890,
@@ -606,16 +602,18 @@ mod tests {
 
         let results = query_mgr.query(&query)?;
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].node.id(), "chat_1");
+        assert_eq!(results[0].node.id().as_str(), "chat_1");
 
         Ok(())
     }
 
     #[test]
     fn test_empty_result_set() -> Result<(), Box<dyn std::error::Error>> {
-        let (_temp, storage) = create_test_db();
-        let indexing = storage.index_manager().unwrap();
-        let query_mgr = QueryManager::new(&storage, indexing);
+        let coordinator = DatabaseCoordinator::new()?;
+        let storage = coordinator.conversations_active();
+        let indexing = storage.index_manager()
+            .ok_or("Index manager not available")?;
+        let query_mgr = QueryManager::new(&coordinator, indexing);
 
         let query = ConvergedQuery {
             structural_filters: Some(vec![StructuralFilter {

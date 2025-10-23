@@ -2,7 +2,7 @@
 Windows-specific hardware detection using WMI and Windows APIs
 */
 
-use crate::cpu::{CpuArchitecture, CpuInfo, CpuVendor};
+use crate::cpu::{CpuInfo, CpuVendor};
 use crate::{HardwareError, Result};
 use std::process::Command;
 

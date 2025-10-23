@@ -18,10 +18,11 @@ use serde::{Deserialize, Serialize};
 ///
 /// ```
 /// use common::models::{Node, Chat};
+/// use common::NodeId;
 /// use serde_json::json;
 ///
 /// let chat = Chat {
-///     id: "chat_123".to_string(),
+///     id: NodeId::new("chat_123"),
 ///     title: "Project Discussion".to_string(),
 ///     topic: "Rust Database".to_string(),
 ///     created_at: 1697500000000,
@@ -33,7 +34,7 @@ use serde::{Deserialize, Serialize};
 /// };
 ///
 /// let node = Node::Chat(chat);
-/// assert_eq!(node.id(), "chat_123");
+/// assert_eq!(node.id().as_str(), "chat_123");
 /// ```
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Node {
@@ -68,10 +69,11 @@ impl Node {
     ///
     /// ```
     /// use common::models::{Node, Entity};
+    /// use common::NodeId;
     /// use serde_json::json;
     ///
     /// let entity = Entity {
-    ///     id: "entity_456".to_string(),
+    ///     id: NodeId::new("entity_456"),
     ///     label: "Project Phoenix".to_string(),
     ///     entity_type: "PROJECT".to_string(),
     ///     embedding_id: None,
@@ -79,7 +81,7 @@ impl Node {
     /// };
     ///
     /// let node = Node::Entity(entity);
-    /// assert_eq!(node.id(), "entity_456");
+    /// assert_eq!(node.id().as_str(), "entity_456");
     /// ```
     #[inline]
     pub fn id(&self) -> &NodeId {
@@ -260,12 +262,13 @@ pub struct Attachment {
 ///
 /// ```
 /// use common::models::Edge;
+/// use common::{EdgeId, NodeId};
 /// use serde_json::json;
 ///
 /// let edge = Edge {
-///     id: "edge_789".to_string(),
-///     from_node: "message_123".to_string(),
-///     to_node: "entity_456".to_string(),
+///     id: EdgeId::new("edge_789"),
+///     from_node: NodeId::new("message_123"),
+///     to_node: NodeId::new("entity_456"),
 ///     edge_type: "MENTIONS".to_string(),
 ///     created_at: 1697500000000,
 ///     metadata: json!({"confidence": 0.95}),
@@ -440,9 +443,10 @@ pub struct ModelInfo {
 ///
 /// ```
 /// use common::models::Embedding;
+/// use common::EmbeddingId;
 ///
 /// let embedding = Embedding {
-///     id: "embed_001".to_string(),
+///     id: EmbeddingId::new("embed_001"),
 ///     vector: vec![0.1, 0.2, 0.3], // Typically 384 or 768 dimensions
 ///     model: "all-MiniLM-L6-v2".to_string(),
 /// };

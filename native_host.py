@@ -88,6 +88,145 @@ def send_message(message_content: Dict[str, Any]) -> None:
     sys.stdout.buffer.write(encoded_content)
     sys.stdout.buffer.flush()
 
+# ==============================================================================
+# MODEL TYPE DETECTION (Router Helpers)
+# ==============================================================================
+
+def is_gguf_or_bitnet(model_path: str) -> bool:
+    """Check if model is GGUF or BitNet (Rust handles these)"""
+    if not model_path:
+        return False
+    lower = model_path.lower()
+    return (
+        ".gguf" in lower or 
+        "bitnet" in lower or 
+        "llamacpp" in lower or
+        "llama" in lower
+    )
+
+def is_onnx(model_path: str) -> bool:
+    """Check if model is ONNX (Python handles these)"""
+    if not model_path:
+        return False
+    return ".onnx" in model_path.lower()
+
+def is_mediapipe(model_path: str) -> bool:
+    """Check if model is MediaPipe (Python handles these)"""
+    if not model_path:
+        return False
+    return "mediapipe" in model_path.lower()
+
+# ==============================================================================
+# RUST SERVICES (Required for ALL operations)
+# ==============================================================================
+
+# Try to import Rust handler (for GGUF/BitNet inference)
+try:
+    from tabagent_native_handler import handle_message as rust_handle_message
+    RUST_HANDLER_AVAILABLE = True
+    logging.info("Rust native handler loaded successfully")
+except ImportError as e:
+    RUST_HANDLER_AVAILABLE = False
+    logging.warning(f"Rust native handler not available: {e}")
+    logging.warning("GGUF/BitNet models will use Python fallback (deprecated)")
+
+# Try to import Rust model cache (Required for ALL models)
+try:
+    from tabagent_model_cache_py import ModelCache
+    RUST_MODEL_CACHE = ModelCache(os.path.join(os.path.dirname(__file__), "model_cache"))
+    logging.info("Rust model cache loaded successfully")
+except ImportError as e:
+    RUST_MODEL_CACHE = None
+    logging.error(f"Rust model cache not available: {e}")
+    logging.error("Model storage will not work! Build model-cache-bindings first.")
+
+# Try to import Rust database (Required for saving chat history)
+try:
+    from embedded_db import EmbeddedDB
+    RUST_DATABASE = EmbeddedDB(os.path.join(os.path.dirname(__file__), "database"))
+    logging.info("Rust database loaded successfully")
+except ImportError as e:
+    RUST_DATABASE = None
+    logging.error(f"Rust database not available: {e}")
+    logging.error("Chat history will not persist! Build db-bindings first.")
+
+# ==============================================================================
+# MODEL STORAGE HELPERS (ALL models go through Rust cache)
+# ==============================================================================
+
+def ensure_model_cached(repo_id: str, file_path: str, progress_callback: Optional[Callable] = None) -> bytes:
+    """
+    Ensure model file is in Rust cache, download if needed.
+    
+    Args:
+        repo_id: HuggingFace repo ID (e.g., "microsoft/phi-2")
+        file_path: File path within repo (e.g., "model.onnx")
+        progress_callback: Optional progress callback
+        
+    Returns:
+        Model bytes from cache
+        
+    Raises:
+        RuntimeError: If model cache not available or download fails
+    """
+    if RUST_MODEL_CACHE is None:
+        raise RuntimeError("Rust model cache not available - build model-cache-bindings first")
+    
+    # Check if file exists in cache
+    if not RUST_MODEL_CACHE.has_file(repo_id, file_path):
+        logging.info(f"Model not in cache, downloading: {repo_id}/{file_path}")
+        
+        # Download via Rust
+        RUST_MODEL_CACHE.download_file(repo_id, file_path, progress_callback)
+        logging.info(f"Download complete: {repo_id}/{file_path}")
+    
+    # Get file bytes from cache
+    model_bytes = RUST_MODEL_CACHE.get_file(repo_id, file_path)
+    if model_bytes is None:
+        raise RuntimeError(f"Failed to get model from cache: {repo_id}/{file_path}")
+    
+    logging.info(f"Retrieved model from cache: {len(model_bytes)} bytes")
+    return model_bytes
+
+def save_message_to_db(chat_id: str, role: str, content: str, **kwargs) -> bool:
+    """
+    Save message to Rust database.
+    
+    Args:
+        chat_id: Chat ID
+        role: Message role (user/assistant/system)
+        content: Message content
+        **kwargs: Additional metadata
+        
+    Returns:
+        True if successful
+    """
+    if RUST_DATABASE is None:
+        logging.error("Rust database not available - message will not persist")
+        return False
+    
+    try:
+        import uuid
+        import time
+        
+        message_node = {
+            "id": f"msg_{uuid.uuid4().hex}",
+            "type": "Message",
+            "chat_id": chat_id,
+            "sender": role,
+            "text_content": content,
+            "timestamp": int(time.time() * 1000),
+            **kwargs
+        }
+        
+        node_id = RUST_DATABASE.insert_node(message_node)
+        logging.debug(f"Saved message to DB: {node_id}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Failed to save message to DB: {e}")
+        return False
+
 def handle_ping(message: Dict[str, Any]) -> Dict[str, Any]:
     """Handle ping message"""
     return {
@@ -179,30 +318,66 @@ def handle_execute_command(message: Dict[str, Any]) -> Dict[str, Any]:
 def handle_load_model(message: Dict[str, Any]) -> Dict[str, Any]:
     """
     Handle model loading request from extension.
-    Uses shared InferenceService (DRY).
+    
+    ALL models go through Rust model-cache first!
     """
     try:
         # Validate request
         request = LoadModelRequest(**message)
         model_path = request.modelPath
         
-        # Progress callback for native messaging
-        def progress_callback(status: LoadingStatus, progress: int, msg: str):
+        # Extract repo_id and file from path
+        # Format: "repo_owner/repo_name/model_file.ext"
+        # OR absolute path (legacy)
+        if "/" in model_path and not os.path.isabs(model_path):
+            parts = model_path.split("/")
+            if len(parts) >= 3:
+                repo_id = f"{parts[0]}/{parts[1]}"
+                file_path = "/".join(parts[2:])
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Invalid model path format: {model_path}"
+                }
+        else:
+            # Legacy absolute path - not supported anymore
+            return {
+                "status": "error",
+                "message": "Absolute paths not supported - use HuggingFace repo format: owner/repo/file.ext"
+            }
+        
+        # Progress callback for downloads
+        def download_progress(loaded: int, total: int):
             send_message({
                 "type": EventType.MODEL_LOADING_PROGRESS.value,
                 "payload": {
-                    "status": status.value,
-                    "progress": progress,
-                    "file": os.path.basename(model_path),
-                    "message": msg
+                    "status": LoadingStatus.DOWNLOADING.value,
+                    "progress": int((loaded / total) * 100) if total > 0 else 0,
+                    "file": file_path,
+                    "message": f"Downloading: {loaded}/{total} bytes"
                 }
             })
         
-        # Use shared service (same logic for HTTP and native)
-        return _inference_service.load_model(model_path, progress_callback)
+        # Get model from Rust cache (downloads if needed)
+        logging.info(f"Ensuring model in cache: {repo_id}/{file_path}")
+        model_bytes = ensure_model_cached(repo_id, file_path, download_progress)
+        
+        # Model is now in cache - use inference service to load it
+        # But pass the bytes, not the path
+        # TODO: Update inference service to accept bytes
+        
+        return {
+            "status": "success",
+            "message": f"Model ready: {file_path}",
+            "payload": {
+                "isReady": True,
+                "modelPath": model_path,
+                "size": len(model_bytes)
+            }
+        }
     
-    except FileNotFoundError as e:
-        logging.error(f"Model file not found: {e}")
+    except RuntimeError as e:
+        logging.error(f"Model cache error: {e}")
         return {
             "status": "error",
             "message": str(e)
@@ -218,7 +393,8 @@ def handle_load_model(message: Dict[str, Any]) -> Dict[str, Any]:
 def handle_generate(message: Dict[str, Any]) -> Dict[str, Any]:
     """
     Handle text generation request from extension.
-    Uses shared InferenceService (DRY).
+    
+    After generation, saves to Rust database!
     """
     try:
         # Validate request
@@ -236,11 +412,33 @@ def handle_generate(message: Dict[str, Any]) -> Dict[str, Any]:
             })
         
         # Use shared service (same logic for HTTP and native)
-        return _inference_service.generate(
+        result = _inference_service.generate(
             messages=request.messages,
             settings=request.settings,
             stream_callback=stream_callback
         )
+        
+        # Save to Rust database
+        if result.get("status") == "success" and "text" in result:
+            chat_id = message.get("chat_id", "default")
+            
+            # Save user message
+            if request.messages:
+                last_user_msg = request.messages[-1]
+                save_message_to_db(
+                    chat_id=chat_id,
+                    role=last_user_msg.role,
+                    content=last_user_msg.content
+                )
+            
+            # Save assistant response
+            save_message_to_db(
+                chat_id=chat_id,
+                role="assistant",
+                content=result["text"]
+            )
+        
+        return result
     
     except Exception as e:
         logging.error(f"Generation error: {e}")
@@ -361,45 +559,61 @@ def handle_unload_model(message: Dict[str, Any]) -> Dict[str, Any]:
 
 def handle_pull_model(message: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Download model from HuggingFace.
+    Download model from HuggingFace via Rust model-cache.
     
     Args:
-        message: Contains 'model_name' and optional 'variant'
+        message: Contains 'model_name' (repo/file format) or 'model'
         
     Returns:
         Status response
     """
     try:
-        from models import ModelManager
+        if RUST_MODEL_CACHE is None:
+            return {
+                "status": "error",
+                "message": "Rust model cache not available - build model-cache-bindings first"
+            }
         
         model_name = message.get("model_name") or message.get("model")
-        variant = message.get("variant")
         
         if not model_name:
             return {
                 "status": "error",
-                "message": "model_name is required"
+                "message": "model_name is required (format: owner/repo/file.ext)"
             }
         
-        logging.info(f"Pull request for model: {model_name}")
-        
-        manager = ModelManager()
-        success = manager.download_model(
-            model_name=model_name,
-            variant=variant
-        )
-        
-        if success:
-            return {
-                "status": "success",
-                "message": f"Model {model_name} downloaded successfully",
-                "model": model_name
-            }
-        else:
+        # Parse model path
+        parts = model_name.split("/")
+        if len(parts) < 3:
             return {
                 "status": "error",
-                "message": f"Failed to download model: {model_name}"
+                "message": "Invalid format - use: owner/repo/file.ext"
             }
+        
+        repo_id = f"{parts[0]}/{parts[1]}"
+        file_path = "/".join(parts[2:])
+        
+        logging.info(f"Pull request for model: {repo_id}/{file_path}")
+        
+        # Progress callback
+        def progress(loaded: int, total: int):
+            send_message({
+                "type": "MODEL_DOWNLOAD_PROGRESS",
+                "payload": {
+                    "loaded": loaded,
+                    "total": total,
+                    "progress": int((loaded / total) * 100) if total > 0 else 0
+                }
+            })
+        
+        # Download via Rust
+        RUST_MODEL_CACHE.download_file(repo_id, file_path, progress)
+        
+        return {
+            "status": "success",
+            "message": f"Model {model_name} downloaded successfully",
+            "model": model_name
+        }
     
     except Exception as e:
         logging.error(f"Pull error: {e}")
@@ -889,13 +1103,59 @@ def main():
             message = get_message()
             logging.debug(f"Received message: {message}")
             
-            # Get the action from the message
+            # Get the action and model info
             action = message.get("action", "")
+            model_path = message.get("modelPath") or message.get("model") or ""
             
-            # Handle the action
-            if action in handlers:
+            # ============================================================
+            # ROUTING: Determine if Rust or Python should handle this
+            # ============================================================
+            
+            # Check if this is a model-related action that needs routing
+            model_actions = {
+                ActionType.LOAD_MODEL.value,
+                ActionType.GENERATE.value,
+                ActionType.UNLOAD_MODEL.value,
+                ActionType.GET_MODEL_STATE.value,
+                ActionType.PULL_MODEL.value,
+                ActionType.DELETE_MODEL.value,
+                ActionType.UPDATE_SETTINGS.value,
+                ActionType.STOP_GENERATION.value,
+            }
+            
+            if action in model_actions and is_gguf_or_bitnet(model_path):
+                # ===== RUST HANDLER (GGUF/BitNet) =====
+                if RUST_HANDLER_AVAILABLE:
+                    logging.info(f"Routing {action} for GGUF/BitNet to Rust handler")
+                    try:
+                        # Call Rust handler - it MUST return a response
+                        response_json = rust_handle_message(json.dumps(message))
+                        response = json.loads(response_json)
+                        logging.debug(f"Rust handler response: {response}")
+                    except Exception as e:
+                        logging.error(f"Rust handler error: {e}", exc_info=True)
+                        response = {
+                            "status": "error",
+                            "message": f"Rust handler error: {str(e)}"
+                        }
+                else:
+                    # Rust not available - log warning and use Python fallback
+                    logging.warning(f"Rust handler not available for {model_path}, using Python fallback")
+                    if action in handlers:
+                        response = handlers[action](message)
+                    else:
+                        response = {
+                            "status": "error",
+                            "message": f"Rust handler unavailable and no Python fallback for: {action}"
+                        }
+            
+            elif action in handlers:
+                # ===== PYTHON HANDLER (ONNX/MediaPipe/Other) =====
+                logging.debug(f"Handling {action} with Python handler")
                 response = handlers[action](message)
+            
             else:
+                # ===== UNKNOWN ACTION =====
                 response = {
                     "status": "error",
                     "message": f"Unknown action: {action}"

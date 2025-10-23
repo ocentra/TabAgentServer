@@ -14,13 +14,16 @@ members = [
     "task-scheduler",
     
     # ML & Model handling
-    "ml-bridge",
+    "python-ml-bridge",        # Python ML models (Rust calls Python)
     "hardware",
     "model-loader",
+    "model-cache",
     
-    # Python bindings
-    "bindings",         # Database bindings
-    "model-bindings",   # Model loader bindings
+    # Python bindings (Python calls Rust)
+    "db-bindings",             # Database bindings
+    "model-bindings",          # Model loader bindings
+    "model-cache-bindings",    # Model cache bindings
+    "native-handler",          # Native messaging handler (GGUF/BitNet)
 ]
 
 [workspace.package]

@@ -4,7 +4,7 @@
 //! have accumulated.
 
 use crate::{WeaverContext, WeaverResult};
-use common::models::{Chat, Edge, Node, Summary};
+use common::{NodeId, EdgeId, models::{Chat, Edge, Node, Summary}};
 
 /// Processes a chat update to potentially generate a summary.
 ///
@@ -16,7 +16,7 @@ pub async fn on_chat_updated(
     log::debug!("Summarizer: Processing chat {}", chat_id);
     
     // Load the chat node
-    let chat = match context.storage.get_node(chat_id)? {
+    let chat = match context.coordinator.conversations_active().get_node(chat_id)? {
         Some(Node::Chat(c)) => c,
         _ => {
             log::warn!("Chat {} not found for summarization", chat_id);
@@ -46,8 +46,8 @@ pub async fn on_chat_updated(
         .as_millis() as i64;
     
     let summary = Summary {
-        id: summary_id.clone(),
-        chat_id: chat_id.to_string(),
+        id: NodeId::from(summary_id.as_str()),
+        chat_id: NodeId::from(chat_id),
         created_at: now,
         content: summary_text,
         message_ids: chat.message_ids.clone(), // Include all messages in summary
@@ -58,7 +58,7 @@ pub async fn on_chat_updated(
     };
     
     // Store the summary
-    context.storage.insert_node(&Node::Summary(summary))?;
+    context.coordinator.conversations_active().insert_node(&Node::Summary(summary))?;
     
     // Create CONTAINS_SUMMARY edge from chat to summary
     create_summary_edge(context, chat_id, &summary_id).await?;
@@ -82,7 +82,7 @@ async fn get_recent_messages(
         .collect();
     
     for message_id in message_ids {
-        if let Some(Node::Message(msg)) = context.storage.get_node(message_id)? {
+        if let Some(Node::Message(msg)) = context.coordinator.conversations_active().get_node(message_id.as_str())? {
             messages.push(msg.text_content);
         }
     }
@@ -101,9 +101,9 @@ async fn create_summary_edge(
 ) -> WeaverResult<()> {
     let edge_id = format!("edge_{}", uuid::Uuid::new_v4());
     let edge = Edge {
-        id: edge_id,
-        from_node: chat_id.to_string(),
-        to_node: summary_id.to_string(),
+        id: EdgeId::from(edge_id.as_str()),
+        from_node: NodeId::from(chat_id),
+        to_node: NodeId::from(summary_id),
         edge_type: "CONTAINS_SUMMARY".to_string(),
         created_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -112,7 +112,7 @@ async fn create_summary_edge(
         metadata: serde_json::json!({}),
     };
     
-    context.storage.insert_edge(&edge)?;
+    context.coordinator.conversations_active().insert_edge(&edge)?;
     
     log::debug!("Created CONTAINS_SUMMARY edge: {} -> {}", chat_id, summary_id);
     

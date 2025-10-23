@@ -4,7 +4,7 @@
 //! It extracts text content from nodes and generates embeddings using the ML bridge.
 
 use crate::{WeaverContext, WeaverResult};
-use common::models::{Embedding, Node};
+use common::{EmbeddingId, models::{Embedding, Node}};
 
 /// Processes a newly created node for semantic indexing.
 ///
@@ -23,7 +23,7 @@ pub async fn on_node_created(
     }
     
     // Load the node
-    let node = match context.storage.get_node(node_id)? {
+    let node = match context.coordinator.conversations_active().get_node(node_id)? {
         Some(n) => n,
         None => {
             log::warn!("Node {} not found for semantic indexing", node_id);
@@ -55,13 +55,13 @@ pub async fn on_node_created(
     // Create Embedding object
     let embedding_id = format!("emb_{}", uuid::Uuid::new_v4());
     let embedding = Embedding {
-        id: embedding_id.clone(),
+        id: EmbeddingId::from(embedding_id.as_str()),
         vector,
         model: "default".to_string(), // TODO: Get model name from ML bridge
     };
     
     // Store embedding (this will also update the vector index via storage's auto-indexing)
-    context.storage.insert_embedding(&embedding)?;
+    context.coordinator.embeddings_active().insert_embedding(&embedding)?;
     
     log::info!("Generated embedding {} for node {}", embedding_id, node_id);
     

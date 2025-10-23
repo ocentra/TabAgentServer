@@ -34,8 +34,9 @@ When in doubt, consult the official Rust documentation, this guideline, and the 
 16. [Performance Optimizations](#performance-optimizations)
 17. [Best Practices](#best-practices)
 18. [Testing Strategies](#testing-strategies)
-19. [Dependency Management](#dependency-management)
-20. [Security Best Practices](#security-best-practices)
+19. [Testing Principles](#testing-principles)
+20. [Dependency Management](#dependency-management)
+21. [Security Best Practices](#security-best-practices)
 21. [Build, CI, and Tooling](#build-ci-and-tooling)
 22. [Migration and Maintenance](#migration-and-maintenance)
 23. [Checklist](#checklist)
@@ -614,6 +615,8 @@ fn find<T: PartialEq>(vec: &Vec<T>, item: &T) -> Option<usize> {
 
 - **Action**: Always require the AI to generate `rustdoc` comments (`///`) for all public functions, structs, and enums. These comments should include a brief explanation, sections for `# Examples`, `# Panics`, and `# Errors`.
 - **Action**: For any non-trivial function, instruct the AI to also generate a `#[cfg(test)] mod tests { ... }` module with unit tests covering both success and failure cases.
+- **Action**: Instruct the AI to follow Test-Driven Development (TDD) principles, writing tests that validate real functionality rather than just trying to make tests pass.
+- **Action**: Require the AI to avoid stubs and mocks except when absolutely necessary, preferring real implementations and real data in tests.
 
 ```rust
 /// Adds two numbers together.
@@ -666,6 +669,66 @@ fn set_color(color: Color) { /* ... */ }
 ```rust
 let mut vec = vec![1, 2, 3, 4];
 vec.retain(|&x| x % 2 != 0);
+```
+
+### Rule 13.5: Avoid String Literals for Domain-Specific Values
+
+- String literals are prone to typos and make refactoring difficult. They provide no type safety and can lead to runtime errors.
+- Use enums, constants, or newtype patterns for domain-specific string values.
+- This approach prevents accidental misspellings, enables compile-time checking, and improves code documentation.
+
+```rust
+// BAD: Stringly-typed API with literals
+fn set_status(status: &str) -> Result<(), Error> {
+    match status {
+        "active" => { /* ... */ },
+        "inactive" => { /* ... */ },
+        "pending" => { /* ... */ },
+        _ => return Err(Error::InvalidStatus),
+    }
+    Ok(())
+}
+
+// GOOD: Type-safe enum
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Status {
+    Active,
+    Inactive,
+    Pending,
+}
+
+fn set_status(status: Status) -> Result<(), Error> {
+    match status {
+        Status::Active => { /* ... */ },
+        Status::Inactive => { /* ... */ },
+        Status::Pending => { /* ... */ },
+    }
+    Ok(())
+}
+
+// ALSO GOOD: Constants for fixed string values
+const STATUS_ACTIVE: &str = "active";
+const STATUS_INACTIVE: &str = "inactive";
+const STATUS_PENDING: &str = "pending";
+
+// BEST: Newtype pattern with validation
+#[derive(Debug, Clone, PartialEq)]
+struct Status(String);
+
+impl Status {
+    pub fn active() -> Self { Status(STATUS_ACTIVE.to_string()) }
+    pub fn inactive() -> Self { Status(STATUS_INACTIVE.to_string()) }
+    pub fn pending() -> Self { Status(STATUS_PENDING.to_string()) }
+    
+    pub fn from_str(s: &str) -> Result<Self, Error> {
+        match s {
+            STATUS_ACTIVE => Ok(Status::active()),
+            STATUS_INACTIVE => Ok(Status::inactive()),
+            STATUS_PENDING => Ok(Status::pending()),
+            _ => Err(Error::InvalidStatus),
+        }
+    }
+}
 ```
 
 ## Module Organization
@@ -891,6 +954,29 @@ proptest! {
 // cargo fuzz init
 ```
 
+## Testing Principles
+
+### Rule 17.4: Every Code Addition Requires Tests
+
+- If there is code, there must be corresponding tests.
+- All functionality, whether critical or non-critical, must have regression tests.
+- Tests must be written before or alongside the code, following Test-Driven Development (TDD) principles.
+
+### Rule 17.5: Avoid Stubs and Mocks Except When Absolutely Necessary
+
+- Stubs and mocks should only be used in rare occasions and for temporary reasons.
+- Prefer real implementations and real data in tests whenever possible.
+- If a test requires a stub or mock, clearly document why it's necessary.
+
+### Rule 17.6: Tests Must Validate Real Functionality
+
+- Do not retrofit tests just to make them pass.
+- If a test fails, it should fail for a valid reason that indicates a real issue.
+- The core idea of testing is not to simply pass tests, but to validate functionality so we can fix actual code.
+- A failing test is better than a test with stub or mock data.
+- Always test against real data as much as possible.
+- Follow TDD and industry standards for test quality.
+
 ## Dependency Management
 
 ### Rule 18.1: Minimize Dependencies
@@ -1029,6 +1115,135 @@ fn bench_new(b: &mut test::Bencher) {
 - [ ] **Benchmarks exist for performance-critical code.**
 - [ ] **`[inline]` is used judiciously for small, hot functions.**
 - [ ] **Follows standard Rust naming conventions (snake_case for functions/variables, PascalCase for types).**
+- [ ] **Domain-specific string values use enums or constants instead of string literals.**
+- [ ] **Every code addition has corresponding tests.**
+- [ ] **All critical and non-critical functionality has regression tests.**
+- [ ] **Stubs and mocks are avoided except when absolutely necessary.**
+- [ ] **Tests validate real functionality, not just pass for the sake of passing.**
+- [ ] **Failing tests indicate real issues that need to be fixed.**
+- [ ] **Tests use real data whenever possible instead of stub/mock data.**
+- [ ] **Follows Test-Driven Development (TDD) principles.**
+
+
+1. **Ownership Fundamentals** (Rules 1.1-1.3)
+   - [ ] Each value has exactly one owner
+   - [ ] Clone only when ownership is required
+   - [ ] Prefer move semantics for large data
+
+2. **Borrowing Rules** (Rules 2.1-2.3)
+   - [ ] Either multiple immutable borrows OR one mutable borrow
+   - [ ] Explicit lifetimes when ambiguous
+   - [ ] Struct lifetime annotations for stored references
+
+3. **Lifetimes** (Rules 3.1-3.4)
+   - [ ] Explicit lifetimes when references outlive scope
+   - [ ] Avoid lifetime elision ambiguity
+   - [ ] Struct lifetime annotations for stored references
+   - [ ] Higher-ranked trait bounds for flexible lifetimes
+
+4. **Memory Safety** (Rules 4.1-4.3)
+   - [ ] Eliminate null pointers with `Option<T>`
+   - [ ] Leverage RAII for resource management
+   - [ ] Use appropriate smart pointers
+
+5. **Error Handling** (Rules 5.1-5.4)
+   - [ ] Use `Result<T, E>` for recoverable errors
+   - [ ] Use specific, custom error types
+   - [ ] Differentiate recoverable vs unrecoverable errors
+   - [ ] Implement error tracing
+
+6. **Concurrency** (Rules 6.1-6.3)
+   - [ ] Use message passing
+   - [ ] Use mutexes for shared state
+   - [ ] Avoid data races
+
+7. **Async Programming** (Rules 7.1-7.3)
+   - [ ] Use async/await for I/O
+   - [ ] Avoid blocking in async contexts
+   - [ ] Manage cancellation
+
+8. **Type System** (Rules 8.1-8.4)
+   - [ ] Leverage newtype pattern
+   - [ ] Make impossible states unrepresentable
+   - [ ] Use phantom types
+   - [ ] Use associated types
+
+9. **Traits and Generics** (Rules 9.1-9.3)
+   - [ ] Use traits for polymorphism
+   - [ ] Prefer trait objects over enums
+   - [ ] Implement standard traits
+
+10. **Macros and Metaprogramming** (Rules 10.1-10.3)
+    - [ ] Prefer functions over macros
+    - [ ] Use `macro_rules!` for declarative macros
+    - [ ] Use procedural macros
+
+11. **Unsafe Rust** (Rules 11.1-11.3)
+    - [ ] Minimize and isolate unsafe code
+    - [ ] Document safety invariants
+    - [ ] Validate with tests
+
+12. **Unsafe Rust and FFI** (Rule 11.3)
+    - [ ] Follow FFI best practices
+
+13. **AI-Specific Guidelines** (Rules 12.1-12.5)
+    - [ ] Verify ownership and borrowing
+    - [ ] Enforce robust error handling
+    - [ ] Scrutinize unsafe code
+    - [ ] Demand idiomatic Rust
+    - [ ] Generate documentation and tests
+
+14. **Common Anti-Patterns** (Rules 13.1-13.5)
+    - [ ] Avoid RefCell overuse
+    - [ ] Don't fight the borrow checker
+    - [ ] Avoid stringly-typed APIs
+    - [ ] Prevent iterator invalidation
+    - [ ] Avoid string literals for domain values
+
+15. **Module Organization** (Rules 14.1-14.3)
+    - [ ] Follow domain-driven structure
+    - [ ] Separate concerns
+    - [ ] Clear module boundaries
+
+16. **Performance Optimizations** (Rules 15.1-15.5)
+    - [ ] Zero-cost abstractions
+    - [ ] Optimize string handling
+    - [ ] Cache-friendly data structures
+    - [ ] SIMD acceleration
+    - [ ] Memory pools
+
+17. **Best Practices** (Rules 16.1-16.5)
+    - [ ] Naming conventions
+    - [ ] Document public APIs
+    - [ ] Integration tests and benchmarks
+    - [ ] Memory safety
+    - [ ] Linting and formatting
+
+18. **Testing Strategies** (Rules 17.1-17.3)
+    - [ ] Unit and integration tests
+    - [ ] Property-based testing
+    - [ ] Fuzz testing
+
+19. **Testing Principles** (Rules 17.4-17.6)
+    - [ ] Every code addition requires tests
+    - [ ] Avoid stubs and mocks
+    - [ ] Validate real functionality
+
+20. **Dependency Management** (Rules 18.1-18.3)
+    - [ ] Minimize dependencies
+    - [ ] Pin versions
+    - [ ] Prefer no-std when possible
+
+21. **Security Best Practices** (Rules 19.1-19.3)
+    - [ ] Sanitize inputs
+    - [ ] Avoid deserialization vulnerabilities
+    - [ ] Use secure randomness
+
+22. **Build, CI, and Tooling** (Rules 18.1-18.3)
+    - [ ] Enforce code quality with CI
+    - [ ] Audit dependencies
+    - [ ] Use rust-toolchain.toml
+
 
 ## Expected Benefits
 

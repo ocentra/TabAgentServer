@@ -30,7 +30,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 */
 
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use thiserror::Error;
 
 mod cpu;

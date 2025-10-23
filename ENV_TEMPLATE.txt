@@ -1,0 +1,36 @@
+# TabAgent Environment Variables Template
+# 
+# SETUP INSTRUCTIONS:
+# 1. Copy this file to Server/.env
+# 2. Fill in your actual tokens
+# 3. NEVER commit .env to git (it's already in .gitignore)
+#
+# To create .env file:
+# cp Server/ENV_TEMPLATE.txt Server/.env
+
+# ============================================================
+# HUGGINGFACE TOKEN (Required for gated models)
+# ============================================================
+# Get your token from: https://huggingface.co/settings/tokens
+# Required for models like: google/gemma-3n-E4B-it-litert-lm
+HUGGINGFACE_TOKEN=your_token_here
+
+# ============================================================
+# OPTIONAL: OpenAI API Key (for future features)
+# ============================================================
+OPENAI_API_KEY=
+
+# ============================================================
+# OPTIONAL: Anthropic API Key (for future features)
+# ============================================================
+ANTHROPIC_API_KEY=
+
+# ============================================================
+# OPTIONAL: Custom Paths
+# ============================================================
+# Override default model cache directory
+MODEL_CACHE_DIR=
+
+# Override default database path
+DATABASE_PATH=
+

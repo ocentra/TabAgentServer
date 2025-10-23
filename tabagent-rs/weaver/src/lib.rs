@@ -82,9 +82,9 @@ mod modules;
 pub use events::WeaverEvent;
 pub use ml_bridge::{MlBridge, MockMlBridge};
 
-use common::{DbError, DbResult};
+use common::DbError;
 use indexing::IndexManager;
-use storage::StorageManager;
+use storage::DatabaseCoordinator;
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
@@ -117,8 +117,8 @@ pub type WeaverResult<T> = Result<T, WeaverError>;
 /// This contains thread-safe handles to all necessary components.
 #[derive(Clone)]
 pub struct WeaverContext {
-    /// Storage manager for database operations
-    pub storage: Arc<StorageManager>,
+    /// Database coordinator for multi-tier operations
+    pub coordinator: Arc<DatabaseCoordinator>,
     
     /// Index manager for search operations
     pub indexing: Arc<IndexManager>,
@@ -130,16 +130,17 @@ pub struct WeaverContext {
 impl WeaverContext {
     /// Creates a new weaver context.
     pub fn new(
-        storage: Arc<StorageManager>,
+        coordinator: Arc<DatabaseCoordinator>,
         indexing: Arc<IndexManager>,
         ml_bridge: Arc<dyn MlBridge>,
     ) -> Self {
         Self {
-            storage,
+            coordinator,
             indexing,
             ml_bridge,
         }
     }
+    
 }
 
 /// The Knowledge Weaver engine.
@@ -263,9 +264,9 @@ impl Weaver {
             WeaverEvent::NodeCreated { node_id, node_type } => {
                 // Run multiple enrichment tasks concurrently
                 let (sem_result, ent_result, assoc_result) = tokio::join!(
-                    semantic_indexer::on_node_created(context, node_id, node_type),
-                    entity_linker::on_node_created(context, node_id, node_type),
-                    associative_linker::on_node_created(context, node_id, node_type),
+                    semantic_indexer::on_node_created(context, node_id.as_str(), node_type.as_str()),
+                    entity_linker::on_node_created(context, node_id.as_str(), node_type.as_str()),
+                    associative_linker::on_node_created(context, node_id.as_str(), node_type.as_str()),
                 );
                 
                 // Log any errors but don't fail the entire event
@@ -282,13 +283,13 @@ impl Weaver {
             
             WeaverEvent::NodeUpdated { node_id, node_type } => {
                 // Re-index if content changed
-                semantic_indexer::on_node_updated(context, node_id, node_type).await?;
+                semantic_indexer::on_node_updated(context, node_id.as_str(), node_type.as_str()).await?;
             }
             
             WeaverEvent::ChatUpdated { chat_id, messages_since_summary } => {
                 // Trigger summarization if threshold reached
                 if *messages_since_summary >= 20 {
-                    summarizer::on_chat_updated(context, chat_id).await?;
+                    summarizer::on_chat_updated(context, chat_id.as_str()).await?;
                 }
             }
             

@@ -101,48 +101,48 @@ impl IndexManager {
     pub fn index_node(&self, node: &Node) -> DbResult<()> {
         match node {
             Node::Chat(chat) => {
-                self.structural.add("node_type", "Chat", &chat.id)?;
-                self.structural.add("topic", &chat.topic, &chat.id)?;
+                self.structural.add("node_type", "Chat", chat.id.as_str())?;
+                self.structural.add("topic", &chat.topic, chat.id.as_str())?;
             }
             Node::Message(msg) => {
-                self.structural.add("node_type", "Message", &msg.id)?;
-                self.structural.add("chat_id", &msg.chat_id, &msg.id)?;
-                self.structural.add("sender", &msg.sender, &msg.id)?;
+                self.structural.add("node_type", "Message", msg.id.as_str())?;
+                self.structural.add("chat_id", msg.chat_id.as_str(), msg.id.as_str())?;
+                self.structural.add("sender", &msg.sender, msg.id.as_str())?;
             }
             Node::Entity(entity) => {
-                self.structural.add("node_type", "Entity", &entity.id)?;
-                self.structural.add("entity_type", &entity.entity_type, &entity.id)?;
-                self.structural.add("label", &entity.label, &entity.id)?;
+                self.structural.add("node_type", "Entity", entity.id.as_str())?;
+                self.structural.add("entity_type", &entity.entity_type, entity.id.as_str())?;
+                self.structural.add("label", &entity.label, entity.id.as_str())?;
             }
             Node::Summary(summary) => {
-                self.structural.add("node_type", "Summary", &summary.id)?;
-                self.structural.add("chat_id", &summary.chat_id, &summary.id)?;
+                self.structural.add("node_type", "Summary", summary.id.as_str())?;
+                self.structural.add("chat_id", summary.chat_id.as_str(), summary.id.as_str())?;
             }
             Node::Attachment(att) => {
-                self.structural.add("node_type", "Attachment", &att.id)?;
-                self.structural.add("message_id", &att.message_id, &att.id)?;
-                self.structural.add("mime_type", &att.mime_type, &att.id)?;
+                self.structural.add("node_type", "Attachment", att.id.as_str())?;
+                self.structural.add("message_id", att.message_id.as_str(), att.id.as_str())?;
+                self.structural.add("mime_type", &att.mime_type, att.id.as_str())?;
             }
             Node::WebSearch(search) => {
-                self.structural.add("node_type", "WebSearch", &search.id)?;
+                self.structural.add("node_type", "WebSearch", search.id.as_str())?;
             }
             Node::ScrapedPage(page) => {
-                self.structural.add("node_type", "ScrapedPage", &page.id)?;
-                self.structural.add("url", &page.url, &page.id)?;
+                self.structural.add("node_type", "ScrapedPage", page.id.as_str())?;
+                self.structural.add("url", &page.url, page.id.as_str())?;
             }
             Node::Bookmark(bookmark) => {
-                self.structural.add("node_type", "Bookmark", &bookmark.id)?;
-                self.structural.add("url", &bookmark.url, &bookmark.id)?;
+                self.structural.add("node_type", "Bookmark", bookmark.id.as_str())?;
+                self.structural.add("url", &bookmark.url, bookmark.id.as_str())?;
             }
             Node::ImageMetadata(img) => {
-                self.structural.add("node_type", "ImageMetadata", &img.id)?;
+                self.structural.add("node_type", "ImageMetadata", img.id.as_str())?;
             }
             Node::AudioTranscript(audio) => {
-                self.structural.add("node_type", "AudioTranscript", &audio.id)?;
+                self.structural.add("node_type", "AudioTranscript", audio.id.as_str())?;
             }
             Node::ModelInfo(model) => {
-                self.structural.add("node_type", "ModelInfo", &model.id)?;
-                self.structural.add("model_name", &model.name, &model.id)?;
+                self.structural.add("node_type", "ModelInfo", model.id.as_str())?;
+                self.structural.add("model_name", &model.name, model.id.as_str())?;
             }
         }
         Ok(())
@@ -152,48 +152,48 @@ impl IndexManager {
     pub fn unindex_node(&self, node: &Node) -> DbResult<()> {
         match node {
             Node::Chat(chat) => {
-                self.structural.remove("node_type", "Chat", &chat.id)?;
-                self.structural.remove("topic", &chat.topic, &chat.id)?;
+                self.structural.remove("node_type", "Chat", chat.id.as_str())?;
+                self.structural.remove("topic", &chat.topic, chat.id.as_str())?;
             }
             Node::Message(msg) => {
-                self.structural.remove("node_type", "Message", &msg.id)?;
-                self.structural.remove("chat_id", &msg.chat_id, &msg.id)?;
-                self.structural.remove("sender", &msg.sender, &msg.id)?;
+                self.structural.remove("node_type", "Message", msg.id.as_str())?;
+                self.structural.remove("chat_id", msg.chat_id.as_str(), msg.id.as_str())?;
+                self.structural.remove("sender", &msg.sender, msg.id.as_str())?;
             }
             Node::Entity(entity) => {
-                self.structural.remove("node_type", "Entity", &entity.id)?;
-                self.structural.remove("entity_type", &entity.entity_type, &entity.id)?;
-                self.structural.remove("label", &entity.label, &entity.id)?;
+                self.structural.remove("node_type", "Entity", entity.id.as_str())?;
+                self.structural.remove("entity_type", &entity.entity_type, entity.id.as_str())?;
+                self.structural.remove("label", &entity.label, entity.id.as_str())?;
             }
             Node::Summary(summary) => {
-                self.structural.remove("node_type", "Summary", &summary.id)?;
-                self.structural.remove("chat_id", &summary.chat_id, &summary.id)?;
+                self.structural.remove("node_type", "Summary", summary.id.as_str())?;
+                self.structural.remove("chat_id", summary.chat_id.as_str(), summary.id.as_str())?;
             }
             Node::Attachment(att) => {
-                self.structural.remove("node_type", "Attachment", &att.id)?;
-                self.structural.remove("message_id", &att.message_id, &att.id)?;
-                self.structural.remove("mime_type", &att.mime_type, &att.id)?;
+                self.structural.remove("node_type", "Attachment", att.id.as_str())?;
+                self.structural.remove("message_id", att.message_id.as_str(), att.id.as_str())?;
+                self.structural.remove("mime_type", &att.mime_type, att.id.as_str())?;
             }
             Node::WebSearch(search) => {
-                self.structural.remove("node_type", "WebSearch", &search.id)?;
+                self.structural.remove("node_type", "WebSearch", search.id.as_str())?;
             }
             Node::ScrapedPage(page) => {
-                self.structural.remove("node_type", "ScrapedPage", &page.id)?;
-                self.structural.remove("url", &page.url, &page.id)?;
+                self.structural.remove("node_type", "ScrapedPage", page.id.as_str())?;
+                self.structural.remove("url", &page.url, page.id.as_str())?;
             }
             Node::Bookmark(bookmark) => {
-                self.structural.remove("node_type", "Bookmark", &bookmark.id)?;
-                self.structural.remove("url", &bookmark.url, &bookmark.id)?;
+                self.structural.remove("node_type", "Bookmark", bookmark.id.as_str())?;
+                self.structural.remove("url", &bookmark.url, bookmark.id.as_str())?;
             }
             Node::ImageMetadata(img) => {
-                self.structural.remove("node_type", "ImageMetadata", &img.id)?;
+                self.structural.remove("node_type", "ImageMetadata", img.id.as_str())?;
             }
             Node::AudioTranscript(audio) => {
-                self.structural.remove("node_type", "AudioTranscript", &audio.id)?;
+                self.structural.remove("node_type", "AudioTranscript", audio.id.as_str())?;
             }
             Node::ModelInfo(model) => {
-                self.structural.remove("node_type", "ModelInfo", &model.id)?;
-                self.structural.remove("model_name", &model.name, &model.id)?;
+                self.structural.remove("node_type", "ModelInfo", model.id.as_str())?;
+                self.structural.remove("model_name", &model.name, model.id.as_str())?;
             }
         }
         Ok(())
@@ -213,7 +213,7 @@ impl IndexManager {
     pub fn index_embedding(&self, embedding: &Embedding) -> DbResult<()> {
         let mut vec_idx = self.vector.lock()
             .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
-        vec_idx.add_vector(&embedding.id, embedding.vector.clone())
+        vec_idx.add_vector(embedding.id.as_str(), embedding.vector.clone())
     }
 
     /// Removes an embedding from the vector index.
@@ -317,7 +317,8 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
     use serde_json::json;
-    use common::models::{Chat, Message};
+    use common::{NodeId, EdgeId, EmbeddingId};
+    use common::models::{Chat, Message, Edge, Embedding};
     
     fn create_test_manager() -> (IndexManager, TempDir) {
         let temp_dir = TempDir::new().unwrap();
@@ -331,7 +332,7 @@ mod tests {
         let (manager, _temp) = create_test_manager();
         
         let chat = Node::Chat(Chat {
-            id: "chat_001".to_string(),
+            id: NodeId::from("chat_001"),
             title: "Test Chat".to_string(),
             topic: "Testing".to_string(),
             created_at: 1697500000000,
@@ -346,7 +347,7 @@ mod tests {
         
         let results = manager.get_nodes_by_property("node_type", "Chat").unwrap();
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0], "chat_001");
+        assert_eq!(results[0], NodeId::from("chat_001"));
         
         let topic_results = manager.get_nodes_by_property("topic", "Testing").unwrap();
         assert_eq!(topic_results.len(), 1);
@@ -357,8 +358,8 @@ mod tests {
         let (manager, _temp) = create_test_manager();
         
         let message = Node::Message(Message {
-            id: "msg_001".to_string(),
-            chat_id: "chat_123".to_string(),
+            id: NodeId::from("msg_001"),
+            chat_id: NodeId::from("chat_123"),
             sender: "user".to_string(),
             timestamp: 1697500000000,
             text_content: "Hello".to_string(),
@@ -371,7 +372,7 @@ mod tests {
         
         let results = manager.get_nodes_by_property("chat_id", "chat_123").unwrap();
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0], "msg_001");
+        assert_eq!(results[0], NodeId::from("msg_001"));
     }
 
     #[test]
@@ -379,9 +380,9 @@ mod tests {
         let (manager, _temp) = create_test_manager();
         
         let edge = Edge {
-            id: "edge_001".to_string(),
-            from_node: "chat_123".to_string(),
-            to_node: "msg_456".to_string(),
+            id: EdgeId::from("edge_001"),
+            from_node: NodeId::from("chat_123"),
+            to_node: NodeId::from("msg_456"),
             edge_type: "CONTAINS".to_string(),
             created_at: 1697500000000,
             metadata: json!({}),
@@ -391,7 +392,7 @@ mod tests {
         
         let outgoing = manager.get_outgoing_edges("chat_123").unwrap();
         assert_eq!(outgoing.len(), 1);
-        assert_eq!(outgoing[0], "edge_001");
+        assert_eq!(outgoing[0], EdgeId::from("edge_001"));
     }
 
     #[test]
@@ -399,7 +400,7 @@ mod tests {
         let (manager, _temp) = create_test_manager();
         
         let embedding = Embedding {
-            id: "embed_001".to_string(),
+            id: EmbeddingId::from("embed_001"),
             vector: vec![0.1, 0.2, 0.3],
             model: "test-model".to_string(),
         };

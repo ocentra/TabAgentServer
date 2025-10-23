@@ -12,23 +12,139 @@
 
 pub mod models;
 pub mod platform;
+pub mod actions;
 
-// --- Core Type Aliases ---
+// --- Core Newtype Wrappers (RAG Rule 8.1) ---
 
 /// Unique identifier for a node in the knowledge graph.
 ///
 /// Nodes represent entities like chats, messages, summaries, attachments, and entities.
-pub type NodeId = String;
+/// 
+/// **Type Safety**: Using newtype pattern instead of alias prevents accidental mixing
+/// of NodeId with EdgeId or EmbeddingId at compile time.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct NodeId(String);
+
+impl NodeId {
+    /// Create a new NodeId from a string
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+    
+    /// Get the inner string reference
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+    
+    /// Consume and return the inner string
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl std::fmt::Display for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<String> for NodeId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for NodeId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
 
 /// Unique identifier for an edge connecting two nodes.
 ///
 /// Edges represent typed relationships like "CONTAINS_MESSAGE", "MENTIONS", etc.
-pub type EdgeId = String;
+/// 
+/// **Type Safety**: Using newtype pattern prevents mixing with NodeId or EmbeddingId.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct EdgeId(String);
+
+impl EdgeId {
+    /// Create a new EdgeId from a string
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+    
+    /// Get the inner string reference
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+    
+    /// Consume and return the inner string
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl std::fmt::Display for EdgeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<String> for EdgeId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for EdgeId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
 
 /// Unique identifier for a vector embedding.
 ///
 /// Embeddings are high-dimensional vectors used for semantic search.
-pub type EmbeddingId = String;
+/// 
+/// **Type Safety**: Using newtype pattern prevents mixing with NodeId or EdgeId.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct EmbeddingId(String);
+
+impl EmbeddingId {
+    /// Create a new EmbeddingId from a string
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+    
+    /// Get the inner string reference
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+    
+    /// Consume and return the inner string
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl std::fmt::Display for EmbeddingId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<String> for EmbeddingId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for EmbeddingId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
 
 // --- Error Types ---
 
@@ -109,14 +225,42 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_type_aliases() {
-        let node_id: NodeId = "node_123".to_string();
-        let edge_id: EdgeId = "edge_456".to_string();
-        let embedding_id: EmbeddingId = "embed_789".to_string();
+    fn test_newtype_wrappers() {
+        // Test creation
+        let node_id = NodeId::new("node_123");
+        let edge_id = EdgeId::new("edge_456");
+        let embedding_id = EmbeddingId::new("embed_789");
 
-        assert_eq!(node_id, "node_123");
-        assert_eq!(edge_id, "edge_456");
-        assert_eq!(embedding_id, "embed_789");
+        // Test as_str()
+        assert_eq!(node_id.as_str(), "node_123");
+        assert_eq!(edge_id.as_str(), "edge_456");
+        assert_eq!(embedding_id.as_str(), "embed_789");
+        
+        // Test Display
+        assert_eq!(node_id.to_string(), "node_123");
+        assert_eq!(edge_id.to_string(), "edge_456");
+        assert_eq!(embedding_id.to_string(), "embed_789");
+        
+        // Test From<String>
+        let node_from_string: NodeId = "test".to_string().into();
+        assert_eq!(node_from_string.as_str(), "test");
+        
+        // Test From<&str>
+        let edge_from_str: EdgeId = "test2".into();
+        assert_eq!(edge_from_str.as_str(), "test2");
+    }
+    
+    #[test]
+    fn test_type_safety() {
+        // This demonstrates type safety - these won't compile if uncommented:
+        // let node_id = NodeId::new("node_123");
+        // let edge_id: EdgeId = node_id; // ❌ Compile error!
+        // let _mixed: bool = node_id == edge_id; // ❌ Compile error!
+        
+        // But same-type comparisons work:
+        let node1 = NodeId::new("same");
+        let node2 = NodeId::new("same");
+        assert_eq!(node1, node2);
     }
 
     #[test]

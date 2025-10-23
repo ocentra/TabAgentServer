@@ -55,8 +55,8 @@ impl StructuralIndex {
             .map_err(|e| DbError::Serialization(e.to_string()))?
             .unwrap_or_default();
         
-        // Add node ID
-        id_set.insert(node_id.to_string());
+        // Add node ID (convert &str to NodeId)
+        id_set.insert(NodeId::from(node_id));
         
         // Store back
         let serialized = bincode::serialize(&id_set)
@@ -75,8 +75,8 @@ impl StructuralIndex {
             let mut id_set: HashSet<NodeId> = bincode::deserialize(&bytes)
                 .map_err(|e| DbError::Serialization(e.to_string()))?;
             
-            // Remove node ID
-            id_set.remove(node_id);
+            // Remove node ID (convert &str to NodeId for lookup)
+            id_set.remove(&NodeId::from(node_id));
             
             if id_set.is_empty() {
                 // Remove key if set is now empty
@@ -152,6 +152,7 @@ impl StructuralIndex {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+    use common::NodeId;
     
     fn create_test_index() -> (StructuralIndex, TempDir) {
         let temp_dir = TempDir::new().unwrap();
@@ -170,12 +171,12 @@ mod tests {
         
         let results = index.get("chat_id", "chat_123").unwrap();
         assert_eq!(results.len(), 2);
-        assert!(results.contains(&"msg_1".to_string()));
-        assert!(results.contains(&"msg_2".to_string()));
+        assert!(results.contains(&NodeId::from("msg_1")));
+        assert!(results.contains(&NodeId::from("msg_2")));
         
         let results = index.get("chat_id", "chat_456").unwrap();
         assert_eq!(results.len(), 1);
-        assert!(results.contains(&"msg_3".to_string()));
+        assert!(results.contains(&NodeId::from("msg_3")));
     }
     
     #[test]
@@ -189,7 +190,7 @@ mod tests {
         
         let results = index.get("chat_id", "chat_123").unwrap();
         assert_eq!(results.len(), 1);
-        assert!(results.contains(&"msg_2".to_string()));
+        assert!(results.contains(&NodeId::from("msg_2")));
     }
     
     #[test]

@@ -3,7 +3,7 @@
 //! This module provides unsafe bindings to the llama.cpp library.
 //! All function signatures match the C API exactly.
 
-use std::os::raw::{c_char, c_float, c_int, c_void};
+use std::os::raw::{c_char, c_float, c_int};
 
 /// Opaque pointer to llama_model
 #[repr(C)]

@@ -4,7 +4,7 @@
 //! IS_SEMANTICALLY_SIMILAR_TO edges between them.
 
 use crate::{WeaverContext, WeaverResult};
-use common::models::Edge;
+use common::{NodeId, EdgeId, models::Edge};
 
 /// Processes a newly created node to find and link similar content.
 ///
@@ -22,7 +22,7 @@ pub async fn on_node_created(
     }
     
     // Get the node's embedding
-    let embedding = match context.storage.get_embedding_by_node(node_id)? {
+    let embedding = match context.coordinator.embeddings_active().get_embedding_by_node(node_id)? {
         Some(emb) => emb,
         None => {
             log::debug!("No embedding yet for {}, skipping associative linking", node_id);
@@ -38,7 +38,7 @@ pub async fn on_node_created(
     
     for result in similar_nodes {
         // Skip self and low-similarity nodes
-        if result.id == node_id || result.distance < similarity_threshold {
+        if result.id.as_str() == node_id || result.distance < similarity_threshold {
             continue;
         }
         
@@ -46,7 +46,7 @@ pub async fn on_node_created(
         // TODO: Implement proper check for existing edge
         
         // Create associative edge
-        create_similarity_edge(context, node_id, &result.id, result.distance).await?;
+        create_similarity_edge(context, node_id, result.id.as_str(), result.distance).await?;
         links_created += 1;
         
         // Limit number of links per node
@@ -80,9 +80,9 @@ async fn create_similarity_edge(
 ) -> WeaverResult<()> {
     let edge_id = format!("edge_{}", uuid::Uuid::new_v4());
     let edge = Edge {
-        id: edge_id,
-        from_node: from_node_id.to_string(),
-        to_node: to_node_id.to_string(),
+        id: EdgeId::from(edge_id.as_str()),
+        from_node: NodeId::from(from_node_id),
+        to_node: NodeId::from(to_node_id),
         edge_type: "IS_SEMANTICALLY_SIMILAR_TO".to_string(),
         created_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -93,7 +93,7 @@ async fn create_similarity_edge(
         }),
     };
     
-    context.storage.insert_edge(&edge)?;
+    context.coordinator.knowledge_active().insert_edge(&edge)?;
     
     log::debug!(
         "Created similarity edge: {} -> {} (score: {:.2})",

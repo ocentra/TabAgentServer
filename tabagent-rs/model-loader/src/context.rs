@@ -3,10 +3,10 @@
 //! Provides safe wrappers for creating inference contexts and generating text
 
 use crate::error::{ModelError, Result};
-use crate::ffi::{LlamaBatch, LlamaContext, LlamaContextParams, LlamaToken, LlamaTokenData, LlamaTokenDataArray};
+use crate::ffi::{LlamaContext, LlamaContextParams, LlamaToken};
 use crate::model::Model;
 use serde::{Deserialize, Serialize};
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::sync::Arc;
 
 /// Parameters for text generation
@@ -90,6 +90,12 @@ impl Context {
             ..Default::default()
         };
 
+        // SAFETY: llama_new_context_with_model creates a new inference context.
+        // This is safe because:
+        // 1. model.as_ptr() is a valid model pointer from a loaded Model
+        // 2. ctx_params is a valid struct matching the C API layout
+        // 3. We check for null return value to handle creation failures
+        // 4. The returned pointer's lifetime is managed by our Drop implementation
         let context_ptr = unsafe {
             (model.functions().llama_new_context_with_model)(
                 model.as_ptr(),
@@ -125,6 +131,11 @@ impl Context {
             .map_err(|e| ModelError::InvalidParameter(format!("Invalid text: {}", e)))?;
 
         // First pass: get token count
+        // SAFETY: Calling llama_tokenize with null output buffer to get token count.
+        // This is safe because:
+        // 1. text_cstr is a valid null-terminated C string
+        // 2. Passing null_mut() with size 0 is explicitly supported by llama.cpp for counting
+        // 3. model.as_ptr() is valid and owned by self.model
         let n_tokens = unsafe {
             (self.model.functions().llama_tokenize)(
                 self.model.as_ptr(),
@@ -145,6 +156,11 @@ impl Context {
 
         // Second pass: get actual tokens
         let mut tokens = vec![0i32; n_tokens as usize];
+        // SAFETY: Second call to llama_tokenize with properly sized output buffer.
+        // This is safe because:
+        // 1. tokens buffer was allocated with exact size n_tokens from first call
+        // 2. as_mut_ptr() provides a valid mutable pointer to the buffer
+        // 3. All parameters match the first call that determined buffer size
         let result = unsafe {
             (self.model.functions().llama_tokenize)(
                 self.model.as_ptr(),
@@ -177,6 +193,8 @@ impl Context {
     pub fn token_to_text(&self, token: LlamaToken) -> Result<String> {
         let mut buf = vec![0u8; 32]; // Most tokens are < 32 bytes
 
+        // SAFETY: Calling llama_token_to_piece to convert token ID to text.
+        // Safe because buf is a valid mutable buffer and we handle buffer resize if needed.
         let n_bytes = unsafe {
             (self.model.functions().llama_token_to_piece)(
                 self.model.as_ptr(),
@@ -196,6 +214,7 @@ impl Context {
         // If buffer was too small, retry with correct size
         if n_bytes as usize > buf.len() {
             buf.resize(n_bytes as usize, 0);
+            // SAFETY: Second call with correctly sized buffer based on first call's return value.
             let result = unsafe {
                 (self.model.functions().llama_token_to_piece)(
                     self.model.as_ptr(),
@@ -270,6 +289,7 @@ impl Context {
 
     /// Get the context size
     pub fn context_size(&self) -> u32 {
+        // SAFETY: Calling llama C API with valid context_ptr owned by this struct
         unsafe { (self.model.functions().llama_n_ctx)(self.context_ptr) }
     }
 }
@@ -277,6 +297,11 @@ impl Context {
 impl Drop for Context {
     fn drop(&mut self) {
         if !self.context_ptr.is_null() {
+            // SAFETY: llama_free safely deallocates the context.
+            // This is safe because:
+            // 1. context_ptr was allocated by llama_new_context_with_model and is valid
+            // 2. We check is_null() to prevent double-free
+            // 3. This is only called once during Drop, ensuring proper cleanup
             unsafe {
                 (self.model.functions().llama_free)(self.context_ptr);
             }
@@ -285,7 +310,9 @@ impl Drop for Context {
     }
 }
 
-// Context is Send because each context is independent
+// SAFETY: Context is Send because each context is independent and can be safely moved between threads.
+// The underlying llama.cpp library supports per-thread contexts. However, Context is NOT Sync -
+// it must not be accessed from multiple threads simultaneously.
 unsafe impl Send for Context {}
 // Context is NOT Sync - must not be accessed from multiple threads simultaneously
 

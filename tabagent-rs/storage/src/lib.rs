@@ -13,7 +13,7 @@
 //! # Examples
 //!
 //! ```
-//! use storage::{StorageManager, Node, Chat};
+//! use storage::{StorageManager, Node, Chat, NodeId};
 //! use serde_json::json;
 //!
 //! # fn main() -> Result<(), storage::DbError> {
@@ -22,7 +22,7 @@
 //!
 //! // Create and insert a chat node
 //! let chat = Chat {
-//!     id: "chat_123".to_string(),
+//!     id: NodeId::new("chat_123"),
 //!     title: "My Chat".to_string(),
 //!     topic: "Discussion".to_string(),
 //!     created_at: 1697500000000,
@@ -42,8 +42,14 @@
 //! # }
 //! ```
 
+mod database_type;
+pub mod coordinator;
+
 use common::{models, DbResult};
 use std::sync::Arc;
+
+pub use database_type::{DatabaseType, TemperatureTier};
+pub use coordinator::DatabaseCoordinator;
 
 /// Manages all direct interactions with the sled database for CRUD operations.
 ///
@@ -61,6 +67,10 @@ pub struct StorageManager {
     edges: sled::Tree,
     embeddings: sled::Tree,
     index_manager: Option<Arc<indexing::IndexManager>>,
+    
+    // Database type and tier (for multi-tier architecture)
+    db_type: DatabaseType,
+    tier: Option<TemperatureTier>,
 }
 
 impl StorageManager {
@@ -102,7 +112,72 @@ impl StorageManager {
             edges,
             embeddings,
             index_manager: None,
+            db_type: DatabaseType::Conversations, // Default for backward compatibility
+            tier: None,
         })
+    }
+    
+    /// Opens a typed database at a specific temperature tier
+    ///
+    /// This is the recommended method for MIA's multi-tier architecture.
+    ///
+    /// # Arguments
+    ///
+    /// * `db_type` - Type of database (Conversations, Knowledge, etc.)
+    /// * `tier` - Optional temperature tier (Active, Recent, Archive, etc.)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use storage::{StorageManager, DatabaseType, TemperatureTier};
+    ///
+    /// # fn main() -> Result<(), storage::DbError> {
+    /// // Open conversations/active (HOT tier)
+    /// let conv_active = StorageManager::open_typed(
+    ///     DatabaseType::Conversations,
+    ///     Some(TemperatureTier::Active)
+    /// )?;
+    ///
+    /// // Open knowledge/stable
+    /// let knowledge_stable = StorageManager::open_typed(
+    ///     DatabaseType::Knowledge,
+    ///     Some(TemperatureTier::Stable)
+    /// )?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn open_typed(
+        db_type: DatabaseType,
+        tier: Option<TemperatureTier>,
+    ) -> DbResult<Self> {
+        let path = db_type.get_path(tier);
+        
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            common::platform::ensure_db_directory(parent)?;
+        }
+        
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| common::DbError::InvalidOperation(
+                "Invalid UTF-8 in database path".to_string()
+            ))?;
+        
+        let mut storage = Self::new(path_str)?;
+        storage.db_type = db_type;
+        storage.tier = tier;
+        
+        Ok(storage)
+    }
+    
+    /// Get the database type of this storage manager
+    pub fn db_type(&self) -> DatabaseType {
+        self.db_type
+    }
+    
+    /// Get the temperature tier of this storage manager
+    pub fn tier(&self) -> Option<TemperatureTier> {
+        self.tier
     }
 
     /// Opens or creates a database at the platform-specific default location.
@@ -223,7 +298,55 @@ impl StorageManager {
             edges,
             embeddings,
             index_manager: Some(Arc::new(index_manager)),
+            db_type: DatabaseType::Conversations, // Default for backward compatibility
+            tier: None,
         })
+    }
+    
+    /// Opens a typed database with indexing at a specific temperature tier
+    ///
+    /// Combines `open_typed()` and indexing setup.
+    ///
+    /// # Arguments
+    ///
+    /// * `db_type` - Type of database
+    /// * `tier` - Optional temperature tier
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use storage::{StorageManager, DatabaseType, TemperatureTier};
+    ///
+    /// # fn main() -> Result<(), storage::DbError> {
+    /// let storage = StorageManager::open_typed_with_indexing(
+    ///     DatabaseType::Conversations,
+    ///     Some(TemperatureTier::Active)
+    /// )?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn open_typed_with_indexing(
+        db_type: DatabaseType,
+        tier: Option<TemperatureTier>,
+    ) -> DbResult<Self> {
+        let path = db_type.get_path(tier);
+        
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            common::platform::ensure_db_directory(parent)?;
+        }
+        
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| common::DbError::InvalidOperation(
+                "Invalid UTF-8 in database path".to_string()
+            ))?;
+        
+        let mut storage = Self::with_indexing(path_str)?;
+        storage.db_type = db_type;
+        storage.tier = tier;
+        
+        Ok(storage)
     }
 
     // --- Node Operations ---
@@ -261,6 +384,13 @@ impl StorageManager {
     /// # }
     /// ```
     pub fn get_node(&self, id: &str) -> DbResult<Option<models::Node>> {
+        // Input validation (RAG Rule 5.1)
+        if id.is_empty() {
+            return Err(common::DbError::InvalidOperation(
+                "Node ID cannot be empty".to_string()
+            ));
+        }
+        
         match self.nodes.get(id.as_bytes())? {
             Some(bytes) => {
                 let node: models::Node = bincode::deserialize(&bytes)?;
@@ -288,14 +418,14 @@ impl StorageManager {
     /// # Examples
     ///
     /// ```
-    /// use storage::{StorageManager, Node, Entity};
+    /// use storage::{StorageManager, Node, Entity, NodeId};
     /// use serde_json::json;
     ///
     /// # fn main() -> Result<(), storage::DbError> {
     /// let storage = StorageManager::new("test_db")?;
     ///
     /// let entity = Entity {
-    ///     id: "entity_456".to_string(),
+    ///     id: NodeId::new("entity_456"),
     ///     label: "Rust".to_string(),
     ///     entity_type: "LANGUAGE".to_string(),
     ///     embedding_id: None,
@@ -308,8 +438,16 @@ impl StorageManager {
     /// ```
     pub fn insert_node(&self, node: &models::Node) -> DbResult<()> {
         let id = node.id();
+        
+        // Input validation (RAG Rule 5.1)
+        if id.as_str().is_empty() {
+            return Err(common::DbError::InvalidOperation(
+                "Node ID cannot be empty".to_string()
+            ));
+        }
+        
         let bytes = bincode::serialize(node)?;
-        self.nodes.insert(id.as_bytes(), bytes)?;
+        self.nodes.insert(id.as_str().as_bytes(), bytes)?;
         
         // Update indexes if indexing is enabled
         if let Some(ref idx) = self.index_manager {
@@ -352,6 +490,13 @@ impl StorageManager {
     /// # }
     /// ```
     pub fn delete_node(&self, id: &str) -> DbResult<Option<models::Node>> {
+        // Input validation (RAG Rule 5.1)
+        if id.is_empty() {
+            return Err(common::DbError::InvalidOperation(
+                "Node ID cannot be empty".to_string()
+            ));
+        }
+        
         match self.nodes.remove(id.as_bytes())? {
             Some(bytes) => {
                 let node: models::Node = bincode::deserialize(&bytes)?;
@@ -386,6 +531,13 @@ impl StorageManager {
     /// - `DbError::Sled`: Database I/O error
     /// - `DbError::Serialization`: Data corruption or version mismatch
     pub fn get_edge(&self, id: &str) -> DbResult<Option<models::Edge>> {
+        // Input validation (RAG Rule 5.1)
+        if id.is_empty() {
+            return Err(common::DbError::InvalidOperation(
+                "Edge ID cannot be empty".to_string()
+            ));
+        }
+        
         match self.edges.get(id.as_bytes())? {
             Some(bytes) => {
                 let edge: models::Edge = bincode::deserialize(&bytes)?;
@@ -407,8 +559,15 @@ impl StorageManager {
     /// - `DbError::Sled`: Database I/O error
     /// - `DbError::Serialization`: Failed to serialize the edge
     pub fn insert_edge(&self, edge: &models::Edge) -> DbResult<()> {
+        // Input validation (RAG Rule 5.1)
+        if edge.id.as_str().is_empty() {
+            return Err(common::DbError::InvalidOperation(
+                "Edge ID cannot be empty".to_string()
+            ));
+        }
+        
         let bytes = bincode::serialize(edge)?;
-        self.edges.insert(edge.id.as_bytes(), bytes)?;
+        self.edges.insert(edge.id.as_str().as_bytes(), bytes)?;
         
         // Update indexes if indexing is enabled
         if let Some(ref idx) = self.index_manager {
@@ -435,6 +594,13 @@ impl StorageManager {
     /// - `DbError::Sled`: Database I/O error
     /// - `DbError::Serialization`: Data corruption in deleted edge
     pub fn delete_edge(&self, id: &str) -> DbResult<Option<models::Edge>> {
+        // Input validation (RAG Rule 5.1)
+        if id.is_empty() {
+            return Err(common::DbError::InvalidOperation(
+                "Edge ID cannot be empty".to_string()
+            ));
+        }
+        
         match self.edges.remove(id.as_bytes())? {
             Some(bytes) => {
                 let edge: models::Edge = bincode::deserialize(&bytes)?;
@@ -469,6 +635,13 @@ impl StorageManager {
     /// - `DbError::Sled`: Database I/O error
     /// - `DbError::Serialization`: Data corruption or version mismatch
     pub fn get_embedding(&self, id: &str) -> DbResult<Option<models::Embedding>> {
+        // Input validation (RAG Rule 5.1)
+        if id.is_empty() {
+            return Err(common::DbError::InvalidOperation(
+                "Embedding ID cannot be empty".to_string()
+            ));
+        }
+        
         match self.embeddings.get(id.as_bytes())? {
             Some(bytes) => {
                 let embedding: models::Embedding = bincode::deserialize(&bytes)?;
@@ -500,7 +673,7 @@ impl StorageManager {
         
         // Load the embedding if ID exists
         match embedding_id {
-            Some(id) => self.get_embedding(&id),
+            Some(id) => self.get_embedding(id.as_str()),
             None => Ok(None),
         }
     }
@@ -520,13 +693,13 @@ impl StorageManager {
     /// # Examples
     ///
     /// ```
-    /// use storage::{StorageManager, Embedding};
+    /// use storage::{StorageManager, Embedding, EmbeddingId};
     ///
     /// # fn main() -> Result<(), storage::DbError> {
     /// let storage = StorageManager::new("test_db")?;
     ///
     /// let embedding = Embedding {
-    ///     id: "embed_001".to_string(),
+    ///     id: EmbeddingId::new("embed_001"),
     ///     vector: vec![0.1; 384], // 384-dimensional vector
     ///     model: "all-MiniLM-L6-v2".to_string(),
     /// };
@@ -536,8 +709,15 @@ impl StorageManager {
     /// # }
     /// ```
     pub fn insert_embedding(&self, embedding: &models::Embedding) -> DbResult<()> {
+        // Input validation (RAG Rule 5.1)
+        if embedding.id.as_str().is_empty() {
+            return Err(common::DbError::InvalidOperation(
+                "Embedding ID cannot be empty".to_string()
+            ));
+        }
+        
         let bytes = bincode::serialize(embedding)?;
-        self.embeddings.insert(embedding.id.as_bytes(), bytes)?;
+        self.embeddings.insert(embedding.id.as_str().as_bytes(), bytes)?;
         
         // Update indexes if indexing is enabled
         if let Some(ref idx) = self.index_manager {
@@ -564,13 +744,20 @@ impl StorageManager {
     /// - `DbError::Sled`: Database I/O error
     /// - `DbError::Serialization`: Data corruption in deleted embedding
     pub fn delete_embedding(&self, id: &str) -> DbResult<Option<models::Embedding>> {
+        // Input validation (RAG Rule 5.1)
+        if id.is_empty() {
+            return Err(common::DbError::InvalidOperation(
+                "Embedding ID cannot be empty".to_string()
+            ));
+        }
+        
         match self.embeddings.remove(id.as_bytes())? {
             Some(bytes) => {
                 let embedding: models::Embedding = bincode::deserialize(&bytes)?;
                 
                 // Update indexes if indexing is enabled
                 if let Some(ref idx) = self.index_manager {
-                    idx.unindex_embedding(&embedding.id)?;
+                    idx.unindex_embedding(embedding.id.as_str())?;
                 }
                 
                 Ok(Some(embedding))
@@ -656,7 +843,7 @@ mod tests {
 
     fn create_test_chat(id: &str) -> Node {
         Node::Chat(Chat {
-            id: id.to_string(),
+            id: NodeId::new(id),
             title: "Test Chat".to_string(),
             topic: "Testing".to_string(),
             created_at: 1697500000000,
@@ -679,7 +866,7 @@ mod tests {
         // Read
         let retrieved = storage.get_node("chat_001")?;
         assert!(retrieved.is_some());
-        assert_eq!(retrieved.unwrap().id(), "chat_001");
+        assert_eq!(retrieved.unwrap().id().as_str(), "chat_001");
 
         // Update (re-insert with modified data)
         let mut updated_chat = create_test_chat("chat_001");
@@ -710,9 +897,9 @@ mod tests {
         let (storage, _temp) = create_temp_db();
 
         let edge = Edge {
-            id: "edge_001".to_string(),
-            from_node: "node_a".to_string(),
-            to_node: "node_b".to_string(),
+            id: EdgeId::new("edge_001"),
+            from_node: NodeId::new("node_a"),
+            to_node: NodeId::new("node_b"),
             edge_type: "CONTAINS".to_string(),
             created_at: 1697500000000,
             metadata: json!({}),
@@ -735,7 +922,7 @@ mod tests {
         let (storage, _temp) = create_temp_db();
 
         let embedding = Embedding {
-            id: "embed_001".to_string(),
+            id: EmbeddingId::new("embed_001"),
             vector: vec![0.1, 0.2, 0.3],
             model: "test-model".to_string(),
         };
@@ -764,5 +951,53 @@ mod tests {
 
         Ok(())
     }
+    
+    #[test]
+    fn test_empty_id_validation() {
+        let (storage, _temp) = create_temp_db();
+        
+        // Test empty node ID (RAG Rule 5.1)
+        let result = storage.get_node("");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cannot be empty"));
+        
+        let result = storage.delete_node("");
+        assert!(result.is_err());
+        
+        // Test empty edge ID
+        let result = storage.get_edge("");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cannot be empty"));
+        
+        // Test empty embedding ID
+        let result = storage.get_embedding("");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cannot be empty"));
+    }
+    
+    #[test]
+    fn test_insert_with_empty_id() -> DbResult<()> {
+        let (storage, _temp) = create_temp_db();
+        
+        // Create node with empty ID (RAG Rule 5.1)
+        let bad_chat = Node::Chat(Chat {
+            id: NodeId::new(""),
+            title: "Test".to_string(),
+            topic: "Test".to_string(),
+            created_at: 1697500000000,
+            updated_at: 1697500000000,
+            message_ids: vec![],
+            summary_ids: vec![],
+            embedding_id: None,
+            metadata: json!({}),
+        });
+        
+        let result = storage.insert_node(&bad_chat);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cannot be empty"));
+        
+        Ok(())
+    }
 }
+
 

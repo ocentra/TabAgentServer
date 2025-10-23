@@ -70,7 +70,7 @@ impl ModelConfig {
 /// A loaded GGUF model
 pub struct Model {
     model_ptr: *mut LlamaModel,
-    library: Arc<Library>,
+    _library: Arc<Library>,  // Keep library alive for entire model lifetime
     functions: Arc<LlamaFunctions>,
     config: ModelConfig,
 }
@@ -103,6 +103,10 @@ impl Model {
         }
 
         // Load the shared library
+        // SAFETY: Library::new loads a shared library from the filesystem. This is safe because:
+        // 1. We validate the library path exists and is a valid DLL/SO file
+        // 2. The library is only accessed through properly typed function pointers
+        // 3. All subsequent FFI calls verify function symbols exist before use
         let library = unsafe {
             Library::new(library_path.as_ref()).map_err(|e| {
                 ModelError::LibraryLoadError(format!(
@@ -119,6 +123,11 @@ impl Model {
         let functions = Arc::new(functions);
 
         // Initialize llama backend
+        // SAFETY: llama_backend_init initializes the llama.cpp backend once per process.
+        // This is safe because:
+        // 1. The function pointer was verified to exist during load_functions
+        // 2. llama_backend_init is designed to be called before any model operations
+        // 3. It's idempotent - safe to call multiple times
         unsafe {
             (functions.llama_backend_init)();
         }
@@ -137,6 +146,12 @@ impl Model {
         let model_path_cstr = CString::new(config.model_path.to_string_lossy().as_bytes())
             .map_err(|e| ModelError::InvalidPath(e.to_string()))?;
 
+        // SAFETY: llama_load_model_from_file loads a GGUF model from disk.
+        // This is safe because:
+        // 1. model_path_cstr is a valid null-terminated C string
+        // 2. model_params is a valid struct matching the C API layout
+        // 3. We check for null return value to handle load failures
+        // 4. The returned pointer's lifetime is managed by our Drop implementation
         let model_ptr = unsafe {
             (functions.llama_load_model_from_file)(model_path_cstr.as_ptr(), model_params)
         };
@@ -152,7 +167,7 @@ impl Model {
 
         Ok(Self {
             model_ptr,
-            library,
+            _library: library,
             functions,
             config,
         })
@@ -160,6 +175,12 @@ impl Model {
 
     /// Load all required function symbols from the library
     fn load_functions(library: &Library) -> Result<LlamaFunctions> {
+        // SAFETY: We're loading function symbols from a trusted llama.cpp shared library.
+        // This is safe because:
+        // 1. All symbol names are verified C strings with null terminators
+        // 2. Each .get() call returns Result, and we propagate errors for missing symbols
+        // 3. Function signatures exactly match the llama.cpp C API
+        // 4. The Library holds the loaded shared library, preventing symbol invalidation
         unsafe {
             Ok(LlamaFunctions {
                 llama_backend_init: **library
@@ -247,38 +268,39 @@ impl Model {
         &self.functions
     }
 
-    /// Get the library handle
-    pub(crate) fn library(&self) -> &Arc<Library> {
-        &self.library
-    }
-
     /// Get model vocabulary size
     pub fn vocab_size(&self) -> usize {
+        // SAFETY: Calling llama C API with valid model_ptr owned by this struct
         unsafe { (self.functions.llama_n_vocab)(self.model_ptr) as usize }
     }
 
     /// Get model training context size
     pub fn context_train_size(&self) -> usize {
+        // SAFETY: Calling llama C API with valid model_ptr owned by this struct
         unsafe { (self.functions.llama_n_ctx_train)(self.model_ptr) as usize }
     }
 
     /// Get model embedding dimension
     pub fn embedding_dim(&self) -> usize {
+        // SAFETY: Calling llama C API with valid model_ptr owned by this struct
         unsafe { (self.functions.llama_n_embd)(self.model_ptr) as usize }
     }
 
     /// Get BOS (beginning of sequence) token
     pub fn token_bos(&self) -> i32 {
+        // SAFETY: Calling llama C API with valid model_ptr owned by this struct
         unsafe { (self.functions.llama_token_bos)(self.model_ptr) }
     }
 
     /// Get EOS (end of sequence) token
     pub fn token_eos(&self) -> i32 {
+        // SAFETY: Calling llama C API with valid model_ptr owned by this struct
         unsafe { (self.functions.llama_token_eos)(self.model_ptr) }
     }
 
     /// Get newline token
     pub fn token_nl(&self) -> i32 {
+        // SAFETY: Calling llama C API with valid model_ptr owned by this struct
         unsafe { (self.functions.llama_token_nl)(self.model_ptr) }
     }
 
@@ -291,6 +313,11 @@ impl Model {
 impl Drop for Model {
     fn drop(&mut self) {
         if !self.model_ptr.is_null() {
+            // SAFETY: llama_free_model safely deallocates the model.
+            // This is safe because:
+            // 1. model_ptr was allocated by llama_load_model_from_file and is valid
+            // 2. We check is_null() to prevent double-free
+            // 3. This is only called once during Drop, ensuring proper cleanup
             unsafe {
                 (self.functions.llama_free_model)(self.model_ptr);
             }
@@ -299,7 +326,9 @@ impl Drop for Model {
     }
 }
 
-// Model is Send because the underlying C library is thread-safe for model access
+// SAFETY: Model is Send because the underlying llama.cpp library is thread-safe for model access.
+// The model_ptr can be safely moved between threads, and the Arc-wrapped library/functions ensure
+// the shared library remains valid. However, Model is NOT Sync - contexts must be created per-thread.
 unsafe impl Send for Model {}
 // Model is NOT Sync - contexts must be created per-thread
 

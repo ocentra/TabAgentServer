@@ -251,7 +251,7 @@ mod tests {
     #[tokio::test]
     async fn test_task_execution() {
         let task = Task::GenerateEmbedding {
-            node_id: "msg_123".to_string(),
+            node_id: NodeId::from("msg_123"),
             text: "Hello world".to_string(),
             priority: TaskPriority::Normal,
         };
@@ -263,13 +263,13 @@ mod tests {
     #[test]
     fn test_task_priority() {
         let urgent_task = Task::IndexNode {
-            node_id: "node_1".to_string(),
+            node_id: NodeId::from("node_1"),
             priority: TaskPriority::Urgent,
         };
         assert_eq!(urgent_task.priority(), TaskPriority::Urgent);
         
         let batch_task = Task::GenerateSummary {
-            chat_id: "chat_1".to_string(),
+            chat_id: NodeId::from("chat_1"),
             message_ids: vec![],
             priority: TaskPriority::Batch,
         };

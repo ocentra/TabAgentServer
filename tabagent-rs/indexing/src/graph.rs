@@ -60,22 +60,22 @@ impl GraphIndex {
     /// # }
     /// ```
     pub fn add_edge(&self, edge: &Edge) -> DbResult<()> {
-        // Add to outgoing index
-        self.add_to_index(&self.outgoing_tree, &edge.from_node, &edge.id)?;
+        // Add to outgoing index (convert newtypes to &str)
+        self.add_to_index(&self.outgoing_tree, edge.from_node.as_str(), edge.id.as_str())?;
         
         // Add to incoming index
-        self.add_to_index(&self.incoming_tree, &edge.to_node, &edge.id)?;
+        self.add_to_index(&self.incoming_tree, edge.to_node.as_str(), edge.id.as_str())?;
         
         Ok(())
     }
     
     /// Removes an edge from both indexes.
     pub fn remove_edge(&self, edge: &Edge) -> DbResult<()> {
-        // Remove from outgoing index
-        self.remove_from_index(&self.outgoing_tree, &edge.from_node, &edge.id)?;
+        // Remove from outgoing index (convert newtypes to &str)
+        self.remove_from_index(&self.outgoing_tree, edge.from_node.as_str(), edge.id.as_str())?;
         
         // Remove from incoming index
-        self.remove_from_index(&self.incoming_tree, &edge.to_node, &edge.id)?;
+        self.remove_from_index(&self.incoming_tree, edge.to_node.as_str(), edge.id.as_str())?;
         
         Ok(())
     }
@@ -151,8 +151,8 @@ impl GraphIndex {
             .map_err(|e| DbError::Serialization(e.to_string()))?
             .unwrap_or_default();
         
-        // Add edge ID
-        edge_set.insert(edge_id.to_string());
+        // Add edge ID (convert &str to EdgeId)
+        edge_set.insert(EdgeId::from(edge_id));
         
         // Store back
         let serialized = bincode::serialize(&edge_set)
@@ -174,7 +174,7 @@ impl GraphIndex {
             let mut edge_set: HashSet<EdgeId> = bincode::deserialize(&bytes)
                 .map_err(|e| DbError::Serialization(e.to_string()))?;
             
-            edge_set.remove(edge_id);
+            edge_set.remove(&EdgeId::from(edge_id));
             
             if edge_set.is_empty() {
                 tree.remove(key.as_bytes())?;
@@ -212,6 +212,8 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
     use serde_json::json;
+    use common::{NodeId, EdgeId};
+    use common::models::Edge;
     
     fn create_test_index() -> (GraphIndex, TempDir) {
         let temp_dir = TempDir::new().unwrap();
@@ -223,9 +225,9 @@ mod tests {
     
     fn create_test_edge(id: &str, from: &str, to: &str) -> Edge {
         Edge {
-            id: id.to_string(),
-            from_node: from.to_string(),
-            to_node: to.to_string(),
+            id: EdgeId::from(id),
+            from_node: NodeId::from(from),
+            to_node: NodeId::from(to),
             edge_type: "TEST".to_string(),
             created_at: 1697500000000,
             metadata: json!({}),
@@ -244,8 +246,8 @@ mod tests {
         
         let outgoing = index.get_outgoing("chat_1").unwrap();
         assert_eq!(outgoing.len(), 2);
-        assert!(outgoing.contains(&"e1".to_string()));
-        assert!(outgoing.contains(&"e2".to_string()));
+        assert!(outgoing.contains(&EdgeId::from("e1")));
+        assert!(outgoing.contains(&EdgeId::from("e2")));
     }
     
     #[test]
@@ -260,8 +262,8 @@ mod tests {
         
         let incoming = index.get_incoming("msg_1").unwrap();
         assert_eq!(incoming.len(), 2);
-        assert!(incoming.contains(&"e1".to_string()));
-        assert!(incoming.contains(&"e2".to_string()));
+        assert!(incoming.contains(&EdgeId::from("e1")));
+        assert!(incoming.contains(&EdgeId::from("e2")));
     }
     
     #[test]
