@@ -39,7 +39,6 @@ from ..constants import ErrorCode
 from core.inference_service import get_inference_service
 from core.recipe_types import ModelCapabilities as ModelCapabilitiesDataclass
 from models import ModelManager
-from models.model_registry import ModelRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -99,32 +98,9 @@ async def pull_model(request: ModelPullRequest):
                 }
             )
         
-        # Register model if recipe and model_name provided
-        if request.recipe and request.model_name:
-            # Convert capabilities dict to ModelCapabilities
-            caps = ModelCapabilitiesDataclass()
-            if request.capabilities:
-                caps = ModelCapabilitiesDataclass(
-                    reasoning=request.capabilities.get("reasoning", False),
-                    vision=request.capabilities.get("vision", False),
-                    audio=request.capabilities.get("audio", False),
-                    video=request.capabilities.get("video", False),
-                    function_calling=request.capabilities.get("function_calling", False),
-                    mmproj_path=request.capabilities.get("mmproj_path")
-                )
-            
-            # Register in model registry
-            ModelRegistry.register_model(
-                model_name=request.model_name,
-                checkpoint=request.model,
-                recipe=request.recipe,
-                capabilities=caps
-            )
-            
-            logger.info(f"Model registered: {request.model_name} with recipe {request.recipe.value}")
-            message = f"Model {request.model} downloaded and registered as {request.model_name}"
-        else:
-            message = f"Model {request.model} downloaded successfully"
+        # Model downloaded successfully
+        # (Legacy registry system removed - models are auto-detected by Rust)
+        message = f"Model {request.model} downloaded successfully"
         
         return ModelOperationResponse(
             success=True,
@@ -272,15 +248,7 @@ async def load_model(request: ModelLoadRequest):
         service = get_inference_service()
         model_path = request.model
         
-        # Check if it's a registered model name
-        registered = ModelRegistry.get_model(request.model)
-        if registered:
-            logger.info(f"Loading registered model: {registered.model_name} (recipe: {registered.recipe.value})")
-            # Use registered model's checkpoint/path
-            # For now, assume checkpoint maps to path (ModelManager handles this)
-            model_path = registered.checkpoint
-        
-        # Load model (reuses native_host logic)
+        # Load model (uses Rust detection + pipelines, no registry needed)
         result = service.load_model(model_path)
         
         if result["status"] == "success":
@@ -479,35 +447,33 @@ async def list_recipes():
 @router.get("/models/registered")
 async def list_registered_models():
     """
-    List all registered models (system + user).
+    List all available models from catalog.
     
-    Returns models registered with recipes and capabilities.
+    Returns models from curated library (replaces legacy registry).
     
     Returns:
-        Dictionary of registered models
+        Dictionary of available models
     """
-    all_models = ModelRegistry.get_all_models()
+    from models import ModelLibrary
+    
+    library = ModelLibrary()
+    all_models = library.list_models()
     
     return {
         "models": {
-            name: {
-                "checkpoint": model.checkpoint,
-                "recipe": model.recipe.value,
-                "capabilities": {
-                    "reasoning": model.capabilities.reasoning,
-                    "vision": model.capabilities.vision,
-                    "audio": model.capabilities.audio,
-                    "video": model.capabilities.video,
-                    "function_calling": model.capabilities.function_calling,
-                    "mmproj_path": model.capabilities.mmproj_path
-                },
+            model.name: {
+                "repo": model.repo,
+                "type": model.model_type.value,
                 "description": model.description,
-                "is_user_model": model.is_user_model
+                "size_gb": model.size_gb,
+                "context_length": model.context_length,
+                "recommended": model.recommended,
+                "variants": model.variants,
+                "license": model.license.value,
+                "use_cases": [uc.value for uc in model.use_cases]
             }
-            for name, model in all_models.items()
+            for model in all_models
         },
-        "system_models": len(ModelRegistry.get_system_models()),
-        "user_models": len(ModelRegistry.get_user_models()),
         "total": len(all_models)
     }
 

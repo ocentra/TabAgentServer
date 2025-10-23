@@ -149,21 +149,13 @@ class UnifiedRequestHandler:
         Load model for inference.
         
         Args:
-            model_path: Path to model or registered name
-            recipe: Optional recipe override
+            model_path: Path to model (HuggingFace repo or local path)
+            recipe: Deprecated, kept for compatibility
             
         Returns:
             Status dictionary
         """
-        # Check if registered model
-        from models.model_registry import ModelRegistry
-        registered = ModelRegistry.get_model(model_path)
-        
-        if registered:
-            logger.info(f"Loading registered model: {registered.model_name}")
-            model_path = registered.checkpoint
-        
-        # Load via InferenceService
+        # Load via InferenceService (uses Rust detection + pipelines)
         result = self._service.load_model(model_path)
         
         return {
@@ -371,29 +363,28 @@ class UnifiedRequestHandler:
     
     def get_registered_models(self) -> Dict[str, Any]:
         """
-        List registered models.
+        List available models from catalog.
         
         Returns:
-            Dictionary of registered models
+            Dictionary of available models
         """
-        from models.model_registry import ModelRegistry
+        from models import ModelLibrary
         
-        all_models = ModelRegistry.get_all_models()
+        library = ModelLibrary()
+        all_models = library.list_models()
         
         return {
             "models": {
-                name: {
-                    "checkpoint": model.checkpoint,
-                    "recipe": model.recipe.value,
-                    "capabilities": {
-                        "reasoning": model.capabilities.reasoning,
-                        "vision": model.capabilities.vision,
-                        "audio": model.capabilities.audio,
-                    },
+                model.name: {
+                    "repo": model.repo,
+                    "type": model.model_type.value,
                     "description": model.description,
-                    "is_user_model": model.is_user_model
+                    "size_gb": model.size_gb,
+                    "context_length": model.context_length,
+                    "recommended": model.recommended,
+                    "variants": model.variants,
                 }
-                for name, model in all_models.items()
+                for model in all_models
             },
             "total": len(all_models)
         }
