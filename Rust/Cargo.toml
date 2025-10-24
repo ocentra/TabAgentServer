@@ -8,6 +8,7 @@ members = [
     "storage",
     "query",
     "indexing",
+    "knowledge-graph",
     
     # Knowledge weaving
     "weaver",

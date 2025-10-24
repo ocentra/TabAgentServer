@@ -18,6 +18,7 @@
 //!
 //! ```no_run
 //! use task_scheduler::{TaskScheduler, Task, TaskPriority, ActivityLevel};
+//! use common::NodeId;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let scheduler = TaskScheduler::new();

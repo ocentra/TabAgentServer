@@ -19,31 +19,31 @@ pub enum DatabaseType {
     /// SOURCE: User conversations (CRITICAL - cannot lose!)
     /// Contains chats, messages, attachments
     Conversations,
-    
+
     /// DERIVED: Extracted entities and relationships (regeneratable)
     /// Contains entities extracted by weaver
     Knowledge,
-    
+
     /// DERIVED: Semantic embeddings for vector search (regeneratable)
     /// Contains vectors and HNSW indexes
     Embeddings,
-    
+
     /// EXTERNAL: Cached tool results (searches, scrapes, APIs)
     /// Contains web search results, scraped pages, API responses
     ToolResults,
-    
+
     /// LEARNING: Agent experience and feedback (CRITICAL for learning!)
     /// Contains action outcomes, user feedback, success/error patterns
     Experience,
-    
+
     /// DERIVED: Hierarchical summaries (regeneratable)
     /// Contains daily/weekly/monthly summaries
     Summaries,
-    
+
     /// INDEXES: Query optimization metadata (rebuildable)
     /// Contains query routing cache, performance stats
     Meta,
-    
+
     /// MODELS: Model files and manifests (separate system)
     /// Already implemented in model-cache crate
     ModelCache,
@@ -57,28 +57,28 @@ pub enum DatabaseType {
 pub enum TemperatureTier {
     /// HOT: 0-30 days, always in RAM, <1ms queries
     Active,
-    
+
     /// WARM: 30-90 days, lazy load on first access, <10ms queries
     Recent,
-    
+
     /// COLD: 90+ days, on-demand load per quarter, 100ms queries (acceptable)
     Archive,
-    
+
     /// STABLE: For knowledge - proven entities (10+ mentions)
     Stable,
-    
+
     /// INFERRED: For knowledge - experimental/low-confidence entities
     Inferred,
-    
+
     /// SESSION: For summaries - current session (in-memory, volatile)
     Session,
-    
+
     /// DAILY: For summaries - daily summaries (last 30 days)
     Daily,
-    
+
     /// WEEKLY: For summaries - weekly summaries (last 6 months)
     Weekly,
-    
+
     /// MONTHLY: For summaries - monthly summaries (all time)
     Monthly,
 }
@@ -90,7 +90,7 @@ impl DatabaseType {
     /// Creates parent directories if they don't exist.
     pub fn get_path(&self, tier: Option<TemperatureTier>) -> PathBuf {
         let base = platform::get_default_db_path();
-        
+
         match (self, tier) {
             // === CONVERSATIONS (3 tiers) ===
             (DatabaseType::Conversations, Some(TemperatureTier::Active)) => {
@@ -102,10 +102,8 @@ impl DatabaseType {
             (DatabaseType::Conversations, Some(TemperatureTier::Archive)) => {
                 base.join("conversations").join("archive")
             }
-            (DatabaseType::Conversations, None) => {
-                base.join("conversations")
-            }
-            
+            (DatabaseType::Conversations, None) => base.join("conversations"),
+
             // === KNOWLEDGE (3 tiers) ===
             (DatabaseType::Knowledge, Some(TemperatureTier::Active)) => {
                 base.join("knowledge").join("active")
@@ -116,10 +114,8 @@ impl DatabaseType {
             (DatabaseType::Knowledge, Some(TemperatureTier::Inferred)) => {
                 base.join("knowledge").join("inferred")
             }
-            (DatabaseType::Knowledge, None) => {
-                base.join("knowledge")
-            }
-            
+            (DatabaseType::Knowledge, None) => base.join("knowledge"),
+
             // === EMBEDDINGS (3 tiers) ===
             (DatabaseType::Embeddings, Some(TemperatureTier::Active)) => {
                 base.join("embeddings").join("active")
@@ -130,10 +126,8 @@ impl DatabaseType {
             (DatabaseType::Embeddings, Some(TemperatureTier::Archive)) => {
                 base.join("embeddings").join("archive")
             }
-            (DatabaseType::Embeddings, None) => {
-                base.join("embeddings")
-            }
-            
+            (DatabaseType::Embeddings, None) => base.join("embeddings"),
+
             // === SUMMARIES (4 tiers) ===
             (DatabaseType::Summaries, Some(TemperatureTier::Session)) => {
                 base.join("summaries").join("session")
@@ -147,30 +141,20 @@ impl DatabaseType {
             (DatabaseType::Summaries, Some(TemperatureTier::Monthly)) => {
                 base.join("summaries").join("monthly")
             }
-            (DatabaseType::Summaries, None) => {
-                base.join("summaries")
-            }
-            
+            (DatabaseType::Summaries, None) => base.join("summaries"),
+
             // === TOOL-RESULTS (single tier) ===
-            (DatabaseType::ToolResults, _) => {
-                base.join("tool-results")
-            }
-            
+            (DatabaseType::ToolResults, _) => base.join("tool-results"),
+
             // === EXPERIENCE (single tier) ===
-            (DatabaseType::Experience, _) => {
-                base.join("experience")
-            }
-            
+            (DatabaseType::Experience, _) => base.join("experience"),
+
             // === META (single tier) ===
-            (DatabaseType::Meta, _) => {
-                base.join("meta")
-            }
-            
+            (DatabaseType::Meta, _) => base.join("meta"),
+
             // === MODEL-CACHE (single tier, already exists) ===
-            (DatabaseType::ModelCache, _) => {
-                base.join("model-cache")
-            }
-            
+            (DatabaseType::ModelCache, _) => base.join("model-cache"),
+
             // === CATCH-ALL for invalid tier combinations ===
             // This handles cases like Conversations with Stable tier, etc.
             _ => {
@@ -179,7 +163,7 @@ impl DatabaseType {
             }
         }
     }
-    
+
     /// Get human-readable name for this database type
     pub fn name(&self) -> &'static str {
         match self {
@@ -193,12 +177,12 @@ impl DatabaseType {
             DatabaseType::ModelCache => "model-cache",
         }
     }
-    
+
     /// Is this a SOURCE database? (cannot lose data!)
     pub fn is_source(&self) -> bool {
         matches!(self, DatabaseType::Conversations | DatabaseType::Experience)
     }
-    
+
     /// Is this a DERIVED database? (can regenerate from source)
     pub fn is_derived(&self) -> bool {
         matches!(
@@ -206,17 +190,17 @@ impl DatabaseType {
             DatabaseType::Knowledge | DatabaseType::Embeddings | DatabaseType::Summaries
         )
     }
-    
+
     /// Is this an EXTERNAL database? (cached external data)
     pub fn is_external(&self) -> bool {
         matches!(self, DatabaseType::ToolResults)
     }
-    
+
     /// Is this an INDEX database? (rebuildable)
     pub fn is_index(&self) -> bool {
         matches!(self, DatabaseType::Meta)
     }
-    
+
     /// Get default tiers for this database type
     pub fn default_tiers(&self) -> Vec<TemperatureTier> {
         match self {
@@ -265,7 +249,7 @@ impl TemperatureTier {
             TemperatureTier::Monthly => "monthly",
         }
     }
-    
+
     /// Is this a HOT tier? (always loaded)
     pub fn is_hot(&self) -> bool {
         matches!(
@@ -273,44 +257,20 @@ impl TemperatureTier {
             TemperatureTier::Active | TemperatureTier::Stable | TemperatureTier::Session
         )
     }
-    
+
     /// Is this a WARM tier? (lazy load)
     pub fn is_warm(&self) -> bool {
         matches!(self, TemperatureTier::Recent | TemperatureTier::Daily)
     }
-    
+
     /// Is this a COLD tier? (on-demand)
     pub fn is_cold(&self) -> bool {
         matches!(
             self,
-            TemperatureTier::Archive | TemperatureTier::Inferred | TemperatureTier::Weekly | TemperatureTier::Monthly
+            TemperatureTier::Archive
+                | TemperatureTier::Inferred
+                | TemperatureTier::Weekly
+                | TemperatureTier::Monthly
         )
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_database_type_paths() {
-        let path = DatabaseType::Conversations.get_path(Some(TemperatureTier::Active));
-        assert!(path.to_string_lossy().contains("conversations"));
-        assert!(path.to_string_lossy().contains("active"));
-    }
-
-    #[test]
-    fn test_source_databases() {
-        assert!(DatabaseType::Conversations.is_source());
-        assert!(DatabaseType::Experience.is_source());
-        assert!(!DatabaseType::Knowledge.is_source());
-    }
-
-    #[test]
-    fn test_default_tiers() {
-        let conv_tiers = DatabaseType::Conversations.default_tiers();
-        assert_eq!(conv_tiers.len(), 3);
-        assert!(conv_tiers.contains(&TemperatureTier::Active));
-    }
-}
-

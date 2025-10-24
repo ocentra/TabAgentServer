@@ -83,6 +83,9 @@ async fn test_activity_level_changes() {
     scheduler.set_activity(ActivityLevel::SleepMode).await;
     println!("  Set to SleepMode");
     
+    // Give time for the activity change to be processed
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    
     // Verify we can get the activity level
     let current = scheduler.get_activity().await;
     assert_eq!(current, ActivityLevel::SleepMode);
@@ -333,4 +336,81 @@ async fn test_priority_ordering() {
     // (Actual execution order verification would require more instrumentation)
     
     println!("✅ Priority-based scheduling verified");
+}
+
+#[tokio::test]
+async fn test_attachment_processing_task() {
+    println!("\n🧪 Testing attachment processing task...");
+    
+    let scheduler = TaskScheduler::new();
+    
+    let task = Task::ProcessAttachment {
+        attachment_id: NodeId::new("attach_123".to_string()),
+        file_path: "/path/to/document.pdf".to_string(),
+        mime_type: "application/pdf".to_string(),
+        priority: TaskPriority::Normal,
+    };
+    
+    let result = scheduler.submit(task).await;
+    assert!(result.is_ok(), "Attachment processing task should be accepted");
+    
+    println!("✅ Attachment processing task submitted");
+}
+
+#[tokio::test]
+async fn test_document_chunking_task() {
+    println!("\n🧪 Testing document chunking task...");
+    
+    let scheduler = TaskScheduler::new();
+    
+    let task = Task::ChunkDocument {
+        attachment_id: NodeId::new("attach_456".to_string()),
+        file_path: "/path/to/large_document.txt".to_string(),
+        chunk_size: 1000,
+        priority: TaskPriority::Normal,
+    };
+    
+    let result = scheduler.submit(task).await;
+    assert!(result.is_ok(), "Document chunking task should be accepted");
+    
+    println!("✅ Document chunking task submitted");
+}
+
+#[tokio::test]
+async fn test_text_extraction_task() {
+    println!("\n🧪 Testing text extraction task...");
+    
+    let scheduler = TaskScheduler::new();
+    
+    let task = Task::ExtractAttachmentText {
+        attachment_id: NodeId::new("attach_789".to_string()),
+        file_path: "/path/to/image.png".to_string(),
+        mime_type: "image/png".to_string(),
+        priority: TaskPriority::Normal,
+    };
+    
+    let result = scheduler.submit(task).await;
+    assert!(result.is_ok(), "Text extraction task should be accepted");
+    
+    println!("✅ Text extraction task submitted");
+}
+
+#[tokio::test]
+async fn test_attachment_embedding_task() {
+    println!("\n🧪 Testing attachment embedding task...");
+    
+    let scheduler = TaskScheduler::new();
+    
+    let chunk_ids = vec!["chunk_1".to_string(), "chunk_2".to_string()];
+    
+    let task = Task::GenerateAttachmentEmbeddings {
+        attachment_id: NodeId::new("attach_999".to_string()),
+        chunk_ids,
+        priority: TaskPriority::Normal,
+    };
+    
+    let result = scheduler.submit(task).await;
+    assert!(result.is_ok(), "Attachment embedding task should be accepted");
+    
+    println!("✅ Attachment embedding task submitted");
 }

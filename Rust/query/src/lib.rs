@@ -27,9 +27,9 @@
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Initialize components
-//! let storage = StorageManager::new("test_db")?;
-//! let indexing = IndexManager::new(storage.db())?;
-//! let query_mgr = QueryManager::new(&storage, &indexing);
+//! let coordinator = DatabaseCoordinator::new()?;
+//! let indexing = IndexManager::new(/* db reference */)?;
+//! let query_mgr = QueryManager::new(&coordinator, &indexing);
 //!
 //! // Build a converged query
 //! let query = ConvergedQuery {
@@ -101,12 +101,12 @@ impl<'a> QueryManager<'a> {
     ///
     /// ```
     /// # use query::QueryManager;
-    /// # use storage::StorageManager;
+    /// # use storage::{DatabaseCoordinator, StorageManager};
     /// # use indexing::IndexManager;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let storage = StorageManager::new("test_db")?;
-    /// let indexing = IndexManager::new(storage.db())?;
-    /// let query_mgr = QueryManager::new(&storage, &indexing);
+    /// let coordinator = DatabaseCoordinator::new()?;
+    /// let indexing = IndexManager::new(/* db reference */)?;
+    /// let query_mgr = QueryManager::new(&coordinator, &indexing);
     /// # Ok(())
     /// # }
     /// ```
@@ -133,13 +133,13 @@ impl<'a> QueryManager<'a> {
     ///
     /// ```
     /// # use query::{QueryManager, models::*};
-    /// # use storage::StorageManager;
+    /// # use storage::{DatabaseCoordinator, StorageManager};
     /// # use indexing::IndexManager;
     /// # use serde_json::json;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let storage = StorageManager::new("test_db")?;
-    /// # let indexing = IndexManager::new(storage.db())?;
-    /// # let query_mgr = QueryManager::new(&storage, &indexing);
+    /// # let coordinator = DatabaseCoordinator::new()?;
+    /// # let indexing = IndexManager::new(/* db reference */)?;
+    /// # let query_mgr = QueryManager::new(&coordinator, &indexing);
     /// let query = ConvergedQuery {
     ///     structural_filters: Some(vec![StructuralFilter {
     ///         property_name: "node_type".to_string(),
@@ -453,107 +453,316 @@ impl<'a> QueryManager<'a> {
 
     // --- HIGH-LEVEL CONVENIENCE APIs ---
 
-    /// Finds the shortest path between two nodes using BFS.
+    /// Finds the shortest path between two nodes using advanced graph algorithms.
     ///
-    /// Returns `None` if no path exists, otherwise returns a `Path` object
-    /// containing the ordered nodes and edges.
+    /// This method uses the hot graph index if available for faster computation.
     ///
-    /// # Examples
+    /// # Arguments
     ///
-    /// ```
-    /// # use query::QueryManager;
-    /// # use storage::StorageManager;
-    /// # use indexing::IndexManager;
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let storage = StorageManager::new("test_db")?;
-    /// # let indexing = IndexManager::new(storage.db())?;
-    /// # let query_mgr = QueryManager::new(&storage, &indexing);
-    /// let path = query_mgr.find_shortest_path("node_1", "node_2")?;
+    /// * `start_node_id` - The start node ID
+    /// * `end_node_id` - The end node ID
     ///
-    /// if let Some(path) = path {
-    ///     println!("Found path with {} nodes", path.nodes.len());
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// # Returns
+    ///
+    /// A vector of node IDs representing the shortest path, or an error if no path exists.
     pub fn find_shortest_path(
         &self,
         start_node_id: &str,
         end_node_id: &str,
-    ) -> QueryResult2<Option<Path>> {
-        use std::collections::VecDeque;
-
-        // BFS to find shortest path
-        let mut queue = VecDeque::new();
-        let mut visited = HashSet::new();
-        let mut parent_map: HashMap<NodeId, (NodeId, common::models::Edge)> = HashMap::new();
-
-        let start_node_id = NodeId::from(start_node_id);
-        let end_node_id = NodeId::from(end_node_id);
-
-        queue.push_back(start_node_id.clone());
-        visited.insert(start_node_id.clone());
-
-        let mut found = false;
-
-        while let Some(current_id) = queue.pop_front() {
-            if current_id == end_node_id {
-                found = true;
-                break;
+    ) -> QueryResult2<Vec<String>> {
+        // Try to use the hot graph index for advanced algorithms
+        match self.indexing.dijkstra_shortest_path(start_node_id, end_node_id) {
+            Ok((path, _distance)) => Ok(path),
+            Err(_) => {
+                // Fallback to simple BFS on the persistent graph
+                self.find_shortest_path_bfs(start_node_id, end_node_id)
             }
-
-            // Get all outgoing edge IDs
-            let edge_ids = self.indexing.get_outgoing_edges(current_id.as_str())?;
-
-            for edge_id in edge_ids {
-                let Some(edge) = self.coordinator.conversations_active().get_edge(edge_id.as_str())? else {
-                    continue; // Edge was deleted
-                };
-
-                if !visited.contains(&edge.to_node) {
-                    visited.insert(edge.to_node.clone());
-                    parent_map.insert(edge.to_node.clone(), (current_id.clone(), edge.clone()));
-                    queue.push_back(edge.to_node.clone());
+        }
+    }
+    
+    /// Finds the shortest path using BFS on the persistent graph.
+    ///
+    /// This is a fallback implementation when the hot graph index is not available.
+    fn find_shortest_path_bfs(
+        &self,
+        start_node_id: &str,
+        end_node_id: &str,
+    ) -> QueryResult2<Vec<String>> {
+        use std::collections::VecDeque;
+        
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+        let mut predecessors: HashMap<String, String> = HashMap::new();
+        
+        queue.push_back(start_node_id.to_string());
+        visited.insert(start_node_id.to_string());
+        
+        while let Some(current_node) = queue.pop_front() {
+            if current_node == end_node_id {
+                // Reconstruct path
+                let mut path = Vec::new();
+                let mut current = current_node;
+                
+                while current != start_node_id {
+                    path.push(current.clone());
+                    current = predecessors.get(&current).ok_or_else(|| {
+                        QueryError::GraphTraversal("Path reconstruction failed".to_string())
+                    })?.clone();
+                }
+                
+                path.push(start_node_id.to_string());
+                path.reverse();
+                return Ok(path);
+            }
+            
+            // Get neighbors
+            let outgoing_edges = self.indexing.get_outgoing_edges(&current_node)?;
+            for edge_id in outgoing_edges {
+                if let Some(edge) = self.coordinator.conversations_active().get_edge(edge_id.as_str())? {
+                    let neighbor = edge.to_node.as_str();
+                    
+                    if !visited.contains(neighbor) {
+                        visited.insert(neighbor.to_string());
+                        predecessors.insert(neighbor.to_string(), current_node.clone());
+                        queue.push_back(neighbor.to_string());
+                    }
                 }
             }
         }
-
-        if !found {
-            return Ok(None); // No path found
+        
+        Err(QueryError::GraphTraversal(
+            format!("No path found from {} to {}", start_node_id, end_node_id)
+        ))
+    }
+    
+    /// Performs a semantic search using the hot vector index if available.
+    ///
+    /// This method uses the hot vector index for faster similarity search.
+    ///
+    /// # Arguments
+    ///
+    /// * `query_vector` - The query vector
+    /// * `limit` - The number of results to return
+    ///
+    /// # Returns
+    ///
+    /// A vector of (node_id, similarity) tuples, sorted by similarity.
+    pub fn semantic_search(
+        &self,
+        query_vector: &[f32],
+        limit: usize,
+    ) -> QueryResult2<Vec<(String, f32)>> {
+        // Try to use the hot vector index for faster search
+        match self.indexing.search_hot_vectors(query_vector, limit) {
+            Ok(results) => Ok(results),
+            Err(_) => {
+                // Fallback to the persistent vector index
+                let search_results = self.indexing.search_vectors(query_vector, limit)?;
+                Ok(search_results.into_iter()
+                    .map(|sr| (sr.id.as_str().to_string(), sr.distance))
+                    .collect())
+            }
         }
-
-        // Reconstruct the path
-        let mut path_nodes = Vec::new();
-        let mut path_edges = Vec::new();
-        let mut current = end_node_id.clone();
-
-        // Build path in reverse
-        while let Some((parent_id, edge)) = parent_map.get(&current) {
-            path_edges.push(edge.clone());
-            current = parent_id.clone();
+    }
+    
+    /// Performs a converged query with hybrid index support.
+    ///
+    /// This method extends the standard query with hybrid index capabilities.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The converged query specification
+    ///
+    /// # Returns
+    ///
+    /// A vector of `QueryResult` items, ordered by relevance.
+    pub fn query_with_hybrid(&self, query: &ConvergedQuery) -> QueryResult2<Vec<QueryResult>> {
+        // For now, we'll just call the standard query method
+        // In a more advanced implementation, we would leverage hybrid indexes
+        // for better performance
+        self.query(query)
+    }
+    
+    /// Performs a hybrid search combining structural, graph, and semantic filters.
+    ///
+    /// This method leverages the hot indexes when available for improved performance
+    /// on frequently accessed data.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The converged query specification
+    ///
+    /// # Returns
+    ///
+    /// A vector of `QueryResult` items, ordered by relevance.
+    pub fn hybrid_search(&self, query: &ConvergedQuery) -> QueryResult2<Vec<QueryResult>> {
+        // --- STAGE 1: Candidate Set Generation using Hybrid Indexes ---
+        
+        // 1a. Apply structural filters using hybrid indexes when available
+        let structural_candidates = self.apply_structural_filters_hybrid(&query.structural_filters)?;
+        
+        // 1b. Apply graph filters using hybrid graph indexes when available
+        let graph_candidates = self.apply_graph_filter_hybrid(&query.graph_filter)?;
+        
+        // 1c. Intersect candidate sets to get the final, accurate set
+        let final_candidates = self.intersect_candidates(structural_candidates, graph_candidates);
+        
+        // --- STAGE 2: Fetching & Semantic Re-ranking using Hybrid Indexes ---
+        
+        let results = if let Some(semantic_query) = &query.semantic_query {
+            // If there's a semantic component, search within the candidate set using hybrid indexes
+            self.fetch_and_rank_by_similarity_hybrid(
+                &semantic_query.vector,
+                final_candidates,
+                semantic_query.similarity_threshold,
+                query.limit,
+                query.offset,
+            )?
+        } else {
+            // If no semantic component, just fetch the filtered candidates
+            self.fetch_nodes(final_candidates, query.limit, query.offset)?
+        };
+        
+        Ok(results)
+    }
+    
+    /// Applies structural filters using hybrid indexes when available.
+    fn apply_structural_filters_hybrid(
+        &self,
+        filters: &Option<Vec<StructuralFilter>>,
+    ) -> QueryResult2<Option<HashSet<NodeId>>> {
+        // For now, we'll use the same implementation as the standard method
+        // In a more advanced implementation, we would check if the data is available
+        // in the hot indexes and use them for better performance
+        self.apply_structural_filters(filters)
+    }
+    
+    /// Applies graph filters using hybrid indexes when available.
+    fn apply_graph_filter_hybrid(
+        &self,
+        filter: &Option<GraphFilter>,
+    ) -> QueryResult2<Option<HashSet<NodeId>>> {
+        // First try to use the hot graph index if available
+        if let Some(hot_graph) = self.indexing.get_hot_graph_index() {
+            if let Some(filter) = filter {
+                // We need to release the lock after each operation to avoid deadlocks
+                let mut visited = HashSet::new();
+                let mut current_level = HashSet::new();
+                current_level.insert(filter.start_node_id.clone());
+                
+                // BFS traversal up to the specified depth using hot graph
+                for _ in 0..filter.depth {
+                    let mut next_level = HashSet::new();
+                    
+                    for node_id in &current_level {
+                        if visited.contains(node_id) {
+                            continue;
+                        }
+                        visited.insert(node_id.clone());
+                        
+                        // Get neighbors from hot graph
+                        let neighbors_result = {
+                            let mut hot_graph_guard = hot_graph.lock()
+                                .map_err(|e| QueryError::Storage(common::DbError::Other(format!("Lock poisoned: {}", e))))?;
+                            hot_graph_guard.get_outgoing_neighbors(node_id.as_str())
+                        };
+                        
+                        match neighbors_result {
+                            Ok(neighbors) => {
+                                for neighbor_id in neighbors {
+                                    // Add the neighbor to the next level
+                                    next_level.insert(NodeId::from(neighbor_id.as_str()));
+                                }
+                            }
+                            Err(_) => {
+                                // If hot graph doesn't have the data, fall back to persistent index
+                                let edge_ids = self.indexing.get_outgoing_edges(node_id.as_str())?;
+                                for edge_id in edge_ids {
+                                    if let Some(edge) = self.coordinator.conversations_active().get_edge(edge_id.as_str())? {
+                                        next_level.insert(edge.to_node.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    current_level = next_level;
+                    
+                    if current_level.is_empty() {
+                        break; // No more nodes to explore
+                    }
+                }
+                
+                return Ok(Some(visited));
+            }
         }
-
-        // Reverse to get correct order
-        path_edges.reverse();
-
-        // Fetch all nodes in the path
-        path_nodes.push(
-            self.coordinator.conversations_active()
-                .get_node(start_node_id.as_str())?
-                .ok_or_else(|| QueryError::GraphTraversal("Start node not found".to_string()))?,
-        );
-
-        for edge in &path_edges {
-            let node = self.coordinator.conversations_active()
-                .get_node(edge.to_node.as_str())?
-                .ok_or_else(|| QueryError::GraphTraversal("Path node not found".to_string()))?;
-            path_nodes.push(node);
+        
+        // Fall back to the standard implementation
+        self.apply_graph_filter(filter)
+    }
+    
+    /// Fetches and ranks nodes by similarity using hybrid indexes when available.
+    fn fetch_and_rank_by_similarity_hybrid(
+        &self,
+        query_vector: &[f32],
+        candidates: Option<HashSet<NodeId>>,
+        similarity_threshold: Option<f32>,
+        limit: usize,
+        offset: usize,
+    ) -> QueryResult2<Vec<QueryResult>> {
+        // Try to use the hot vector index for faster search
+        if let Some(hot_vector) = self.indexing.get_hot_vector_index() {
+            // Perform search on hot vectors
+            let hot_results = {
+                let mut hot_vector_guard = hot_vector.lock()
+                    .map_err(|e| QueryError::Storage(common::DbError::Other(format!("Lock poisoned: {}", e))))?;
+                hot_vector_guard.search(query_vector, limit + offset)
+            };
+            
+            match hot_results {
+                Ok(hot_results) => {
+                    // Filter by candidates if provided
+                    let mut results: Vec<QueryResult> = hot_results
+                        .into_iter()
+                        .filter_map(|(embedding_id, similarity)| {
+                            // Filter by candidate set if provided
+                            if let Some(ref candidates) = candidates {
+                                if !candidates.contains(&NodeId::from(embedding_id.as_str())) {
+                                    return None;
+                                }
+                            }
+                            
+                            // Filter by similarity threshold if provided
+                            if let Some(threshold) = similarity_threshold {
+                                if similarity < threshold {
+                                    return None;
+                                }
+                            }
+                            
+                            // Fetch the node
+                            match self.coordinator.get_message(embedding_id.as_str()).ok()? {
+                                Some(msg) => Some(QueryResult {
+                                    node: common::models::Node::Message(msg),
+                                    similarity_score: Some(similarity),
+                                }),
+                                None => None,
+                            }
+                        })
+                        .collect();
+                    
+                    // Apply pagination
+                    results = results.into_iter().skip(offset).take(limit).collect();
+                    
+                    return Ok(results);
+                }
+                Err(_) => {
+                    // Fall back to persistent vector index
+                }
+            }
         }
-
-        Ok(Some(Path {
-            nodes: path_nodes,
-            edges: path_edges,
-        }))
+        
+        // Fall back to the standard implementation
+        self.fetch_and_rank_by_similarity(query_vector, candidates, similarity_threshold, limit, offset)
     }
 }
 

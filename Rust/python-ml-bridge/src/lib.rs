@@ -26,7 +26,7 @@
 //! # Examples
 //!
 //! ```rust,no_run
-//! use ml_bridge::PyMlBridge;
+//! use python_ml_bridge::PyMlBridge;
 //! use weaver::ml_bridge::MlBridge;
 //!
 //! #[tokio::main]

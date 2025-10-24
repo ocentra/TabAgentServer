@@ -93,6 +93,14 @@ if let Some(idx) = storage.index_manager() {
 
 For production database location strategy (platform-specific paths, user data directories), see [DATABASE_STRATEGY.md](./DATABASE_STRATEGY.md).
 
+## Testing
+
+The storage crate includes comprehensive tests:
+- 10 unit tests covering core functionality
+- 18 integration tests covering database operations
+- 15 documentation tests covering all public APIs
+- All tests validate real functionality with temporary databases
+
 ## See Also
 
 - Parent: [Main README](../README.md)

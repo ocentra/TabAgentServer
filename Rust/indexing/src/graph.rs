@@ -45,12 +45,13 @@ impl GraphIndex {
     /// ```
     /// # use indexing::graph::GraphIndex;
     /// # use common::models::Edge;
+    /// # use common::{EdgeId, NodeId};
     /// # use serde_json::json;
     /// # fn example(index: &GraphIndex) -> Result<(), Box<dyn std::error::Error>> {
     /// let edge = Edge {
-    ///     id: "edge_1".to_string(),
-    ///     from_node: "chat_1".to_string(),
-    ///     to_node: "msg_1".to_string(),
+    ///     id: EdgeId::from("edge_1"),
+    ///     from_node: NodeId::from("chat_1"),
+    ///     to_node: NodeId::from("msg_1"),
     ///     edge_type: "CONTAINS_MESSAGE".to_string(),
     ///     created_at: 1697500000000,
     ///     metadata: json!({}),

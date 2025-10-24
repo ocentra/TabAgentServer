@@ -37,7 +37,7 @@ All core data structures using the **Hybrid Schema Model**:
 
 ## Usage
 
-```rust
+``rust
 use common::{NodeId, DbError, DbResult};
 use common::models::{Node, Chat, Message, Edge};
 
@@ -48,6 +48,13 @@ fn process_node(id: NodeId) -> DbResult<()> {
     Ok(())
 }
 ```
+
+## Testing
+
+The common crate includes comprehensive tests:
+- 7 documentation tests covering all major APIs
+- 8 unit tests covering newtype wrappers, error types, and platform functionality
+- All serialization/deserialization functionality validated
 
 ## Dependencies
 

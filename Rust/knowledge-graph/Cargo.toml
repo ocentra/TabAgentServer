@@ -1,0 +1,32 @@
+[package]
+name = "knowledge-graph"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Workspace crates
+common = { path = "../common" }
+indexing = { path = "../indexing" }
+storage = { path = "../storage" }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Graph algorithms
+petgraph = { workspace = true }
+
+# Database
+sled = { workspace = true }
+
+# Collections
+hashbrown = "0.15"
+
+# Logging
+log = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.8"

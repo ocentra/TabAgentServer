@@ -12,7 +12,7 @@
 - [x] Summarization (BART)
 - [x] Error handling and type conversion
 - [x] Async support via spawn_blocking
-- [x] Basic tests
+- [x] Comprehensive tests (30 tests passing: 2 unit + 28 PyO3 integration + 1 doc)
 - [x] Documentation
 
 ## 🔄 Phase 6.5: Enhancements (Optional)

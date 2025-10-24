@@ -23,6 +23,10 @@
 - [x] CreateAssociativeLinks
 - [x] IndexNode
 - [x] UpdateVectorIndex
+- [x] ProcessAttachment
+- [x] ChunkDocument
+- [x] ExtractAttachmentText
+- [x] GenerateAttachmentEmbeddings
 
 ## 🔄 In Progress
 
@@ -39,6 +43,8 @@ _Nothing currently in progress_
 - [ ] Implement GenerateEmbedding with Python ML models
 - [ ] Implement ExtractEntities with NER models
 - [ ] Implement GenerateSummary with LLM
+- [ ] Implement ProcessAttachment with document processing
+- [ ] Implement ExtractAttachmentText with OCR/transcription
 
 ### Phase 5: Knowledge Weaver Integration
 - [ ] Implement LinkEntities (graph expansion)

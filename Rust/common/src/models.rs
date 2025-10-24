@@ -60,6 +60,8 @@ pub enum Node {
     AudioTranscript(AudioTranscript),
     /// AI model information.
     ModelInfo(ModelInfo),
+    /// Agent action outcome for learning and improvement.
+    ActionOutcome(ActionOutcome),
 }
 
 impl Node {
@@ -97,6 +99,7 @@ impl Node {
             Node::ImageMetadata(i) => &i.id,
             Node::AudioTranscript(a) => &a.id,
             Node::ModelInfo(m) => &m.id,
+            Node::ActionOutcome(a) => &a.id,
         }
     }
 }
@@ -433,7 +436,56 @@ pub struct ModelInfo {
     pub metadata: serde_json::Value,
 }
 
-// --- Embedding ---
+/// Agent action outcome for learning and improvement.
+///
+/// Records the results of agent actions for experience-based learning.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ActionOutcome {
+    /// Unique identifier for this action outcome.
+    pub id: NodeId,
+    /// Type of action performed (e.g., "search", "scrape", "summarize").
+    pub action_type: String,
+    /// Arguments passed to the action as JSON.
+    #[serde(with = "crate::json_metadata")]
+    pub action_args: serde_json::Value,
+    /// Result of the action (success/failure and returned data).
+    #[serde(with = "crate::json_metadata")]
+    pub result: serde_json::Value,
+    /// Optional user feedback on the action.
+    pub user_feedback: Option<UserFeedback>,
+    /// Unix timestamp (milliseconds) when the action was performed.
+    pub timestamp: i64,
+    /// Context where the action occurred (message ID or conversation context).
+    pub conversation_context: String,
+}
+
+/// User feedback on agent actions.
+///
+/// Captures user approval, correction, or rejection of agent behavior.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UserFeedback {
+    /// Type of feedback provided.
+    pub feedback_type: FeedbackType,
+    /// Optional user comment explaining the feedback.
+    pub user_comment: Option<String>,
+    /// Optional correction provided by the user.
+    pub correction: Option<String>,
+    /// Unix timestamp (milliseconds) when the feedback was provided.
+    pub timestamp: i64,
+}
+
+/// Types of user feedback.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum FeedbackType {
+    /// User corrected the agent's action.
+    Correction,
+    /// User approved the agent's action.
+    Approval,
+    /// User rejected the agent's action.
+    Rejection,
+    /// No explicit feedback (infer from follow-up or lack of response).
+    Neutral,
+}
 
 /// A high-dimensional vector embedding.
 ///

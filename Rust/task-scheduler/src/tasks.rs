@@ -72,6 +72,45 @@ pub enum Task {
         priority: TaskPriority,
     },
     
+    /// Process an attachment (chunking, OCR, embedding).
+    ///
+    /// Handles PDFs, documents, images, etc.
+    ProcessAttachment {
+        attachment_id: NodeId,
+        file_path: String,
+        mime_type: String,
+        priority: TaskPriority,
+    },
+    
+    /// Chunk a large document for processing.
+    ///
+    /// Splits large files into manageable pieces.
+    ChunkDocument {
+        attachment_id: NodeId,
+        file_path: String,
+        chunk_size: usize,
+        priority: TaskPriority,
+    },
+    
+    /// Extract text from an attachment (OCR, transcription).
+    ///
+    /// Converts images/audio to text for further processing.
+    ExtractAttachmentText {
+        attachment_id: NodeId,
+        file_path: String,
+        mime_type: String,
+        priority: TaskPriority,
+    },
+    
+    /// Generate embeddings for attachment chunks.
+    ///
+    /// Creates vector representations of document chunks.
+    GenerateAttachmentEmbeddings {
+        attachment_id: NodeId,
+        chunk_ids: Vec<String>,
+        priority: TaskPriority,
+    },
+    
     /// Rotate memory layers (hot → warm → cold).
     ///
     /// Runs periodically to manage the hybrid vector index.
@@ -99,6 +138,10 @@ impl Task {
             Task::CreateAssociativeLinks { priority, .. } => *priority,
             Task::IndexNode { priority, .. } => *priority,
             Task::UpdateVectorIndex { priority, .. } => *priority,
+            Task::ProcessAttachment { priority, .. } => *priority,
+            Task::ChunkDocument { priority, .. } => *priority,
+            Task::ExtractAttachmentText { priority, .. } => *priority,
+            Task::GenerateAttachmentEmbeddings { priority, .. } => *priority,
             Task::RotateMemoryLayers { priority, .. } => *priority,
             Task::BackupData { priority, .. } => *priority,
         }
@@ -114,6 +157,10 @@ impl Task {
             Task::CreateAssociativeLinks { .. } => "CreateAssociativeLinks",
             Task::IndexNode { .. } => "IndexNode",
             Task::UpdateVectorIndex { .. } => "UpdateVectorIndex",
+            Task::ProcessAttachment { .. } => "ProcessAttachment",
+            Task::ChunkDocument { .. } => "ChunkDocument",
+            Task::ExtractAttachmentText { .. } => "ExtractAttachmentText",
+            Task::GenerateAttachmentEmbeddings { .. } => "GenerateAttachmentEmbeddings",
             Task::RotateMemoryLayers { .. } => "RotateMemoryLayers",
             Task::BackupData { .. } => "BackupData",
         }
@@ -182,6 +229,42 @@ impl Task {
                 Ok(None)
             }
             
+            Task::ProcessAttachment { attachment_id, file_path, mime_type, .. } => {
+                // TODO: Process attachment (chunking, OCR, embedding)
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                println!("[Task] Processed attachment {} ({}): {}", 
+                    attachment_id, mime_type, file_path
+                );
+                Ok(None)
+            }
+            
+            Task::ChunkDocument { attachment_id, file_path, chunk_size, .. } => {
+                // TODO: Chunk document
+                tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+                println!("[Task] Chunked document {} ({} bytes per chunk): {}", 
+                    attachment_id, chunk_size, file_path
+                );
+                Ok(None)
+            }
+            
+            Task::ExtractAttachmentText { attachment_id, file_path, mime_type, .. } => {
+                // TODO: Extract text (OCR, transcription)
+                tokio::time::sleep(std::time::Duration::from_millis(40)).await;
+                println!("[Task] Extracted text from {} ({}): {}", 
+                    attachment_id, mime_type, file_path
+                );
+                Ok(None)
+            }
+            
+            Task::GenerateAttachmentEmbeddings { attachment_id, chunk_ids, .. } => {
+                // TODO: Generate embeddings for chunks
+                tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+                println!("[Task] Generated embeddings for {} chunks of attachment {}", 
+                    chunk_ids.len(), attachment_id
+                );
+                Ok(None)
+            }
+            
             Task::RotateMemoryLayers { .. } => {
                 // TODO: Move vectors between hot/warm/cold layers
                 tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -216,6 +299,31 @@ pub enum TaskResult {
     /// Summary was generated.
     SummaryGenerated {
         summary_id: NodeId,
+    },
+    
+    /// Attachment was processed.
+    AttachmentProcessed {
+        attachment_id: NodeId,
+        chunk_ids: Vec<String>,
+        text_extracted: bool,
+    },
+    
+    /// Document was chunked.
+    DocumentChunked {
+        attachment_id: NodeId,
+        chunk_ids: Vec<String>,
+    },
+    
+    /// Text was extracted from attachment.
+    TextExtracted {
+        attachment_id: NodeId,
+        text_length: usize,
+    },
+    
+    /// Embeddings were generated for attachment chunks.
+    AttachmentEmbeddingsGenerated {
+        attachment_id: NodeId,
+        embedding_ids: Vec<String>,
     },
     
     /// Generic success message.

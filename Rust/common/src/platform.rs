@@ -22,6 +22,11 @@ use std::env;
 /// println!("Database will be stored at: {:?}", db_path);
 /// ```
 pub fn get_default_db_path() -> PathBuf {
+    // Check if we're running in a test environment
+    if let Ok(test_dir) = env::var("TABAGENT_TEST_DIR") {
+        return PathBuf::from(test_dir).join("db");
+    }
+    
     #[cfg(target_os = "windows")]
     {
         get_windows_db_path()
@@ -143,4 +148,68 @@ pub fn get_named_db_path(name: &str) -> PathBuf {
     get_default_db_path().join(name)
 }
 
+/// Get the quarter string for a given timestamp.
+///
+/// Returns a string in the format "YYYY-QN" where YYYY is the year and N is the quarter number.
+/// For example: "2024-Q1", "2024-Q2", etc.
+///
+/// # Arguments
+///
+/// * `timestamp_ms` - Unix timestamp in milliseconds
+///
+/// # Examples
+///
+/// ```
+/// use common::platform::get_quarter_from_timestamp;
+///
+/// // January 15, 2024 12:00:00 UTC
+/// let timestamp = 1705320000000i64;
+/// let quarter = get_quarter_from_timestamp(timestamp);
+/// assert_eq!(quarter, "2024-Q1");
+/// ```
+pub fn get_quarter_from_timestamp(timestamp_ms: i64) -> String {
+    // Convert milliseconds to seconds
+    let timestamp_secs = timestamp_ms / 1000;
+    
+    // Create a OffsetDateTime from the timestamp
+    let datetime = time::OffsetDateTime::from_unix_timestamp(timestamp_secs)
+        .unwrap_or(time::OffsetDateTime::UNIX_EPOCH);
+    
+    let year = datetime.year();
+    let month = datetime.month() as u8;
+    
+    // Determine quarter (1-4)
+    let quarter = match month {
+        1..=3 => 1,
+        4..=6 => 2,
+        7..=9 => 3,
+        10..=12 => 4,
+        _ => 1, // Fallback, though month should always be 1-12
+    };
+    
+    format!("{}-Q{}", year, quarter)
+}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_quarter_from_timestamp() {
+        // Test Q1 (January 15, 2024)
+        let q1_timestamp = 1705320000000i64; // 2024-01-15 12:00:00 UTC
+        assert_eq!(get_quarter_from_timestamp(q1_timestamp), "2024-Q1");
+        
+        // Test Q2 (April 15, 2024)
+        let q2_timestamp = 1713182400000i64; // 2024-04-15 12:00:00 UTC
+        assert_eq!(get_quarter_from_timestamp(q2_timestamp), "2024-Q2");
+        
+        // Test Q3 (July 15, 2024)
+        let q3_timestamp = 1721044800000i64; // 2024-07-15 12:00:00 UTC
+        assert_eq!(get_quarter_from_timestamp(q3_timestamp), "2024-Q3");
+        
+        // Test Q4 (October 15, 2024)
+        let q4_timestamp = 1728993600000i64; // 2024-10-15 12:00:00 UTC
+        assert_eq!(get_quarter_from_timestamp(q4_timestamp), "2024-Q4");
+    }
+}

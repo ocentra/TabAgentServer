@@ -28,6 +28,24 @@ fn test_named_db_path() {
 }
 
 #[test]
+fn test_named_db_path_edge_cases() {
+    // Test with empty name
+    let path = get_named_db_path("");
+    if let Some(path_str) = path.to_str() {
+        assert!(path_str.contains("TabAgent"));
+        assert!(path_str.contains("db"));
+    }
+    
+    // Test with special characters
+    let path = get_named_db_path("test-db_123");
+    if let Some(path_str) = path.to_str() {
+        assert!(path_str.contains("TabAgent"));
+        assert!(path_str.contains("db"));
+        assert!(path_str.contains("test-db_123"));
+    }
+}
+
+#[test]
 #[cfg(target_os = "windows")]
 fn test_windows_path_format() {
     let path = get_default_db_path();

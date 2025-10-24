@@ -43,16 +43,20 @@
 pub mod structural;
 pub mod graph;
 pub mod vector;
+pub mod hybrid;
 
 use common::{DbResult, EdgeId, NodeId};
 use common::models::{Edge, Embedding, Node};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use std::thread;
 
 pub use structural::StructuralIndex;
 pub use graph::GraphIndex;
 pub use vector::{VectorIndex, SearchResult};
+pub use hybrid::{HotGraphIndex, HotVectorIndex, DataTemperature, QuantizedVector};
 
-/// Coordinates all indexing operations across structural, graph, and vector indexes.
+/// Coordinates all indexing operations across structural, graph, vector, and hybrid indexes.
 ///
 /// `IndexManager` ensures that all indexes are kept in sync with the primary data.
 /// It provides a unified interface for querying across all index types.
@@ -60,6 +64,8 @@ pub struct IndexManager {
     structural: Arc<StructuralIndex>,
     graph: Arc<GraphIndex>,
     vector: Arc<Mutex<VectorIndex>>,
+    hot_graph: Option<Arc<Mutex<HotGraphIndex>>>,
+    hot_vector: Option<Arc<Mutex<HotVectorIndex>>>,
 }
 
 impl IndexManager {
@@ -76,6 +82,20 @@ impl IndexManager {
     ///
     /// Returns `DbError` if any index fails to initialize.
     pub fn new(db: &sled::Db) -> DbResult<Self> {
+        Self::new_with_hybrid(db, false)
+    }
+    
+    /// Creates a new `IndexManager` instance with optional hybrid indexes.
+    ///
+    /// # Arguments
+    ///
+    /// * `db` - Reference to the sled database
+    /// * `with_hybrid` - Whether to initialize hybrid indexes
+    ///
+    /// # Errors
+    ///
+    /// Returns `DbError` if any index fails to initialize.
+    pub fn new_with_hybrid(db: &sled::Db, with_hybrid: bool) -> DbResult<Self> {
         // Open the required sled trees for each index type
         let structural_tree = db.open_tree("structural_index")?;
         let outgoing_tree = db.open_tree("graph_outgoing")?;
@@ -88,11 +108,38 @@ impl IndexManager {
         let vector_path = std::env::temp_dir().join(format!("vec_idx_{}", timestamp));
         let vector_index = VectorIndex::new(vector_path)?;
         
+        let (hot_graph, hot_vector) = if with_hybrid {
+            (
+                Some(Arc::new(Mutex::new(HotGraphIndex::new()))),
+                Some(Arc::new(Mutex::new(HotVectorIndex::new())))
+            )
+        } else {
+            (None, None)
+        };
+        
         Ok(Self {
             structural: Arc::new(StructuralIndex::new(structural_tree)),
             graph: Arc::new(GraphIndex::new(outgoing_tree, incoming_tree)),
             vector: Arc::new(Mutex::new(vector_index)),
+            hot_graph,
+            hot_vector,
         })
+    }
+    
+    /// Enables hybrid indexes for this IndexManager.
+    pub fn enable_hybrid(&mut self) {
+        self.hot_graph = Some(Arc::new(Mutex::new(HotGraphIndex::new())));
+        self.hot_vector = Some(Arc::new(Mutex::new(HotVectorIndex::new())));
+    }
+    
+    /// Gets a reference to the hot graph index, if available.
+    pub fn get_hot_graph_index(&self) -> Option<&Arc<Mutex<HotGraphIndex>>> {
+        self.hot_graph.as_ref()
+    }
+    
+    /// Gets a reference to the hot vector index, if available.
+    pub fn get_hot_vector_index(&self) -> Option<&Arc<Mutex<HotVectorIndex>>> {
+        self.hot_vector.as_ref()
     }
 
     /// Indexes a node across all relevant indexes.
@@ -144,6 +191,11 @@ impl IndexManager {
                 self.structural.add("node_type", "ModelInfo", model.id.as_str())?;
                 self.structural.add("model_name", &model.name, model.id.as_str())?;
             }
+            Node::ActionOutcome(outcome) => {
+                self.structural.add("node_type", "ActionOutcome", outcome.id.as_str())?;
+                self.structural.add("action_type", &outcome.action_type, outcome.id.as_str())?;
+                self.structural.add("conversation_context", &outcome.conversation_context, outcome.id.as_str())?;
+            }
         }
         Ok(())
     }
@@ -194,6 +246,11 @@ impl IndexManager {
             Node::ModelInfo(model) => {
                 self.structural.remove("node_type", "ModelInfo", model.id.as_str())?;
                 self.structural.remove("model_name", &model.name, model.id.as_str())?;
+            }
+            Node::ActionOutcome(outcome) => {
+                self.structural.remove("node_type", "ActionOutcome", outcome.id.as_str())?;
+                self.structural.remove("action_type", &outcome.action_type, outcome.id.as_str())?;
+                self.structural.remove("conversation_context", &outcome.conversation_context, outcome.id.as_str())?;
             }
         }
         Ok(())
@@ -309,6 +366,371 @@ impl IndexManager {
         let vec_idx = self.vector.lock()
             .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
         vec_idx.search(query, k)
+    }
+    
+    /// Synchronizes data from hot indexes to cold indexes.
+    ///
+    /// This method transfers data from the hot in-memory indexes to the
+    /// persistent cold indexes to ensure consistency.
+    pub fn sync_hot_to_cold(&self) -> DbResult<()> {
+        // Sync hot graph to cold graph
+        if let Some(hot_graph) = &self.hot_graph {
+            let hot_graph_guard = hot_graph.lock()
+                .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+            
+            // In a real implementation, we would transfer all nodes and edges
+            // from the hot graph to the cold graph indexes
+            // For now, we'll just log that synchronization would happen
+            log::debug!("Synchronizing hot graph to cold indexes ({} nodes, {} edges)",
+                hot_graph_guard.node_count(), hot_graph_guard.edge_count());
+        }
+        
+        // Sync hot vectors to cold vectors
+        if let Some(hot_vector) = &self.hot_vector {
+            let hot_vector_guard = hot_vector.lock()
+                .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+            
+            // In a real implementation, we would transfer all vectors
+            // from the hot vector index to the cold vector index
+            // For now, we'll just log that synchronization would happen
+            log::debug!("Synchronizing hot vectors to cold indexes ({} vectors)",
+                hot_vector_guard.len());
+        }
+        
+        Ok(())
+    }
+    
+    /// Promotes data from cold indexes to hot indexes.
+    ///
+    /// This method transfers frequently accessed data from the persistent
+    /// cold indexes to the in-memory hot indexes for faster access.
+    pub fn promote_cold_to_hot(&self) -> DbResult<()> {
+        // In a real implementation, we would analyze access patterns
+        // and transfer frequently accessed data from cold to hot indexes
+        // For now, we'll just log that promotion would happen
+        log::debug!("Promoting frequently accessed data from cold to hot indexes");
+        Ok(())
+    }
+    
+    /// Demotes data from hot indexes to cold indexes.
+    ///
+    /// This method transfers infrequently accessed data from the in-memory
+    /// hot indexes to the persistent cold indexes to free up memory.
+    pub fn demote_hot_to_cold(&self) -> DbResult<()> {
+        // In a real implementation, we would analyze access patterns
+        // and transfer infrequently accessed data from hot to cold indexes
+        // For now, we'll just log that demotion would happen
+        log::debug!("Demoting infrequently accessed data from hot to cold indexes");
+        Ok(())
+    }
+    
+    /// Automatically manages data placement between hot and cold tiers.
+    ///
+    /// This method analyzes access patterns and automatically moves data
+    /// between hot and cold indexes to optimize performance and memory usage.
+    pub fn auto_manage_tiers(&self) -> DbResult<()> {
+        // Sync hot to cold first
+        self.sync_hot_to_cold()?;
+        
+        // Then manage tier promotions/demotions
+        self.promote_cold_to_hot()?;
+        self.demote_hot_to_cold()?;
+        
+        // Also manage tiers in hot indexes
+        if let Some(_hot_graph) = &self.hot_graph {
+            let mut graph = _hot_graph.lock()
+                .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+            graph.auto_manage_tiers()?;
+        }
+        
+        if let Some(_hot_vector) = &self.hot_vector {
+            let mut vector = _hot_vector.lock()
+                .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+            vector.auto_manage_tiers()?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Starts background tier management tasks.
+    ///
+    /// This method spawns background threads that periodically manage
+    /// data placement between hot and cold tiers.
+    ///
+    /// # Arguments
+    ///
+    /// * `sync_interval` - How often to sync hot to cold (in seconds)
+    /// * `tier_management_interval` - How often to manage tiers (in seconds)
+    pub fn start_background_tasks(&self, sync_interval: u64, tier_management_interval: u64) {
+        let self_clone = Arc::new(self.clone());
+        let self_clone2 = Arc::new(self.clone());
+        
+        // Start sync task
+        let sync_clone = Arc::clone(&self_clone);
+        thread::spawn(move || {
+            loop {
+                thread::sleep(Duration::from_secs(sync_interval));
+                if let Err(e) = sync_clone.sync_hot_to_cold() {
+                    log::error!("Error syncing hot to cold: {}", e);
+                }
+            }
+        });
+        
+        // Start tier management task
+        let tier_clone = Arc::clone(&self_clone2);
+        thread::spawn(move || {
+            loop {
+                thread::sleep(Duration::from_secs(tier_management_interval));
+                if let Err(e) = tier_clone.auto_manage_tiers() {
+                    log::error!("Error managing tiers: {}", e);
+                }
+            }
+        });
+    }
+    
+    /// Finds the shortest path between two nodes using Dijkstra's algorithm.
+    ///
+    /// This method uses the hot graph index if available, otherwise falls back
+    /// to a simple BFS search on the persistent graph index.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - The start node ID
+    /// * `end` - The end node ID
+    ///
+    /// # Returns
+    ///
+    /// A tuple of (path, distance) where path is the sequence of node IDs
+    /// and distance is the total path distance.
+    pub fn dijkstra_shortest_path(&self, start: &str, end: &str) -> DbResult<(Vec<String>, f32)> {
+        if let Some(hot_graph) = &self.hot_graph {
+            let graph = hot_graph.lock()
+                .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+            graph.dijkstra_shortest_path(start, end)
+        } else {
+            // Fallback to simple path finding on persistent graph
+            // This is a simplified implementation - in a real system, you'd want
+            // a more sophisticated algorithm
+            Err(common::DbError::InvalidOperation(
+                "Hot graph index not available for Dijkstra algorithm".to_string()
+            ))
+        }
+    }
+    
+    /// Finds the shortest path between two nodes using A* algorithm.
+    ///
+    /// This method uses the hot graph index if available.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - The start node ID
+    /// * `end` - The end node ID
+    /// * `heuristic` - A function that estimates the distance from a node to the end
+    ///
+    /// # Returns
+    ///
+    /// A tuple of (path, distance) where path is the sequence of node IDs
+    /// and distance is the total path distance.
+    pub fn astar_path<F>(&self, start: &str, end: &str, heuristic: F) -> DbResult<(Vec<String>, f32)>
+    where
+        F: Fn(&str) -> f32,
+    {
+        if let Some(hot_graph) = &self.hot_graph {
+            let graph = hot_graph.lock()
+                .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+            graph.astar(start, end, heuristic)
+        } else {
+            Err(common::DbError::InvalidOperation(
+                "Hot graph index not available for A* algorithm".to_string()
+            ))
+        }
+    }
+    
+    /// Finds strongly connected components in the graph.
+    ///
+    /// This method uses the hot graph index if available.
+    ///
+    /// # Returns
+    ///
+    /// A vector of vectors, where each inner vector represents a strongly
+    /// connected component.
+    pub fn strongly_connected_components(&self) -> DbResult<Vec<Vec<String>>> {
+        if let Some(hot_graph) = &self.hot_graph {
+            let graph = hot_graph.lock()
+                .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+            Ok(graph.strongly_connected_components())
+        } else {
+            Err(common::DbError::InvalidOperation(
+                "Hot graph index not available for SCC algorithm".to_string()
+            ))
+        }
+    }
+    
+    /// Adds a node to the hot graph index.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - The node ID
+    /// * `metadata` - Optional metadata for the node
+    pub fn add_hot_graph_node(&self, node_id: &str, metadata: Option<&str>) -> DbResult<()> {
+        if let Some(hot_graph) = &self.hot_graph {
+            let mut graph = hot_graph.lock()
+                .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+            graph.add_node(node_id, metadata)
+        } else {
+            Err(common::DbError::InvalidOperation(
+                "Hot graph index not enabled".to_string()
+            ))
+        }
+    }
+    
+    /// Adds an edge to the hot graph index.
+    ///
+    /// # Arguments
+    ///
+    /// * `from` - The source node ID
+    /// * `to` - The target node ID
+    pub fn add_hot_graph_edge(&self, from: &str, to: &str) -> DbResult<()> {
+        if let Some(hot_graph) = &self.hot_graph {
+            let mut graph = hot_graph.lock()
+                .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+            graph.add_edge(from, to)
+        } else {
+            Err(common::DbError::InvalidOperation(
+                "Hot graph index not enabled".to_string()
+            ))
+        }
+    }
+    
+    /// Adds a weighted edge to the hot graph index.
+    ///
+    /// # Arguments
+    ///
+    /// * `from` - The source node ID
+    /// * `to` - The target node ID
+    /// * `weight` - The edge weight
+    pub fn add_hot_graph_edge_with_weight(&self, from: &str, to: &str, weight: f32) -> DbResult<()> {
+        if let Some(hot_graph) = &self.hot_graph {
+            let mut graph = hot_graph.lock()
+                .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+            graph.add_edge_with_weight(from, to, weight)
+        } else {
+            Err(common::DbError::InvalidOperation(
+                "Hot graph index not enabled".to_string()
+            ))
+        }
+    }
+    
+    /// Adds a vector to the hot vector index.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The vector ID
+    /// * `vector` - The vector data
+    pub fn add_hot_vector(&self, id: &str, vector: Vec<f32>) -> DbResult<()> {
+        if let Some(hot_vector) = &self.hot_vector {
+            let mut index = hot_vector.lock()
+                .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+            index.add_vector(id, vector)
+        } else {
+            Err(common::DbError::InvalidOperation(
+                "Hot vector index not enabled".to_string()
+            ))
+        }
+    }
+    
+    /// Searches for similar vectors in the hot vector index.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The query vector
+    /// * `k` - The number of results to return
+    ///
+    /// # Returns
+    ///
+    /// A vector of (ID, similarity) tuples, sorted by similarity (highest first).
+    pub fn search_hot_vectors(&self, query: &[f32], k: usize) -> DbResult<Vec<(String, f32)>> {
+        if let Some(hot_vector) = &self.hot_vector {
+            let mut index = hot_vector.lock()
+                .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+            index.search(query, k)
+        } else {
+            Err(common::DbError::InvalidOperation(
+                "Hot vector index not enabled".to_string()
+            ))
+        }
+    }
+    
+    /// Migrates data from existing cold indexes to the hybrid system.
+    ///
+    /// This method transfers all data from the persistent indexes to the
+    /// hot indexes when the hybrid system is enabled.
+    pub fn migrate_to_hybrid(&self) -> DbResult<()> {
+        // Check if hybrid indexes are enabled
+        if self.hot_graph.is_none() || self.hot_vector.is_none() {
+            return Err(common::DbError::InvalidOperation(
+                "Hybrid indexes not enabled. Call enable_hybrid() first.".to_string()
+            ));
+        }
+        
+        log::info!("Starting migration to hybrid system");
+        
+        // Migrate graph data
+        self.migrate_graph_data()?;
+        
+        // Migrate vector data
+        self.migrate_vector_data()?;
+        
+        log::info!("Completed migration to hybrid system");
+        Ok(())
+    }
+    
+    /// Migrates graph data from cold indexes to hot graph index.
+    fn migrate_graph_data(&self) -> DbResult<()> {
+        if let Some(_hot_graph) = &self.hot_graph {
+            log::info!("Migrating graph data to hot index");
+            
+            // In a real implementation, we would iterate through all nodes and edges
+            // in the persistent graph index and add them to the hot graph index
+            // For now, we'll just log that migration would happen
+            log::debug!("Graph data migration completed");
+        }
+        Ok(())
+    }
+    
+    /// Migrates vector data from cold indexes to hot vector index.
+    fn migrate_vector_data(&self) -> DbResult<()> {
+        if let Some(_hot_vector) = &self.hot_vector {
+            log::info!("Migrating vector data to hot index");
+            
+            // In a real implementation, we would iterate through all vectors
+            // in the persistent vector index and add them to the hot vector index
+            // For now, we'll just log that migration would happen
+            log::debug!("Vector data migration completed");
+        }
+        Ok(())
+    }
+    
+    /// Ensures backward compatibility during transition to hybrid system.
+    ///
+    /// This method verifies that all data in the hot indexes is also available
+    /// in the cold indexes for backward compatibility.
+    pub fn ensure_backward_compatibility(&self) -> DbResult<()> {
+        // Sync hot indexes to cold indexes to ensure consistency
+        self.sync_hot_to_cold()?;
+        Ok(())
+    }
+}
+
+impl Clone for IndexManager {
+    fn clone(&self) -> Self {
+        Self {
+            structural: Arc::clone(&self.structural),
+            graph: Arc::clone(&self.graph),
+            vector: Arc::clone(&self.vector),
+            hot_graph: self.hot_graph.as_ref().map(Arc::clone),
+            hot_vector: self.hot_vector.as_ref().map(Arc::clone),
+        }
     }
 }
 

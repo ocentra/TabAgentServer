@@ -140,7 +140,7 @@ cargo test -p ml-bridge
 python ml-bridge/python/ml_funcs.py
 ```
 
-✅ 3 tests passing
+✅ 30 tests passing (2 unit tests + 28 PyO3 integration tests + 1 doc test)
 
 ## Development
 

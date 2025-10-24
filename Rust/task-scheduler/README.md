@@ -153,8 +153,12 @@ class MIA:
 5. **CreateAssociativeLinks** - Find semantic similarities
 6. **IndexNode** - Update structural/graph indexes
 7. **UpdateVectorIndex** - Update HNSW vector index
-8. **RotateMemoryLayers** - Hot → warm → cold memory management
-9. **BackupData** - Encrypted backups during sleep
+8. **ProcessAttachment** - Handle document/PDF processing
+9. **ChunkDocument** - Split large documents into chunks
+10. **ExtractAttachmentText** - OCR/transcription for attachments
+11. **GenerateAttachmentEmbeddings** - Create embeddings for document chunks
+12. **RotateMemoryLayers** - Hot → warm → cold memory management
+13. **BackupData** - Encrypted backups during sleep
 
 **Note**: Task execution is currently stubbed. Actual implementations will be added as corresponding systems (embeddings, NER, etc.) are built in Phases 2-5.
 
