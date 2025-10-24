@@ -95,7 +95,7 @@ impl EmbeddedDB {
     ///
     /// Returns:
     ///     str: The ID of the inserted node
-    fn insert_node(&self, node: &PyDict) -> PyResult<String> {
+    fn insert_node(&self, node: &Bound<'_, PyDict>) -> PyResult<String> {
         let node = dict_to_node(node)?;
         let node_id = node.id().to_string();
         
@@ -308,7 +308,7 @@ impl EmbeddedDB {
     /// Returns:
     ///     dict: Database statistics
     fn stats(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new(py);
+        let dict = PyDict::new_bound(py);
         dict.set_item("database", "embedded_db")?;
         dict.set_item("status", "operational")?;
         Ok(dict.into())

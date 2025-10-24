@@ -6,7 +6,7 @@ use pyo3::types::{PyDict, PyList};
 
 /// Convert a Rust Node to a Python dictionary
 pub fn node_to_dict(py: Python, node: &Node) -> PyResult<PyObject> {
-    let dict = PyDict::new(py);
+    let dict = PyDict::new_bound(py);
     
     match node {
         Node::Chat(chat) => {
@@ -109,7 +109,7 @@ pub fn node_to_dict(py: Python, node: &Node) -> PyResult<PyObject> {
 }
 
 /// Convert a Python dictionary to a Rust Node (simplified for now)
-pub fn dict_to_node(dict: &PyDict) -> PyResult<Node> {
+pub fn dict_to_node(dict: &Bound<'_, PyDict>) -> PyResult<Node> {
     let node_type: String = dict.get_item("type")?
         .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("Missing 'type' field"))?
         .extract()?;
@@ -279,7 +279,7 @@ pub fn dict_to_node(dict: &PyDict) -> PyResult<Node> {
 
 /// Convert a Rust Edge to a Python dictionary
 pub fn edge_to_dict(py: Python, edge: &Edge) -> PyResult<PyObject> {
-    let dict = PyDict::new(py);
+    let dict = PyDict::new_bound(py);
     dict.set_item("id", edge.id.as_str())?;
     dict.set_item("from_node", edge.from_node.as_str())?;
     dict.set_item("to_node", edge.to_node.as_str())?;
@@ -295,7 +295,7 @@ pub fn edge_to_dict(py: Python, edge: &Edge) -> PyResult<PyObject> {
 
 /// Convert a Rust Embedding to a Python dictionary
 pub fn embedding_to_dict(py: Python, embedding: &Embedding) -> PyResult<PyObject> {
-    let dict = PyDict::new(py);
+    let dict = PyDict::new_bound(py);
     dict.set_item("id", embedding.id.as_str())?;
     dict.set_item("vector", &embedding.vector)?;
     dict.set_item("model", &embedding.model)?;

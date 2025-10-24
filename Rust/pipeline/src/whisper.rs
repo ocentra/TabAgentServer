@@ -4,6 +4,7 @@
 /// Handles audio preprocessing and ASR-specific configuration.
 
 use crate::error::{Result, PipelineError};
+use crate::types::Architecture;
 use tabagent_model_cache::detection::ModelInfo as DetectionModelInfo;
 
 /// Whisper pipeline handler
@@ -22,17 +23,21 @@ impl WhisperHandler {
     
     /// Validate Whisper model info
     pub fn validate_model(model_info: &DetectionModelInfo) -> Result<()> {
-        if let Some(arch) = &model_info.architecture {
-            let arch_lower = arch.to_lowercase();
-            if arch_lower != "whisper" && arch_lower != "moonshine" {
-                return Err(PipelineError::InvalidArchitecture(
-                    format!("Expected Whisper, got: {}", arch)
-                ));
+        if let Some(arch_str) = &model_info.architecture {
+            let arch = Architecture::from_str(arch_str)
+                .unwrap_or(Architecture::Generic);
+            
+            if arch != Architecture::Whisper && arch != Architecture::Moonshine {
+                return Err(PipelineError::InvalidArchitecture {
+                    expected: Architecture::Whisper,
+                    actual: arch,
+                });
             }
         } else {
-            return Err(PipelineError::InvalidArchitecture(
-                "No architecture specified for Whisper".to_string()
-            ));
+            return Err(PipelineError::InvalidArchitecture {
+                expected: Architecture::Whisper,
+                actual: Architecture::Generic,
+            });
         }
         
         Ok(())

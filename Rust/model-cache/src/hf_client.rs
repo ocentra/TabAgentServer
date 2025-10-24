@@ -245,7 +245,8 @@ pub fn is_supporting_file(path: &str) -> bool {
 /// assert!(!is_onnx_file("config.json"));
 /// ```
 pub fn is_onnx_file(path: &str) -> bool {
-    path.ends_with(".onnx") && !path.ends_with(".onnx_data")
+    use crate::tasks::{EXT_ONNX, EXT_ONNX_DATA};
+    path.ends_with(EXT_ONNX) && !path.ends_with(EXT_ONNX_DATA)
 }
 
 /// Check if a file is ONNX external data
@@ -258,7 +259,8 @@ pub fn is_onnx_file(path: &str) -> bool {
 /// assert!(!is_onnx_external_data("onnx/model.onnx"));
 /// ```
 pub fn is_onnx_external_data(path: &str) -> bool {
-    path.ends_with(".onnx_data")
+    use crate::tasks::EXT_ONNX_DATA;
+    path.ends_with(EXT_ONNX_DATA)
 }
 
 #[cfg(test)]

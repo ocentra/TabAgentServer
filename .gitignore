@@ -16,15 +16,17 @@ bitnet-gpu-env/
 wsl-bitnet-env/
 
 # Reference repositories (moved to references/)
-/references
+/References/
 
 # External submodules (managed separately)
-/external/
+/External/
 
 
-# Rust build artifacts (embedded database)
-embedded-db-rs/target/
-embedded-db-rs/Cargo.lock
+# Rust build artifacts
+Rust/target/
+Rust/Cargo.lock
+**/test_db/
+**/my_database/
 
 # IDE
 .vscode/

@@ -57,7 +57,7 @@ pub mod multimodal;
 pub use base::Pipeline;
 pub use error::{PipelineError, Result};
 pub use factory::PipelineFactory;
-pub use types::PipelineType;
+pub use types::{Architecture, PipelineType};
 
 // Re-export architecture-specific handlers
 pub use florence2::Florence2Handler;

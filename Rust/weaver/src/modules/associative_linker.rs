@@ -31,7 +31,7 @@ pub async fn on_node_created(
     };
     
     // Search for similar nodes (top 5, within last 30 days)
-    let similar_nodes = context.indexing.search_vectors(&embedding.vector, 6)?; // +1 for self
+    let similar_nodes = context.conversations_index.search_vectors(&embedding.vector, 6)?; // +1 for self
     
     let similarity_threshold = 0.85; // High threshold for associative links
     let mut links_created = 0;

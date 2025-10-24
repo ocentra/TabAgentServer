@@ -436,13 +436,19 @@ fn extract_variant_from_filename(file_path: &str) -> String {
     let file_name = file_path.split('/').last().unwrap_or(file_path);
     
     // Config/tokenizer files always go to "common"
-    if file_name.ends_with("config.json") 
-        || file_name.ends_with("tokenizer.json")
-        || file_name.ends_with("tokenizer_config.json")
-        || file_name.ends_with("generation_config.json")
-        || file_name.ends_with("vocab.json")
-        || file_name.ends_with("merges.txt")
-        || file_name.ends_with("special_tokens_map.json") {
+    use crate::tasks::{
+        EXT_CONFIG_JSON, EXT_TOKENIZER_JSON, EXT_TOKENIZER_CONFIG_JSON,
+        EXT_GENERATION_CONFIG_JSON, EXT_VOCAB_JSON, EXT_MERGES_TXT,
+        EXT_SPECIAL_TOKENS_MAP_JSON,
+    };
+    
+    if file_name.ends_with(EXT_CONFIG_JSON) 
+        || file_name.ends_with(EXT_TOKENIZER_JSON)
+        || file_name.ends_with(EXT_TOKENIZER_CONFIG_JSON)
+        || file_name.ends_with(EXT_GENERATION_CONFIG_JSON)
+        || file_name.ends_with(EXT_VOCAB_JSON)
+        || file_name.ends_with(EXT_MERGES_TXT)
+        || file_name.ends_with(EXT_SPECIAL_TOKENS_MAP_JSON) {
         return "common".to_string();
     }
     

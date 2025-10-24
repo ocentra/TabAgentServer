@@ -30,7 +30,6 @@ from Python.core.message_types import (
 from Python.core.inference_service import get_inference_service
 
 # Import backend implementations
-from Python.backends.bitnet import BitNetManager, BitNetConfig, GGUFValidator
 from Python.backends.lmstudio import LMStudioManager
 
 # Import specialized pipelines (NEW - compose model-cache + model-loader)
@@ -81,7 +80,7 @@ logging.basicConfig(
 _inference_service = get_inference_service()
 
 # Initialize backend managers (legacy - will migrate to service)
-bitnet_manager: Optional[BitNetManager] = None
+# BitNet manager removed - now handled via Rust native-handler
 lmstudio_manager: Optional[LMStudioManager] = None
 
 # Pipeline registry (NEW - replaces direct model loading)
@@ -1008,11 +1007,11 @@ def handle_pull_model(message: Dict[str, Any]) -> Dict[str, Any]:
         # Download via Rust
         RUST_MODEL_CACHE.download_file(repo_id, file_path, progress)
         
-        return {
-            "status": "success",
-            "message": f"Model {model_name} downloaded successfully",
-            "model": model_name
-        }
+            return {
+                "status": "success",
+                "message": f"Model {model_name} downloaded successfully",
+                "model": model_name
+            }
     
     except Exception as e:
         logging.error(f"Pull error: {e}")

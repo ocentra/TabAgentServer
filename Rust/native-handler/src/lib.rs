@@ -855,7 +855,7 @@ fn detect_model_py(source: String, auth_token: Option<String>) -> PyResult<Strin
     };
     
     // Layer 1: Try file path detection first
-    let mut model_info = detect_from_file_path(&source)
+    let model_info = detect_from_file_path(&source)
         .or_else(|| detect_from_repo_name(&source));
     
     if model_info.is_none() {
@@ -1020,7 +1020,7 @@ fn recommend_variant_py(
 
 /// Python module definition
 #[pymodule]
-fn tabagent_native_handler(_py: Python, m: &PyModule) -> PyResult<()> {
+fn tabagent_native_handler(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(initialize_handler, m)?)?;
     m.add_function(wrap_pyfunction!(handle_message, m)?)?;
     

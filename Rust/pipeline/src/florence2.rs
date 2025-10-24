@@ -4,6 +4,7 @@
 /// Handles Florence2 special tokens and multimodal processing.
 
 use crate::error::{Result, PipelineError};
+use crate::types::Architecture;
 use tabagent_model_cache::detection::ModelInfo as DetectionModelInfo;
 
 /// Florence2 pipeline handler
@@ -25,16 +26,21 @@ impl Florence2Handler {
     /// Ensures model has required components for Florence2
     pub fn validate_model(model_info: &DetectionModelInfo) -> Result<()> {
         // Check if Florence2 architecture
-        if let Some(arch) = &model_info.architecture {
-            if arch.to_lowercase() != "florence2" && arch.to_lowercase() != "florence" {
-                return Err(PipelineError::InvalidArchitecture(
-                    format!("Expected Florence2, got: {}", arch)
-                ));
+        if let Some(arch_str) = &model_info.architecture {
+            let arch = Architecture::from_str(arch_str)
+                .unwrap_or(Architecture::Generic);
+            
+            if arch != Architecture::Florence2 {
+                return Err(PipelineError::InvalidArchitecture {
+                    expected: Architecture::Florence2,
+                    actual: arch,
+                });
             }
         } else {
-            return Err(PipelineError::InvalidArchitecture(
-                "No architecture specified for Florence2".to_string()
-            ));
+            return Err(PipelineError::InvalidArchitecture {
+                expected: Architecture::Florence2,
+                actual: Architecture::Generic,
+            });
         }
         
         Ok(())

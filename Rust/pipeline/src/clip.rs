@@ -4,6 +4,7 @@
 /// Handles embeddings and zero-shot classification.
 
 use crate::error::{Result, PipelineError};
+use crate::types::Architecture;
 use tabagent_model_cache::detection::ModelInfo as DetectionModelInfo;
 
 /// CLIP pipeline handler
@@ -22,17 +23,21 @@ impl ClipHandler {
     
     /// Validate CLIP model info
     pub fn validate_model(model_info: &DetectionModelInfo) -> Result<()> {
-        if let Some(arch) = &model_info.architecture {
-            let arch_lower = arch.to_lowercase();
-            if arch_lower != "clip" && arch_lower != "clap" {
-                return Err(PipelineError::InvalidArchitecture(
-                    format!("Expected CLIP, got: {}", arch)
-                ));
+        if let Some(arch_str) = &model_info.architecture {
+            let arch = Architecture::from_str(arch_str)
+                .unwrap_or(Architecture::Generic);
+            
+            if arch != Architecture::Clip && arch != Architecture::Clap {
+                return Err(PipelineError::InvalidArchitecture {
+                    expected: Architecture::Clip,
+                    actual: arch,
+                });
             }
         } else {
-            return Err(PipelineError::InvalidArchitecture(
-                "No architecture specified for CLIP".to_string()
-            ));
+            return Err(PipelineError::InvalidArchitecture {
+                expected: Architecture::Clip,
+                actual: Architecture::Generic,
+            });
         }
         
         Ok(())

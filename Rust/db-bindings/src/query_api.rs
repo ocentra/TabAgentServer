@@ -80,10 +80,10 @@ impl EmbeddedDB {
         // Simplified implementation
         let results = self.search_vectors(query_vector, top_k)?;
         
-        let list = PyList::empty(py);
+        let list = PyList::empty_bound(py);
         for (node_id, score) in results {
             if let Some(node) = self.get_node(py, node_id.clone())? {
-                let tuple = PyList::new(py, &[node, score.into_py(py)]);
+                let tuple = PyList::new_bound(py, &[node, score.into_py(py)]);
                 list.append(tuple)?;
             }
         }

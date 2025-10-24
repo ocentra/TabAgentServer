@@ -18,7 +18,7 @@ pub use weaver_api::*;
 
 /// Python module definition
 #[pymodule]
-fn embedded_db(_py: Python, m: &PyModule) -> PyResult<()> {
+fn embedded_db(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Core database class
     m.add_class::<EmbeddedDB>()?;
 

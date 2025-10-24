@@ -102,13 +102,14 @@ impl PyMlBridge {
         // Test Python initialization
         Python::with_gil(|py| {
             // Add module path to sys.path
-            let sys = py.import("sys").map_err(|e| {
+            let sys = py.import_bound("sys").map_err(|e| {
                 MlBridgeError::ModuleImport(format!("Failed to import sys: {}", e))
             })?;
-            let sys_path: &PyList = sys
+            let path_attr = sys
                 .getattr("path")
-                .map_err(|e| MlBridgeError::ModuleImport(format!("No sys.path: {}", e)))?
-                .downcast()
+                .map_err(|e| MlBridgeError::ModuleImport(format!("No sys.path: {}", e)))?;
+            let sys_path = path_attr
+                .downcast::<PyList>()
                 .map_err(|e| {
                     MlBridgeError::TypeConversion(format!("sys.path not a list: {}", e))
                 })?;
@@ -118,7 +119,7 @@ impl PyMlBridge {
             })?;
 
             // Try to import the module to validate it exists
-            let _ = py.import("ml_funcs").map_err(|e| {
+            let _ = py.import_bound("ml_funcs").map_err(|e| {
                 MlBridgeError::ModuleImport(format!(
                     "Failed to import ml_funcs from {}: {}",
                     module_path, e
@@ -151,7 +152,7 @@ impl PyMlBridge {
         T: for<'py> FromPyObject<'py>,
     {
         Python::with_gil(|py| {
-            let module = py.import("ml_funcs").map_err(|e| {
+            let module = py.import_bound("ml_funcs").map_err(|e| {
                 MlBridgeError::FunctionCall(format!("Failed to import module: {}", e))
             })?;
 
@@ -244,7 +245,7 @@ impl MlBridge for PyMlBridge {
     async fn health_check(&self) -> DbResult<bool> {
         Python::with_gil(|py| {
             // Check if Python is working and module is importable
-            match py.import("ml_funcs") {
+            match py.import_bound("ml_funcs") {
                 Ok(_) => Ok(true),
                 Err(e) => {
                     log::error!("ML bridge health check failed: {}", e);

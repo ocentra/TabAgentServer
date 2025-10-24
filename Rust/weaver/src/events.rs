@@ -107,7 +107,7 @@ mod tests {
     #[test]
     fn test_event_description() {
         let event = WeaverEvent::NodeCreated {
-            node_id: "node_123".to_string(),
+            node_id: "node_123".to_string().into(),
             node_type: "Message".to_string(),
         };
         
@@ -116,12 +116,13 @@ mod tests {
 
     #[test]
     fn test_primary_node_id() {
+        let chat_id: NodeId = "chat_456".to_string().into();
         let event = WeaverEvent::ChatUpdated {
-            chat_id: "chat_456".to_string(),
+            chat_id: chat_id.clone(),
             messages_since_summary: 5,
         };
         
-        assert_eq!(event.primary_node_id(), Some(&"chat_456".to_string()));
+        assert_eq!(event.primary_node_id(), Some(&chat_id));
     }
 }
 

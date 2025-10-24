@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from Python.core.secrets import get_secrets, get_huggingface_token
-from core import message_fields as mf
+from Python.core import message_fields as mf
 from Python.core.test_models import get_test_model, TINY_GGUF_REPO, TINY_GGUF_FILE
 
 # Try to import Rust handler

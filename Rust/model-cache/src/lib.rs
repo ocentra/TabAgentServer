@@ -9,6 +9,7 @@ pub mod catalog;
 pub mod detection;
 pub mod hf_client;
 pub mod manifest_builder;
+pub mod tasks;
 
 pub use error::{ModelCacheError, Result};
 pub use schema::{
@@ -28,4 +29,5 @@ pub use detection::{
 };
 pub use hf_client::{fetch_repo_metadata, fetch_model_config, HfRepoMetadata, HfModelConfig, HfFile, extract_clean_dtype, is_supporting_file, is_onnx_file, is_onnx_external_data};
 pub use manifest_builder::{build_manifest_from_hf, ExtensionManifestEntry, ExtensionQuantInfo, DEFAULT_SERVER_ONLY_SIZE, DEFAULT_BYPASS_MODELS};
+pub use tasks::*;
 

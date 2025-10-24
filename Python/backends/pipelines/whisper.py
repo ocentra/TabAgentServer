@@ -55,19 +55,19 @@ class WhisperPipeline(BasePipeline):
             elif backend_decision.get("Python"):
                 # Determine Python backend (ONNX, MediaPipe, or Transformers)
                 if model_info.get("model_type") == "onnx":
-                    from backends.onnx_backend import ONNXRuntimeManager
+                    from Python.backends.onnxrt.manager import ONNXRuntimeManager
                     self.python_backend = ONNXRuntimeManager()
                     result = self.python_backend.load_model(model_id, opts)
                     self.backend_type = "onnx"
                     
                 elif model_info.get("model_type") == "mediapipe":
-                    from backends.mediapipe_backend import MediaPipeManager
+                    from Python.backends.mediapipe.manager import MediaPipeManager
                     self.python_backend = MediaPipeManager()
                     result = self.python_backend.load_model(model_id, opts)
                     self.backend_type = "mediapipe"
                     
                 else:  # SafeTensors/PyTorch via Transformers
-                    from backends.transformers_backend import TransformersTextGenBackend
+                    from Python.backends.transformers_backend import TransformersTextGenBackend
                     self.python_backend = TransformersTextGenBackend()
                     result = self.python_backend.load_model(model_id, opts)
                     self.backend_type = "transformers"

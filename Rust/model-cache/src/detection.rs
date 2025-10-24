@@ -1,6 +1,12 @@
 use serde::{Serialize, Deserialize};
 use crate::manifest::ManifestEntry;
 use crate::hf_client::HfModelConfig;
+use crate::tasks::{
+    TASK_TEXT_GENERATION,
+    ENGINE_BITNET, ENGINE_LLAMA_CPP, ENGINE_ONNXRUNTIME,
+    ENGINE_TRANSFORMERS, ENGINE_MEDIAPIPE,
+    EXT_GGUF, EXT_ONNX, EXT_SAFETENSORS, EXT_TFLITE, EXT_BIN,
+};
 
 /// Supported model types for inference
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,7 +113,7 @@ fn detect_architecture(source: &str) -> Option<String> {
 /// ```
 pub fn detect_from_file_path(path: &str) -> Option<ModelInfo> {
     // GGUF files (both regular and BitNet use .gguf extension)
-    if path.ends_with(".gguf") {
+    if path.ends_with(EXT_GGUF) {
         // Check if it's a BitNet model by path patterns
         // BitNet models are GGUF files but need special handling (different DLL, 1.58-bit quantization)
         let is_bitnet = BITNET_PATTERNS.iter().any(|pattern| path.contains(pattern));
@@ -118,10 +124,10 @@ pub fn detect_from_file_path(path: &str) -> Option<ModelInfo> {
                 repo: repo.clone(),
                 model_type: ModelType::BitNet,
                 backend: Backend::Rust { 
-                    engine: "bitnet".to_string() 
+                    engine: ENGINE_BITNET.to_string() 
                 },
                 variants: vec![path.to_string()],
-                task: Some("text-generation".to_string()),
+                task: Some(TASK_TEXT_GENERATION.to_string()),
                 architecture: detect_architecture(&repo),
                 manifest: None,
             });
@@ -133,23 +139,23 @@ pub fn detect_from_file_path(path: &str) -> Option<ModelInfo> {
             repo: repo.clone(),
             model_type: ModelType::GGUF,
             backend: Backend::Rust { 
-                engine: "llama.cpp".to_string() 
+                engine: ENGINE_LLAMA_CPP.to_string() 
             },
             variants: vec![path.to_string()],
-            task: Some("text-generation".to_string()),
+            task: Some(TASK_TEXT_GENERATION.to_string()),
             architecture: detect_architecture(&repo),
             manifest: None,
         });
     }
     
     // ONNX files
-    if path.ends_with(".onnx") {
+    if path.ends_with(EXT_ONNX) {
         let repo = extract_repo_from_path(path);
         return Some(ModelInfo {
             repo: repo.clone(),
             model_type: ModelType::ONNX,
             backend: Backend::Python { 
-                engine: "onnxruntime".to_string()  // Will migrate to Rust later
+                engine: ENGINE_ONNXRUNTIME.to_string()  // Will migrate to Rust later
             },
             variants: vec![path.to_string()],
             task: None, // Will be fetched from HF if needed
@@ -159,13 +165,13 @@ pub fn detect_from_file_path(path: &str) -> Option<ModelInfo> {
     }
     
     // SafeTensors files
-    if path.ends_with(".safetensors") {
+    if path.ends_with(EXT_SAFETENSORS) {
         let repo = extract_repo_from_path(path);
         return Some(ModelInfo {
             repo: repo.clone(),
             model_type: ModelType::SafeTensors,
             backend: Backend::Python { 
-                engine: "transformers".to_string() 
+                engine: ENGINE_TRANSFORMERS.to_string() 
             },
             variants: vec![path.to_string()],
             task: None,
@@ -175,16 +181,16 @@ pub fn detect_from_file_path(path: &str) -> Option<ModelInfo> {
     }
     
     // LiteRT/TFLite files
-    if path.ends_with(".tflite") || path.ends_with(".bin") {
+    if path.ends_with(EXT_TFLITE) || path.ends_with(EXT_BIN) {
         let repo = extract_repo_from_path(path);
         return Some(ModelInfo {
             repo: repo.clone(),
             model_type: ModelType::LiteRT,
             backend: Backend::Python { 
-                engine: "mediapipe".to_string() 
+                engine: ENGINE_MEDIAPIPE.to_string() 
             },
             variants: vec![path.to_string()],
-            task: Some("text-generation".to_string()),
+            task: Some(TASK_TEXT_GENERATION.to_string()),
             architecture: detect_architecture(&repo),
             manifest: None,
         });
@@ -210,10 +216,10 @@ pub fn detect_from_repo_name(repo: &str) -> Option<ModelInfo> {
             repo: repo.to_string(),
             model_type: ModelType::BitNet,
             backend: Backend::Rust { 
-                engine: "bitnet".to_string() 
+                engine: ENGINE_BITNET.to_string() 
             },
             variants: vec![],
-            task: Some("text-generation".to_string()),
+            task: Some(TASK_TEXT_GENERATION.to_string()),
             architecture: detect_architecture(repo),
             manifest: None,
         });
@@ -226,10 +232,10 @@ pub fn detect_from_repo_name(repo: &str) -> Option<ModelInfo> {
             repo: repo.to_string(),
             model_type: ModelType::GGUF,
             backend: Backend::Rust { 
-                engine: "llama.cpp".to_string() 
+                engine: ENGINE_LLAMA_CPP.to_string() 
             },
             variants: vec![],
-            task: Some("text-generation".to_string()),
+            task: Some(TASK_TEXT_GENERATION.to_string()),
             architecture: detect_architecture(repo),
             manifest: None,
         });
@@ -241,7 +247,7 @@ pub fn detect_from_repo_name(repo: &str) -> Option<ModelInfo> {
             repo: repo.to_string(),
             model_type: ModelType::ONNX,
             backend: Backend::Python { 
-                engine: "onnxruntime".to_string()  // Will migrate to Rust later
+                engine: ENGINE_ONNXRUNTIME.to_string()  // Will migrate to Rust later
             },
             variants: vec![],
             task: None,
@@ -256,10 +262,10 @@ pub fn detect_from_repo_name(repo: &str) -> Option<ModelInfo> {
             repo: repo.to_string(),
             model_type: ModelType::LiteRT,
             backend: Backend::Python { 
-                engine: "mediapipe".to_string() 
+                engine: ENGINE_MEDIAPIPE.to_string() 
             },
             variants: vec![],
-            task: Some("text-generation".to_string()),
+            task: Some(TASK_TEXT_GENERATION.to_string()),
             architecture: detect_architecture(repo),
             manifest: None,
         });
@@ -494,7 +500,7 @@ mod tests {
         assert_eq!(info.repo, "Qwen/Qwen2.5-3B");
         
         if let Backend::Rust { engine } = info.backend {
-            assert_eq!(engine, "llama.cpp");
+            assert_eq!(engine, ENGINE_LLAMA_CPP);
         } else {
             panic!("Expected Rust backend");
         }

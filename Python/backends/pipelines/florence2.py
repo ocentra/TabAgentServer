@@ -74,21 +74,21 @@ class Florence2Pipeline(BasePipeline):
                 
                 if engine == "onnxruntime":
                     # Python ONNX (will migrate to Rust)
-                    from backends.onnxrt import ONNXRuntimeManager
+                    from Python.backends.onnxrt.manager import ONNXRuntimeManager
                     self.backend = ONNXRuntimeManager()
                     self.backend.load_model(model_id, task="image-to-text")
                     self.backend_type = "python-onnx"
                 
                 elif engine == "mediapipe":
                     # Python MediaPipe (will migrate to Rust)
-                    from backends.mediapipe import MediaPipeManager
+                    from Python.backends.mediapipe.manager import MediaPipeManager
                     self.backend = MediaPipeManager()
                     self.backend.load_model(model_id)
                     self.backend_type = "python-mediapipe"
                 
                 elif engine == "transformers":
                     # Python SafeTensors (stays Python)
-                    from backends.transformers_backend import TransformersTextGenBackend
+                    from Python.backends.transformers_backend import TransformersTextGenBackend
                     self.backend = TransformersTextGenBackend()
                     self.backend.load_model(
                         model_path=model_id,

@@ -84,10 +84,11 @@ pub use ml_bridge::{MlBridge, MockMlBridge};
 
 use common::DbError;
 use indexing::IndexManager;
-use storage::DatabaseCoordinator;
+use storage::{StorageManager, DatabaseCoordinator};
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
+use anyhow::{anyhow, Result};
 
 /// Error type for Weaver operations.
 #[derive(Debug, thiserror::Error)]
@@ -107,6 +108,10 @@ pub enum WeaverError {
     /// Weaver is shutting down
     #[error("Weaver is shutting down")]
     ShuttingDown,
+    
+    /// Other errors
+    #[error("Other error: {0}")]
+    Other(#[from] anyhow::Error),
 }
 
 /// Result type for Weaver operations.
@@ -117,11 +122,20 @@ pub type WeaverResult<T> = Result<T, WeaverError>;
 /// This contains thread-safe handles to all necessary components.
 #[derive(Clone)]
 pub struct WeaverContext {
+    /// Conversations database for chat-related data
+    pub conversations_db: Arc<StorageManager>,
+    
+    /// Knowledge database for graph-related data
+    pub knowledge_db: Arc<StorageManager>,
+    
     /// Database coordinator for multi-tier operations
     pub coordinator: Arc<DatabaseCoordinator>,
     
-    /// Index manager for search operations
-    pub indexing: Arc<IndexManager>,
+    /// Conversations index manager for search operations
+    pub conversations_index: Arc<indexing::IndexManager>,
+    
+    /// Knowledge index manager for search operations
+    pub knowledge_index: Arc<indexing::IndexManager>,
     
     /// ML bridge for model inference
     pub ml_bridge: Arc<dyn MlBridge>,
@@ -130,15 +144,31 @@ pub struct WeaverContext {
 impl WeaverContext {
     /// Creates a new weaver context.
     pub fn new(
+        conversations_db: Arc<StorageManager>,
+        knowledge_db: Arc<StorageManager>,
         coordinator: Arc<DatabaseCoordinator>,
-        indexing: Arc<IndexManager>,
         ml_bridge: Arc<dyn MlBridge>,
-    ) -> Self {
-        Self {
+    ) -> WeaverResult<Self> {
+        // Create new index managers for the weaver context
+        // This is less efficient but avoids lifetime issues
+        let conversations_index = Arc::new(
+            indexing::IndexManager::new(conversations_db.db())
+                .map_err(|e| WeaverError::Other(anyhow::Error::from(e)))?
+        );
+            
+        let knowledge_index = Arc::new(
+            indexing::IndexManager::new(knowledge_db.db())
+                .map_err(|e| WeaverError::Other(anyhow::Error::from(e)))?
+        );
+
+        Ok(Self {
+            conversations_db,
+            knowledge_db,
             coordinator,
-            indexing,
+            conversations_index,
+            knowledge_index,
             ml_bridge,
-        }
+        })
     }
     
 }
@@ -354,6 +384,7 @@ use num_cpus;
 mod tests {
     use super::*;
     use tempfile::TempDir;
+    use storage::{StorageManager, DatabaseCoordinator};
 
     async fn create_test_context() -> (TempDir, Arc<StorageManager>, WeaverContext) {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -363,19 +394,22 @@ mod tests {
                 .expect("Failed to create storage")
         );
         
-        // Get the Arc<IndexManager> from storage
-        let indexing = {
-            let idx_ref = storage.index_manager().unwrap();
-            // We need to access the internal Arc - create new IndexManager
-            // For test purposes, create a fresh IndexManager
-            Arc::new(IndexManager::new(storage.db()).expect("Failed to create IndexManager"))
-        };
+        // Create a mock DatabaseCoordinator for testing
+        let coordinator = Arc::new(
+            DatabaseCoordinator::new()
+                .expect("Failed to create DatabaseCoordinator")
+        );
         
+        // Create a mock ML bridge
+        let ml_bridge = Arc::new(MockMlBridge);
+        
+        // Create the context with all required parameters
         let context = WeaverContext::new(
             Arc::clone(&storage),
-            indexing,
-            Arc::new(MockMlBridge),
-        );
+            Arc::clone(&storage),
+            coordinator,
+            ml_bridge,
+        ).expect("Failed to create WeaverContext");
         
         (temp_dir, storage, context)
     }
@@ -397,7 +431,7 @@ mod tests {
         let weaver = Weaver::new(context).await.unwrap();
         
         let event = WeaverEvent::NodeCreated {
-            node_id: "test_node".to_string(),
+            node_id: "test_node".to_string().into(),
             node_type: "Message".to_string(),
         };
         

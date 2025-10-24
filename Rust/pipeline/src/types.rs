@@ -9,6 +9,66 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use tabagent_model_cache::ModelType as CacheModelType;
 
+/// Model architecture enum - NO string literals!
+///
+/// Represents specialized model architectures that require custom handling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Architecture {
+    Florence2,
+    Whisper,
+    Moonshine,
+    Clip,
+    Clap,
+    Janus,
+    Phi3Vision,
+    Llava,
+    Qwen2VL,
+    /// Generic architecture (no special handling)
+    Generic,
+}
+
+impl Architecture {
+    /// Parse from string (case-insensitive)
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "florence2" | "florence" => Some(Self::Florence2),
+            "whisper" => Some(Self::Whisper),
+            "moonshine" => Some(Self::Moonshine),
+            "clip" => Some(Self::Clip),
+            "clap" => Some(Self::Clap),
+            "janus" => Some(Self::Janus),
+            "phi3vision" | "phi-3-vision" => Some(Self::Phi3Vision),
+            "llava" => Some(Self::Llava),
+            "qwen2vl" | "qwen2-vl" => Some(Self::Qwen2VL),
+            _ => None,
+        }
+    }
+
+    /// Is this a specialized architecture requiring custom pipeline?
+    pub fn is_specialized(&self) -> bool {
+        !matches!(self, Self::Generic)
+    }
+}
+
+impl fmt::Display for Architecture {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            Self::Florence2 => "florence2",
+            Self::Whisper => "whisper",
+            Self::Moonshine => "moonshine",
+            Self::Clip => "clip",
+            Self::Clap => "clap",
+            Self::Janus => "janus",
+            Self::Phi3Vision => "phi3vision",
+            Self::Llava => "llava",
+            Self::Qwen2VL => "qwen2vl",
+            Self::Generic => "generic",
+        };
+        write!(f, "{}", name)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PipelineType {
     /// Text generation (LLMs, GPT, Llama, etc.)

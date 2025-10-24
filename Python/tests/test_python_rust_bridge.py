@@ -24,7 +24,7 @@ from pathlib import Path
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core import message_fields as mf
+from Python.core import message_fields as mf
 from Python.core.test_models import get_test_model
 
 # Try to import Rust handler

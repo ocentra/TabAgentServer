@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
-use ::tabagent_model_cache::{ModelCache, ManifestEntry, QuantStatus, CacheStats, ProgressCallback};
+use ::tabagent_model_cache::{ModelCache, ManifestEntry, QuantStatus, ProgressCallback};
 use std::sync::Arc;
 
 /// Python wrapper for ModelCache

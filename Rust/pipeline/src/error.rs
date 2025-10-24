@@ -2,6 +2,7 @@
 ///
 /// Represents all possible failure modes for pipeline operations.
 use thiserror::Error;
+use crate::types::Architecture;
 
 #[derive(Error, Debug)]
 pub enum PipelineError {
@@ -13,6 +14,12 @@ pub enum PipelineError {
 
     #[error("Invalid configuration: {0}")]
     InvalidConfiguration(String),
+
+    #[error("Invalid architecture: expected {expected}, got {actual}")]
+    InvalidArchitecture {
+        expected: Architecture,
+        actual: Architecture,
+    },
 
     #[error("Inference failed: {0}")]
     InferenceFailed(String),
