@@ -1,5 +1,0 @@
-# Expected after build:
-# llama-server (~60-90 MB) - executable for ARM64 macOS
-#
-# To build on macOS:
-# Run: ../../build-cpu-macos.sh

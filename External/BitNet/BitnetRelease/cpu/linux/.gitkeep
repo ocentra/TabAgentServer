@@ -1,5 +1,0 @@
-# Expected after build:
-# llama-server (~60-90 MB) - executable for Linux x64
-#
-# To build on Linux:
-# Run: ../../build-cpu-linux.sh

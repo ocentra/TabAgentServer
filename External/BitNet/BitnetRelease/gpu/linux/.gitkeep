@@ -1,7 +1,0 @@
-# Expected after build:
-# bitlinear_cuda.so (~5-15 MB) - CUDA kernel
-# model.py, generate.py, tokenizer.py, etc.
-# tokenizer.model (~2.1 MB)
-#
-# To build on Linux:
-# Run: ../../build-gpu-linux.sh

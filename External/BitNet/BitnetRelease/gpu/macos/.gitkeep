@@ -1,8 +1,0 @@
-# Expected after build:
-# *.py files only (no CUDA support on macOS)
-# model.py, generate.py, tokenizer.py, etc.
-# tokenizer.model
-# README.txt (explaining limitation)
-#
-# To copy modules on macOS:
-# Run: ../../build-gpu-macos.sh
