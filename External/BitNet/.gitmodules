@@ -1,0 +1,7 @@
+[submodule "3rdparty/llama.cpp"]
+	path = 3rdparty/llama.cpp
+	url = https://github.com/ocentra/llama.cpp.git
+	branch = merge-dev
+[submodule "BitnetRelease"]
+	path = BitnetRelease
+	url = https://github.com/ocentra/BitnetRelease.git

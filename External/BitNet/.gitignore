@@ -1,0 +1,65 @@
+﻿# Extensions
+*.a
+*.bat
+*.bin
+*.deb
+*.dot
+*.etag
+*.gcda
+*.gcno
+*.gcov
+*.lastModified
+*.log
+*.metallib
+*.o
+*.tmp
+
+# GGUF files
+*.gguf
+*.gguf.json
+
+# Build artifacts (temporary builds only)
+build/**/*.exe
+build/**/*.dll
+build/**/*.so
+build-*/**/*.exe
+build-*/**/*.dll
+build-*/**/*.so
+
+# Binaries (these go to BitnetRelease/ repo)
+gpu/**/*.dll
+gpu/**/*.so
+gpu/**/*.pyd
+libs/**/*.dll
+libs/**/*.so
+libs/**/*.lib
+
+# IDE / OS
+.cache/
+.ccls-cache/
+.direnv/
+.DS_Store
+.envrc
+.idea/
+.swiftpm
+.vs/
+.vscode/
+nppBackup
+
+# Models
+models/*
+gpu/checkpoints/*
+
+# Python
+/.venv
+__pycache__/
+*/poetry.lock
+poetry.toml
+
+build/
+build-*/
+logs/wsl-bitnet-env/
+wsl-bitnet-env/
+/bitnet-gpu-env
+/bitnet-gpu-env-windows
+/bitnet-gpu-env-linux

@@ -18,8 +18,8 @@ wsl-bitnet-env/
 # Reference repositories (moved to references/)
 /References/
 
-# External submodules (managed separately)
-/External/
+# External submodules are tracked via .gitmodules
+# (Do NOT ignore External/ - submodules need to be tracked!)
 
 
 # Rust build artifacts
