@@ -1,0 +1,27 @@
+[package]
+name = "tabagent-execution-providers"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "tabagent_execution_providers"
+crate-type = ["rlib"]
+
+[dependencies]
+# Workspace crates
+common = { path = "../common" }
+tabagent-hardware = { path = "../hardware" }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Logging
+log = { workspace = true }
+
+[dev-dependencies]
+env_logger = "0.11"
+

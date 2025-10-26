@@ -31,6 +31,7 @@
 
 use common::{DbError, DbResult, EmbeddingId};
 use hnsw_rs::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -75,10 +76,10 @@ pub struct VectorIndex {
     next_index: Arc<RwLock<usize>>,
 }
 
-#[derive(Debug, Clone)]
-struct VectorMetadata {
-    timestamp: i64,
-    dimension: usize,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VectorMetadata {
+    pub timestamp: i64,
+    pub dimension: usize,
 }
 
 impl VectorIndex {
@@ -241,6 +242,48 @@ impl VectorIndex {
             .unwrap()
             .get(&EmbeddingId::from(id))
             .map(|m| (m.timestamp, m.dimension))
+    }
+    
+    /// Gets a vector by ID.
+    ///
+    /// Note: This is a placeholder implementation since HNSW doesn't directly support
+    /// vector retrieval by ID. In a production system, we'd store vectors separately.
+    pub fn get_vector(&self, id: &EmbeddingId) -> DbResult<Option<VectorEntry>> {
+        // For now, return None since we don't store the original vectors
+        // In a production system, we'd have a separate storage for the original vectors
+        let metadata = self.metadata.read()
+            .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+        
+        if let Some(meta) = metadata.get(id) {
+            // We don't actually store the original vectors in this implementation
+            // This is a limitation of the current HNSW-only approach
+            // In production, we'd store vectors in a separate storage system
+            Ok(None)
+        } else {
+            Ok(None)
+        }
+    }
+    
+    /// Gets all embeddings in the index.
+    ///
+    /// Returns an iterator over all embeddings for migration purposes.
+    /// Note: This is a placeholder since we don't store original vectors.
+    pub fn get_all_embeddings(&self) -> DbResult<impl Iterator<Item = DbResult<common::models::Embedding>>> {
+        let metadata = self.metadata.read()
+            .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+        
+        let embeddings: Vec<DbResult<common::models::Embedding>> = metadata.iter()
+            .map(|(id, meta)| {
+                // Create a placeholder embedding since we don't store original vectors
+                Ok(common::models::Embedding {
+                    id: id.clone(),
+                    vector: vec![0.0; meta.dimension], // Placeholder vector
+                    model: "unknown".to_string(), // Placeholder model
+                })
+            })
+            .collect();
+        
+        Ok(embeddings.into_iter())
     }
     
     /// Saves the index to disk for persistence.

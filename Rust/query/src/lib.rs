@@ -660,12 +660,8 @@ impl<'a> QueryManager<'a> {
                         }
                         visited.insert(node_id.clone());
                         
-                        // Get neighbors from hot graph
-                        let neighbors_result = {
-                            let mut hot_graph_guard = hot_graph.lock()
-                                .map_err(|e| QueryError::Storage(common::DbError::Other(format!("Lock poisoned: {}", e))))?;
-                            hot_graph_guard.get_outgoing_neighbors(node_id.as_str())
-                        };
+                        // Get neighbors from hot graph (lock-free access)
+                        let neighbors_result = hot_graph.get_outgoing_neighbors(node_id.as_str());
                         
                         match neighbors_result {
                             Ok(neighbors) => {
@@ -712,12 +708,8 @@ impl<'a> QueryManager<'a> {
     ) -> QueryResult2<Vec<QueryResult>> {
         // Try to use the hot vector index for faster search
         if let Some(hot_vector) = self.indexing.get_hot_vector_index() {
-            // Perform search on hot vectors
-            let hot_results = {
-                let mut hot_vector_guard = hot_vector.lock()
-                    .map_err(|e| QueryError::Storage(common::DbError::Other(format!("Lock poisoned: {}", e))))?;
-                hot_vector_guard.search(query_vector, limit + offset)
-            };
+            // Perform search on hot vectors (lock-free access)
+            let hot_results = hot_vector.search(query_vector, limit + offset);
             
             match hot_results {
                 Ok(hot_results) => {

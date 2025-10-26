@@ -17,6 +17,38 @@
 //! └── Cold Layer (Persistent)
 //!     └── PersistentIndex (sled-based)
 //! ```
+//!
+//! # Concurrency
+//!
+//! The traditional HotVectorIndex and HotGraphIndex implementations use Mutex-based
+//! concurrency control. For high-performance concurrent access, see the lock-free
+//! implementations in [lock_free_hot_vector] and [lock_free_hot_graph].
+//!
+//! # Example
+//!
+//! ```no_run
+//! # use indexing::hybrid::{HotVectorIndex, HotGraphIndex};
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Traditional mutex-based implementation
+//! let mut vector_index = HotVectorIndex::new();
+//! vector_index.add_vector("vec1", vec![0.1, 0.2, 0.3])?;
+//!
+//! let mut graph_index = HotGraphIndex::new();
+//! graph_index.add_node("node1", None)?;
+//! graph_index.add_edge("node1", "node2")?;
+//!
+//! // For high-concurrency scenarios, use lock-free implementations:
+//! # use indexing::lock_free_hot_vector::LockFreeHotVectorIndex;
+//! # use indexing::lock_free_hot_graph::LockFreeHotGraphIndex;
+//! let lock_free_vector_index = LockFreeHotVectorIndex::new();
+//! lock_free_vector_index.add_vector("vec1", vec![0.1, 0.2, 0.3])?;
+//!
+//! let lock_free_graph_index = LockFreeHotGraphIndex::new();
+//! lock_free_graph_index.add_node("node1", None)?;
+//! lock_free_graph_index.add_edge("node1", "node2")?;
+//! # Ok(())
+//! # }
+//! ```
 
 use common::{DbError, DbResult};
 use std::collections::{HashMap, HashSet, BinaryHeap, VecDeque};

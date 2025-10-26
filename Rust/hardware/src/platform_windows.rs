@@ -10,7 +10,7 @@ use std::process::Command;
 pub fn detect_cpu() -> Result<CpuInfo> {
     // Get CPU info via PowerShell (modern, cross-version compatible)
     let output = Command::new("powershell")
-        .args(&[
+        .args([
             "-Command",
             "Get-CimInstance -ClassName Win32_Processor | Select-Object Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors, Level, Revision | ConvertTo-Json"
         ])

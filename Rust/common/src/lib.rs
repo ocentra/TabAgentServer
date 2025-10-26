@@ -13,6 +13,13 @@
 pub mod models;
 pub mod platform;
 pub mod actions;
+pub mod errors;
+pub mod inference_settings;
+pub mod hardware_constants;
+
+// Re-export commonly used types
+pub use inference_settings::InferenceSettings;
+pub use hardware_constants as hw_const;
 
 // --- Core Newtype Wrappers (RAG Rule 8.1) ---
 
