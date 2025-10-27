@@ -1,12 +1,13 @@
 use crate::error::{ModelCacheError, Result};
 use sled::Db;
-use std::path::Path;
+use std::sync::Arc;
 
 const CHUNK_SIZE: usize = 100 * 1024 * 1024; // 100MB chunks (matching extension logic)
 
 /// Manages chunked storage of model files in sled
 pub struct ChunkStorage {
-    db: Db,
+    /// Shared reference to the database (to keep it alive)
+    _db: Arc<Db>,
     /// Tree for storing file chunks: key = "file:{repo}:{file_path}:chunk:{n}", value = bytes
     chunks: sled::Tree,
     /// Tree for storing file metadata: key = "meta:{repo}:{file_path}", value = FileMetadata
@@ -40,13 +41,13 @@ pub struct ChunkManifest {
 pub type StorageProgressCallback = Box<dyn Fn(u64, u64, usize, usize) + Send + Sync>;
 
 impl ChunkStorage {
-    pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self> {
-        let db = sled::open(db_path)?;
+    /// Create a new ChunkStorage using an existing database instance
+    pub fn new(db: Arc<Db>) -> Result<Self> {
         let chunks = db.open_tree(b"model_chunks")?;
         let metadata = db.open_tree(b"model_metadata")?;
         
         Ok(Self {
-            db,
+            _db: db,
             chunks,
             metadata,
         })
@@ -84,7 +85,7 @@ impl ChunkStorage {
         let meta_bytes = bincode::serialize(&metadata)?;
         self.metadata.insert(meta_key.as_bytes(), meta_bytes)?;
         
-        self.db.flush()?;
+        self._db.flush()?;
         
         Ok(())
     }
@@ -236,7 +237,7 @@ impl ChunkStorage {
         let manifest_bytes = bincode::serialize(&final_manifest)?;
         self.metadata.insert(manifest_key.as_bytes(), manifest_bytes)?;
         
-        self.db.flush()?;
+        self._db.flush()?;
         
         log::info!(
             "[store_file_streaming] ✅ Successfully streamed {}: {} chunks saved",
@@ -351,7 +352,7 @@ impl ChunkStorage {
         // Delete metadata
         self.metadata.remove(meta_key.as_bytes())?;
         
-        self.db.flush()?;
+        self._db.flush()?;
         
         Ok(())
     }
@@ -396,7 +397,7 @@ impl ChunkStorage {
     /// - Flush = sync writes, NOT close connection
     /// - RAII handles cleanup on Drop
     pub fn flush(&self) -> Result<()> {
-        self.db.flush()
+        self._db.flush()
             .map_err(|e| ModelCacheError::Storage(format!("Failed to flush: {}", e)))?;
         Ok(())
     }
@@ -477,7 +478,8 @@ mod tests {
     #[test]
     fn test_store_and_retrieve() {
         let temp_dir = TempDir::new().unwrap();
-        let storage = ChunkStorage::new(temp_dir.path()).unwrap();
+        let db = Arc::new(sled::open(temp_dir.path()).unwrap());
+        let storage = ChunkStorage::new(db).unwrap();
         
         let test_data = b"Hello, this is a test file for chunked storage!".repeat(100);
         
@@ -496,7 +498,8 @@ mod tests {
     #[test]
     fn test_metadata() {
         let temp_dir = TempDir::new().unwrap();
-        let storage = ChunkStorage::new(temp_dir.path()).unwrap();
+        let db = Arc::new(sled::open(temp_dir.path()).unwrap());
+        let storage = ChunkStorage::new(db).unwrap();
         
         let test_data = vec![0u8; 10_000_000]; // 10MB
         

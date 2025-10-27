@@ -10,7 +10,7 @@ crate-type = ["rlib"]
 [dependencies]
 # Composed dependencies (DRY - reuse existing crates!)
 tabagent-model-cache = { path = "../model-cache" }  # Detection, download, caching
-model-loader = { path = "../model-loader" }          # GGUF/BitNet FFI loading
+tabagent-onnx-loader = { path = "../onnx-loader" }  # ONNX Runtime inference
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

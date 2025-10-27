@@ -1,0 +1,46 @@
+[package]
+name = "tabagent-webrtc"
+version = "0.1.0"
+edition = "2021"
+authors = ["TabAgent Team"]
+description = "WebRTC signaling and data channel handler for TabAgent Server"
+license = "MIT"
+
+[lib]
+name = "tabagent_webrtc"
+path = "src/lib.rs"
+
+[dependencies]
+# Workspace dependencies
+tabagent-values = { path = "../values" }
+
+# WebRTC implementation
+webrtc = "0.11"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Logging
+tracing = "0.1"
+
+# Utilities
+async-trait = "0.1"
+futures = "0.3"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[features]
+default = []
+

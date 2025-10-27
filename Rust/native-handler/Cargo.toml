@@ -12,8 +12,10 @@ crate-type = ["cdylib"]
 common = { path = "../common" }
 storage = { path = "../storage" }
 tabagent-model-cache = { path = "../model-cache" }
-model-loader = { path = "../model-loader" }
 tabagent-hardware = { path = "../hardware" }
+tabagent-onnx-loader = { path = "../onnx-loader" }
+tabagent-execution-providers = { path = "../execution-providers" }
+tabagent-pipeline = { path = "../pipeline" }
 
 # PyO3 for Python bindings
 pyo3 = { workspace = true, features = ["extension-module", "abi3-py39"] }

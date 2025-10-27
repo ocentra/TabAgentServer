@@ -73,14 +73,14 @@ pub const DEFAULT_BYPASS_MODELS: &[&str] = &[
 /// ```
 pub fn build_manifest_from_hf(
     metadata: &HfRepoMetadata,
-    server_only_size_limit: u64,
+    _server_only_size_limit: u64, // Kept for API compatibility; unused in desktop (no browser limits)
     bypass_models: &[&str],
 ) -> Result<ExtensionManifestEntry> {
     let repo = metadata.repo_id.clone().unwrap_or_else(|| "unknown".to_string());
     let task = metadata.pipeline_tag.clone();
     
     // Check if this repo is in bypass list
-    let is_bypass = bypass_models.iter().any(|&model| repo.contains(model));
+    let _is_bypass = bypass_models.iter().any(|&model| repo.contains(model));
     
     // Step 1: Find all .onnx files (excluding .onnx_data)
     let onnx_files: Vec<&HfFile> = metadata.siblings.iter()
@@ -99,12 +99,20 @@ pub fn build_manifest_from_hf(
         // Collect all files needed for this quant
         let mut files = vec![onnx_path.clone()];
         let mut has_external_data = false;
+        // Note: total_size accumulated but not used for status in desktop builds (no browser size limits)
+        #[allow(unused_variables, unused_assignments)]
         let mut total_size: u64 = onnx_file.size.unwrap_or(0);
         
-        // Check for corresponding .onnx_data file
-        let data_path = format!("{}_data", onnx_path);
-        if let Some(data_file) = metadata.siblings.iter().find(|f| f.path == data_path) {
-            files.push(data_path);
+        // Check for corresponding .onnx_data OR .onnx.data file
+        // Extension checks BOTH patterns (sidepanel.ts:1777)
+        let base_name = onnx_path.strip_suffix(".onnx").unwrap_or(onnx_path);
+        let data_path_underscore = format!("{}.onnx_data", base_name);
+        let data_path_dot = format!("{}.onnx.data", base_name);
+        
+        if let Some(data_file) = metadata.siblings.iter()
+            .find(|f| f.path == data_path_underscore || f.path == data_path_dot) 
+        {
+            files.push(data_file.path.clone());
             has_external_data = true;
             total_size += data_file.size.unwrap_or(0);
         }
@@ -126,14 +134,11 @@ pub fn build_manifest_from_hf(
             }
         }
         
-        // Determine status based on size
-        let status = if is_bypass {
-            QuantStatus::Available
-        } else if total_size > server_only_size_limit {
-            QuantStatus::ServerOnly
-        } else {
-            QuantStatus::Available
-        };
+        // Desktop: All models are "Available" - no browser size limits
+        // Actual loading will check VRAM/RAM and auto-split GPU/CPU layers
+        // The "server_only_size_limit" parameter is kept for extension compatibility
+        // but not used in desktop - we rely on hardware detection instead
+        let status = QuantStatus::Available;
         
         quants.insert(onnx_path.clone(), ExtensionQuantInfo {
             files,
@@ -231,7 +236,9 @@ mod tests {
     }
     
     #[test]
-    fn test_server_only_status() {
+    fn test_desktop_all_available() {
+        // Desktop builds: All models are "Available" regardless of size
+        // Browser size limits don't apply - we rely on VRAM/RAM detection instead
         let large_size = 3_000_000_000u64; // 3GB
         
         let metadata = HfRepoMetadata {
@@ -245,12 +252,13 @@ mod tests {
         
         let manifest = build_manifest_from_hf(
             &metadata,
-            DEFAULT_SERVER_ONLY_SIZE,
+            DEFAULT_SERVER_ONLY_SIZE, // Kept for API compat but unused in desktop
             DEFAULT_BYPASS_MODELS
         ).expect("Should build manifest");
         
         let quant = manifest.quants.get("model.onnx").expect("Should have quant");
-        assert_eq!(quant.status, QuantStatus::ServerOnly);
+        // Desktop: Always Available - actual loading will check hardware and auto-split layers
+        assert_eq!(quant.status, QuantStatus::Available);
     }
     
     #[test]

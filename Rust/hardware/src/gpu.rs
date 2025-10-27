@@ -38,11 +38,27 @@ pub struct GpuInfo {
     pub driver_version: Option<String>,
 }
 
-/// Detect GPUs (simplified for now)
+/// Detect GPUs using platform-specific methods
 pub fn detect_gpus() -> Result<Vec<GpuInfo>> {
-    // TODO: Implement GPU detection
-    // For now, return empty list
-    // Future: Use nvidia-smi, wmic, vulkan info, etc.
-    Ok(Vec::new())
+    #[cfg(target_os = "windows")]
+    {
+        crate::platform_windows::detect_gpus()
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        crate::platform_linux::detect_gpus()
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        crate::platform_macos::detect_gpus()
+    }
+    
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    {
+        // Unsupported platform
+        Ok(Vec::new())
+    }
 }
 

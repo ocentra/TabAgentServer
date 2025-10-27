@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { workspace = true, features = ["extension-module"] }
-model-loader = { path = "../model-loader" }
+gguf-loader = { path = "../gguf-loader" }
 tabagent-hardware = { path = "../hardware" }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1,0 +1,43 @@
+[package]
+name = "tabagent-onnx-loader"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "tabagent_onnx_loader"
+crate-type = ["rlib"]
+
+[dependencies]
+# Workspace crates
+common = { path = "../common" }
+tabagent-hardware = { path = "../hardware" }
+tabagent-tokenization = { path = "../tokenization" }
+tabagent-execution-providers = { path = "../execution-providers" }
+
+# ONNX Runtime
+ort = { version = "2.0.0-rc.10", features = ["download-binaries", "half", "ndarray"] }
+ndarray = "0.16"
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Logging
+log = { workspace = true }
+
+# Random number generation (for sampling)
+rand = "0.8"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tabagent-model-cache = { path = "../model-cache" }
+env_logger = "0.11"
+

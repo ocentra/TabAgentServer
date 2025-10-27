@@ -1,12 +1,32 @@
 /// Hardware detection tests
 /// 
-/// REAL TESTS - NO MOCKS:
+/// COMPREHENSIVE REAL TESTS - NO MOCKS:
 /// - Queries actual system hardware
-/// - Tests real CPU detection
-/// - Tests real GPU detection (if available)
-/// - Tests real memory readings
+/// - Tests real CPU detection & architecture
+/// - Tests real GPU detection with VRAM
+/// - Tests real memory (RAM) readings
+/// - Tests BitNet DLL variant selection
+/// - Tests execution provider recommendations
+/// - Tests model loading strategies
+/// - Tests constants and tiers
+/// - Tests all helper functions
 
-use tabagent_hardware::{detect_system, detect_cpu_architecture, CpuArchitecture, CpuVendor};
+use tabagent_hardware::{
+    detect_system, 
+    detect_cpu_architecture,
+    detect_memory,
+    calculate_total_vram,
+    get_ram_tier,
+    get_vram_tier,
+    get_bitnet_dll_variant,
+    get_bitnet_dll_filename,
+    recommend_execution_provider,
+    recommend_loading_strategy,
+    CpuArchitecture, 
+    CpuVendor,
+    GpuVendor,
+    constants::*,
+};
 
 #[test]
 fn test_real_cpu_detection() {
@@ -147,5 +167,341 @@ fn test_macos_specific_info() {
     } else {
         println!("✅ Intel Mac detected: {}", system_info.cpu.model_name);
     }
+}
+
+// ========== MEMORY TESTS ==========
+
+#[test]
+fn test_real_memory_detection() {
+    println!("\n🧪 Testing REAL memory detection...");
+    
+    let memory = detect_memory().unwrap();
+    
+    println!("📊 Memory Info:");
+    println!("   Total RAM: {} MB ({:.1} GB)", memory.total_ram_mb, memory.total_ram_mb as f32 / 1024.0);
+    println!("   Available RAM: {} MB ({:.1} GB)", memory.available_ram_mb, memory.available_ram_mb as f32 / 1024.0);
+    println!("   Used RAM: {} MB ({:.1} GB)", memory.used_ram_mb, memory.used_ram_mb as f32 / 1024.0);
+    
+    // Basic sanity checks
+    assert!(memory.total_ram_mb > 0, "Total RAM must be greater than 0");
+    assert!(memory.available_ram_mb <= memory.total_ram_mb, "Available RAM cannot exceed total RAM");
+    assert!(memory.used_ram_mb <= memory.total_ram_mb, "Used RAM cannot exceed total RAM");
+    
+    // Most systems have at least 4GB RAM
+    assert!(memory.total_ram_mb >= 2048, "System should have at least 2GB RAM");
+    
+    println!("✅ Memory detection works correctly");
+}
+
+#[test]
+fn test_ram_tiers() {
+    println!("\n🧪 Testing RAM tier classification...");
+    
+    let memory = detect_memory().unwrap();
+    let tier = get_ram_tier(memory.total_ram_mb);
+    
+    println!("📊 RAM Tier:");
+    println!("   Total: {} MB ({:.1} GB)", memory.total_ram_mb, memory.total_ram_mb as f32 / 1024.0);
+    println!("   Tier: {}", tier);
+    
+    // Verify tier is one of the expected values
+    assert!(
+        tier == TIER_LOW || tier == TIER_MEDIUM || tier == TIER_HIGH || tier == TIER_VERY_HIGH,
+        "Tier should be one of the defined constants"
+    );
+    
+    // Verify tier logic
+    if memory.total_ram_mb < LOW_RAM_THRESHOLD_MB {
+        assert_eq!(tier, TIER_LOW);
+    } else if memory.total_ram_mb < MEDIUM_RAM_THRESHOLD_MB {
+        assert_eq!(tier, TIER_MEDIUM);
+    } else if memory.total_ram_mb < HIGH_RAM_THRESHOLD_MB {
+        assert_eq!(tier, TIER_HIGH);
+    } else {
+        assert_eq!(tier, TIER_VERY_HIGH);
+    }
+    
+    println!("✅ RAM tier classification works correctly");
+}
+
+// ========== GPU & VRAM TESTS ==========
+
+#[test]
+fn test_real_gpu_detection() {
+    println!("\n🧪 Testing REAL GPU detection...");
+    
+    let system = detect_system().unwrap();
+    
+    if system.gpus.is_empty() {
+        println!("⚠️  No GPUs detected (CPU-only system or no drivers)");
+        println!("✅ Test passed (no GPUs is valid)");
+        return;
+    }
+    
+    println!("📊 GPU Info:");
+    for (idx, gpu) in system.gpus.iter().enumerate() {
+        println!("   GPU {}: {}", idx, gpu.name);
+        println!("      Vendor: {:?}", gpu.vendor);
+        
+        if let Some(vram_mb) = gpu.vram_mb {
+            println!("      VRAM: {} MB ({:.1} GB)", vram_mb, vram_mb as f32 / 1024.0);
+        } else {
+            println!("      VRAM: Not detected");
+        }
+        
+        if let Some(ref driver) = gpu.driver_version {
+            println!("      Driver: {}", driver);
+        }
+        
+        // Sanity checks
+        assert!(!gpu.name.is_empty(), "GPU name should not be empty");
+        assert_ne!(gpu.vendor, GpuVendor::Unknown, "GPU vendor should be detected");
+    }
+    
+    println!("✅ GPU detection works correctly");
+}
+
+#[test]
+fn test_total_vram_calculation() {
+    println!("\n🧪 Testing total VRAM calculation...");
+    
+    let system = detect_system().unwrap();
+    let total_vram = calculate_total_vram(&system.gpus);
+    
+    println!("📊 VRAM Summary:");
+    println!("   Total VRAM: {} MB ({:.1} GB)", total_vram, total_vram as f32 / 1024.0);
+    println!("   Tier: {}", system.vram_tier);
+    
+    // Verify it matches system.total_vram_mb
+    assert_eq!(total_vram, system.total_vram_mb, "Calculated VRAM should match system VRAM");
+    
+    println!("✅ VRAM calculation works correctly");
+}
+
+#[test]
+fn test_vram_tiers() {
+    println!("\n🧪 Testing VRAM tier classification...");
+    
+    // Test edge cases
+    assert_eq!(get_vram_tier(0), TIER_LOW);
+    assert_eq!(get_vram_tier(2048), TIER_LOW);      // 2GB
+    assert_eq!(get_vram_tier(6144), TIER_MEDIUM);   // 6GB
+    assert_eq!(get_vram_tier(12288), TIER_HIGH);    // 12GB
+    assert_eq!(get_vram_tier(24576), TIER_VERY_HIGH); // 24GB
+    
+    println!("✅ VRAM tier classification works correctly");
+}
+
+// ========== BITNET DLL VARIANT TESTS ==========
+
+#[test]
+fn test_bitnet_dll_variant_selection() {
+    println!("\n🧪 Testing BitNet DLL variant selection...");
+    
+    let system = detect_system().unwrap();
+    let variant = system.bitnet_dll_variant();
+    let filename = system.bitnet_dll_filename();
+    
+    println!("📊 BitNet DLL Selection:");
+    println!("   CPU Architecture: {:?}", system.cpu.architecture);
+    println!("   DLL Variant: {}", variant);
+    println!("   DLL Filename: {}", filename);
+    
+    // Verify variant is not empty
+    assert!(!variant.is_empty(), "BitNet variant should not be empty");
+    assert!(!filename.is_empty(), "BitNet filename should not be empty");
+    
+    // Verify filename format
+    assert!(filename.starts_with(BITNET_DLL_PREFIX), "Filename should start with bitnet prefix");
+    assert!(filename.ends_with(BITNET_DLL_SUFFIX), "Filename should end with .dll");
+    assert!(filename.contains(variant), "Filename should contain the variant");
+    
+    println!("✅ BitNet DLL variant selection works correctly");
+}
+
+#[test]
+fn test_bitnet_dll_all_architectures() {
+    println!("\n🧪 Testing BitNet DLL for all CPU architectures...");
+    
+    let architectures = vec![
+        CpuArchitecture::AmdZen3,
+        CpuArchitecture::IntelAlderlake,
+        CpuArchitecture::AppleM1,
+        CpuArchitecture::Portable,
+    ];
+    
+    for arch in architectures {
+        let variant = get_bitnet_dll_variant(arch);
+        let filename = get_bitnet_dll_filename(arch);
+        
+        println!("   {:?} → {} → {}", arch, variant, filename);
+        
+        assert!(!variant.is_empty());
+        assert!(filename.contains(variant));
+    }
+    
+    println!("✅ All architecture mappings work correctly");
+}
+
+// ========== EXECUTION PROVIDER TESTS ==========
+
+#[test]
+fn test_execution_provider_recommendation() {
+    println!("\n🧪 Testing execution provider recommendation...");
+    
+    let system = detect_system().unwrap();
+    let recommendation = system.recommended_execution_provider();
+    
+    println!("📊 Execution Provider Recommendation:");
+    println!("   Primary: {}", recommendation.primary);
+    println!("   Fallbacks: {:?}", recommendation.fallbacks);
+    println!("   Reason: {}", recommendation.reason);
+    
+    // Verify recommendation is not empty
+    assert!(!recommendation.primary.is_empty(), "Primary provider should not be empty");
+    assert!(!recommendation.reason.is_empty(), "Reason should not be empty");
+    
+    // Verify primary is one of the known providers
+    let valid_providers = vec![PROVIDER_CUDA, PROVIDER_DIRECTML, PROVIDER_COREML, 
+                               PROVIDER_ROCM, PROVIDER_OPENVINO, PROVIDER_CPU];
+    assert!(
+        valid_providers.contains(&recommendation.primary.as_str()),
+        "Primary provider should be one of the known providers"
+    );
+    
+    // If we have NVIDIA GPU, should recommend CUDA
+    if system.gpus.iter().any(|gpu| gpu.vendor == GpuVendor::Nvidia) {
+        assert_eq!(recommendation.primary, PROVIDER_CUDA, "Should recommend CUDA for NVIDIA GPUs");
+    }
+    
+    // If no GPU, should recommend CPU
+    if system.gpus.is_empty() {
+        assert_eq!(recommendation.primary, PROVIDER_CPU, "Should recommend CPU when no GPU detected");
+    }
+    
+    println!("✅ Execution provider recommendation works correctly");
+}
+
+// ========== MODEL LOADING STRATEGY TESTS ==========
+
+#[test]
+fn test_model_loading_strategy_small_model() {
+    println!("\n🧪 Testing model loading strategy for small model...");
+    
+    let system = detect_system().unwrap();
+    let model_size_mb = 500; // 500MB model
+    let strategy = system.recommended_loading_strategy(model_size_mb);
+    
+    println!("📊 Loading Strategy for {}MB model:", model_size_mb);
+    println!("   Target: {}", strategy.target);
+    println!("   GPU Index: {:?}", strategy.gpu_index);
+    println!("   GPU %: {:?}", strategy.gpu_percent);
+    println!("   CPU %: {:?}", strategy.cpu_percent);
+    println!("   Reason: {}", strategy.reason);
+    
+    // Verify strategy is valid
+    assert!(
+        strategy.target == LOAD_STRATEGY_GPU || 
+        strategy.target == LOAD_STRATEGY_CPU || 
+        strategy.target == LOAD_STRATEGY_SPLIT,
+        "Strategy should be one of the defined constants"
+    );
+    
+    println!("✅ Small model loading strategy works correctly");
+}
+
+#[test]
+fn test_model_loading_strategy_large_model() {
+    println!("\n🧪 Testing model loading strategy for large model...");
+    
+    let system = detect_system().unwrap();
+    let model_size_mb = 14000; // 14GB model (e.g., Llama 70B)
+    let strategy = system.recommended_loading_strategy(model_size_mb);
+    
+    println!("📊 Loading Strategy for {}MB model:", model_size_mb);
+    println!("   Target: {}", strategy.target);
+    println!("   Reason: {}", strategy.reason);
+    
+    // Large models typically require split or CPU
+    if system.total_vram_mb < model_size_mb {
+        assert!(
+            strategy.target == LOAD_STRATEGY_CPU || strategy.target == LOAD_STRATEGY_SPLIT,
+            "Large model with insufficient VRAM should use CPU or split"
+        );
+    }
+    
+    println!("✅ Large model loading strategy works correctly");
+}
+
+// ========== INTEGRATION TESTS ==========
+
+#[test]
+fn test_system_info_completeness() {
+    println!("\n🧪 Testing SystemInfo completeness...");
+    
+    let system = detect_system().unwrap();
+    
+    println!("📊 Complete System Information:");
+    println!("\n🖥️  CPU:");
+    println!("   Model: {}", system.cpu.model_name);
+    println!("   Architecture: {:?}", system.cpu.architecture);
+    println!("   Cores: {} / Threads: {}", system.cpu.cores, system.cpu.threads);
+    println!("   BitNet DLL: {}", system.bitnet_dll_filename());
+    
+    println!("\n💾 Memory:");
+    println!("   Total RAM: {:.1} GB", system.memory.total_ram_mb as f32 / 1024.0);
+    println!("   Available RAM: {:.1} GB", system.memory.available_ram_mb as f32 / 1024.0);
+    println!("   RAM Tier: {}", system.ram_tier);
+    
+    println!("\n🎮 Graphics:");
+    println!("   GPUs: {}", system.gpus.len());
+    for (idx, gpu) in system.gpus.iter().enumerate() {
+        println!("   GPU {}: {} ({:?})", idx, gpu.name, gpu.vendor);
+        if let Some(vram) = gpu.vram_mb {
+            println!("      VRAM: {:.1} GB", vram as f32 / 1024.0);
+        }
+    }
+    println!("   Total VRAM: {:.1} GB", system.total_vram_mb as f32 / 1024.0);
+    println!("   VRAM Tier: {}", system.vram_tier);
+    
+    println!("\n🚀 Recommendations:");
+    let provider = system.recommended_execution_provider();
+    println!("   Execution Provider: {}", provider.primary);
+    println!("   Reason: {}", provider.reason);
+    
+    println!("\n🖥️  OS:");
+    println!("   Name: {}", system.os.name);
+    println!("   Version: {}", system.os.version);
+    println!("   Arch: {}", system.os.arch);
+    
+    // Verify all fields are populated
+    assert!(!system.cpu.model_name.is_empty());
+    assert!(system.memory.total_ram_mb > 0);
+    assert!(!system.ram_tier.is_empty());
+    assert!(!system.vram_tier.is_empty());
+    assert!(!system.os.name.is_empty());
+    
+    println!("\n✅ System info is complete and consistent");
+}
+
+#[test]
+fn test_constants_availability() {
+    println!("\n🧪 Testing constants availability...");
+    
+    // Verify all constants are accessible and non-empty
+    assert!(!CPU_VENDOR_INTEL.is_empty());
+    assert!(!GPU_VENDOR_NVIDIA.is_empty());
+    assert!(!PROVIDER_CUDA.is_empty());
+    assert!(!LOAD_STRATEGY_GPU.is_empty());
+    assert!(!TIER_LOW.is_empty());
+    
+    println!("📊 Sample Constants:");
+    println!("   CPU Vendor: {}", CPU_VENDOR_INTEL);
+    println!("   GPU Vendor: {}", GPU_VENDOR_NVIDIA);
+    println!("   Provider: {}", PROVIDER_CUDA);
+    println!("   Strategy: {}", LOAD_STRATEGY_GPU);
+    println!("   Tier: {}", TIER_LOW);
+    
+    println!("✅ All constants are accessible");
 }
 

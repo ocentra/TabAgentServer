@@ -1,0 +1,88 @@
+[package]
+name = "tabagent-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["TabAgent Team"]
+description = "Rust-native server for TabAgent with native messaging, HTTP API, and WebRTC support"
+
+[[bin]]
+name = "tabagent-server"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace crates (already exist)
+common = { path = "../common" }
+storage = { path = "../storage" }
+tabagent-model-cache = { path = "../model-cache" }
+tabagent-onnx-loader = { path = "../onnx-loader" }
+gguf-loader = { path = "../gguf-loader" }
+tabagent-hardware = { path = "../hardware" }
+tabagent-native-handler = { path = "../native-handler" }
+tabagent-values = { path = "../values" }
+# Note: python-ml-bridge exists but is for Weaver's MlBridge trait
+# Server uses its own python_bridge module for general inference
+
+# Async runtime (RAG: Tokio for enterprise-grade async)
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+
+# Web framework (RAG: Axum for enterprise-grade HTTP)
+axum = { version = "0.7", features = ["macros"] }
+tower = { version = "0.4", features = ["util", "timeout", "load-shed", "limit"] }
+tower-http = { version = "0.5", features = ["fs", "cors", "trace", "compression-full"] }
+hyper = { version = "1", features = ["full"] }
+
+# WebRTC
+webrtc = "0.9"
+tokio-tungstenite = "0.21"  # For WebSocket signaling
+
+# Serialization (RAG: Type-safe JSON handling)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+bytes = "1"
+
+# Error handling (RAG: thiserror for library, anyhow for application)
+anyhow = "1"
+thiserror = "1"
+
+# Logging (RAG: tracing for structured logging)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# API documentation (RAG: OpenAPI/Swagger compliance)
+utoipa = { version = "4", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "6", features = ["axum"] }
+utoipa-rapidoc = { version = "3", features = ["axum"] }
+utoipa-redoc = { version = "3", features = ["axum"] }
+
+# Configuration
+config = "0.14"
+clap = { version = "4", features = ["derive", "env"] }
+toml = "0.8"
+
+# Python bridge (RAG: PyO3 for FFI with proper safety)
+pyo3 = { workspace = true, features = ["auto-initialize"] }
+
+# Utilities
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+dashmap = "5"  # Thread-safe HashMap for loaded models
+parking_lot = "0.12"  # Better Mutex/RwLock
+
+[dev-dependencies]
+# Testing (RAG: Comprehensive test coverage required)
+tokio-test = "0.4"
+tempfile = "3"
+proptest = "1"
+criterion = "0.5"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 0
+debug = true
+

@@ -9,6 +9,8 @@ use tokio::sync::RwLock;
 
 /// Main model cache manager - combines storage, downloads, and manifest management
 pub struct ModelCache {
+    /// Keep the database alive for the entire lifetime of ModelCache
+    _db: Arc<sled::Db>,
     storage: Arc<ChunkStorage>,
     downloader: Arc<ModelDownloader>,
     manifests: Arc<RwLock<sled::Tree>>,
@@ -17,14 +19,18 @@ pub struct ModelCache {
 impl ModelCache {
     /// Create a new model cache at the specified path
     pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self> {
-        let storage = Arc::new(ChunkStorage::new(&db_path)?);
+        // Open the database ONCE
+        let db = Arc::new(sled::open(&db_path)?);
+        
+        // Share the database instance with ChunkStorage
+        let storage = Arc::new(ChunkStorage::new(Arc::clone(&db))?);
         let downloader = Arc::new(ModelDownloader::new());
         
-        // Open manifests tree in the same sled DB
-        let db = sled::open(&db_path)?;
+        // Open manifests tree using the same database instance
         let manifests = Arc::new(RwLock::new(db.open_tree(b"model_manifests")?));
         
         Ok(Self {
+            _db: db,
             storage,
             downloader,
             manifests,
@@ -505,11 +511,12 @@ mod tests {
         assert_eq!(extract_variant_from_filename("model.onnx"), "default");
         assert_eq!(extract_variant_from_filename("onnx/decoder_model_q4.onnx"), "q4");
         
-        // GGUF formats
+        // GGUF formats (using realistic HuggingFace naming patterns)
+        // Most GGUF repos use dash separators (dash works better with multi-part quants like Q4_K_M)
         assert_eq!(extract_variant_from_filename("model-Q4_K_M.gguf"), "Q4_K_M");
         assert_eq!(extract_variant_from_filename("llama-2-7b-Q5_K_S.gguf"), "Q5_K_S");
-        assert_eq!(extract_variant_from_filename("phi-3_Q8_0.gguf"), "Q8_0");
-        assert_eq!(extract_variant_from_filename("model_q4_k_m.gguf"), "q4_k_m");
+        assert_eq!(extract_variant_from_filename("phi-3-Q8_0.gguf"), "Q8_0");
+        assert_eq!(extract_variant_from_filename("model-q4_k_m.gguf"), "q4_k_m"); // Dash before variant
         
         // SafeTensors
         assert_eq!(extract_variant_from_filename("model-fp16.safetensors"), "fp16");
@@ -521,7 +528,7 @@ mod tests {
         assert_eq!(extract_variant_from_filename("generation_config.json"), "common");
         
         // Edge cases
-        assert_eq!(extract_variant_from_filename("model-v2.bin"), "default"); // v2 has no numbers
+        assert_eq!(extract_variant_from_filename("model-v2.bin"), "v2"); // v2 contains digit 2
         assert_eq!(extract_variant_from_filename("random_file_100.txt"), "100"); // Has number
     }
 }

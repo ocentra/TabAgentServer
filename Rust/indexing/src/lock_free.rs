@@ -26,8 +26,20 @@ pub struct LockFreeHashMap<K, V> {
     size: AtomicUsize,
 }
 
-// NOTE: Old complex iterator removed. Now using a simplified Vec-based approach.
-// See the `iter()` method on LockFreeHashMap for the new implementation.
+/// An iterator over the entries of a LockFreeHashMap.
+pub struct LockFreeHashMapIter<'a, K, V> {
+    /// Reference to the hash map
+    map: &'a LockFreeHashMap<K, V>,
+    
+    /// Current bucket index
+    bucket_index: usize,
+    
+    /// Current entry pointer
+    current_entry: Option<Shared<'a, Entry<K, V>>>,
+    
+    /// Guard for epoch-based memory reclamation
+    guard: &'a Guard,
+}
 
 /// A bucket in the hash map containing a linked list of entries
 struct Bucket<K, V> {
@@ -69,10 +81,7 @@ where
         }
     }
     
-    /// Returns an iterator over the entries of the map (snapshot).
-    ///
-    /// NOTE: This collects all entries into a Vec to avoid lifetime issues
-    /// with epoch-based memory reclamation.
+    /// Returns an iterator over the entries of the map.
     pub fn iter(&self) -> impl Iterator<Item = DbResult<(K, V)>> {
         let guard = epoch::pin();
         let mut entries = Vec::new();
@@ -311,6 +320,68 @@ impl<K, V> Drop for LockFreeHashMap<K, V> {
         for bucket in &self.buckets {
             bucket.store(Shared::null(), Ordering::Relaxed);
         }
+    }
+}
+
+impl<'a, K, V> Iterator for LockFreeHashMapIter<'a, K, V>
+where
+    K: Eq + Hash + Clone,
+    V: Clone,
+{
+    type Item = DbResult<(K, V)>;
+    
+    fn next(&mut self) -> Option<Self::Item> {
+        // If we have a current entry, return its key-value pair
+        if let Some(entry_ptr) = self.current_entry {
+            if let Some(entry) = unsafe { entry_ptr.as_ref() } {
+                let key = entry.key.clone();
+                let value = entry.value.clone();
+                
+                // Move to the next entry
+                self.current_entry = if entry.next.load(Ordering::Acquire, self.guard).is_null() {
+                    // Current entry is the last in this bucket, move to next bucket
+                    self.bucket_index += 1;
+                    self.seek_next_entry()
+                } else {
+                    // Move to next entry in the same bucket
+                    Some(entry.next.load(Ordering::Acquire, self.guard))
+                };
+                
+                return Some(Ok((key, value)));
+            }
+        }
+        
+        None
+    }
+}
+
+impl<'a, K, V> LockFreeHashMapIter<'a, K, V>
+where
+    K: Eq + Hash + Clone,
+    V: Clone,
+{
+    /// Seeks to the next entry in the map, starting from the current bucket index.
+    fn seek_next_entry(&mut self) -> Option<Shared<'a, Entry<K, V>>> {
+        while self.bucket_index < self.map.bucket_count {
+            // Get the bucket
+            let bucket_ptr = self.map.buckets[self.bucket_index].load(Ordering::Relaxed, self.guard);
+            if !bucket_ptr.is_null() {
+                let bucket = unsafe { bucket_ptr.as_ref() }.unwrap();
+                
+                // Get the first entry in the bucket
+                let entry_ptr = bucket.head.load(Ordering::Acquire, self.guard);
+                if !entry_ptr.is_null() {
+                    self.current_entry = Some(entry_ptr);
+                    return self.current_entry;
+                }
+            }
+            
+            // Move to the next bucket
+            self.bucket_index += 1;
+        }
+        
+        self.current_entry = None;
+        None
     }
 }
 

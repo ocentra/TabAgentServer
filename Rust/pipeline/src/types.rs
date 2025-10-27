@@ -110,6 +110,10 @@ pub enum PipelineType {
     /// Embedding generation
     #[serde(rename = "embedding")]
     Embedding,
+    
+    /// Image segmentation (MODNet, SAM, etc.)
+    #[serde(rename = "image-segmentation")]
+    ImageSegmentation,
 }
 
 impl PipelineType {
@@ -152,6 +156,7 @@ impl PipelineType {
             Self::ObjectDetection => "object-detection",
             Self::DepthEstimation => "depth-estimation",
             Self::Embedding => "embedding",
+            Self::ImageSegmentation => "image-segmentation",
         }
     }
 
@@ -168,6 +173,7 @@ impl PipelineType {
             "object-detection" => Some(Self::ObjectDetection),
             "depth-estimation" => Some(Self::DepthEstimation),
             "embedding" => Some(Self::Embedding),
+            "image-segmentation" => Some(Self::ImageSegmentation),
             _ => None,
         }
     }

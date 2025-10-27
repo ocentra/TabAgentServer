@@ -46,6 +46,11 @@ class ActionType(str, Enum):
     SELECT_ACTIVE_MODEL = "select_active_model"
     ESTIMATE_MODEL_SIZE = "estimate_model_size"
     
+    # Hardware detection and recommendations
+    GET_HARDWARE_INFO = "get_hardware_info"
+    CHECK_MODEL_FEASIBILITY = "check_model_feasibility"
+    GET_RECOMMENDED_MODELS = "get_recommended_models"
+    
     # HuggingFace Authentication
     SET_HF_TOKEN = "set_hf_token"
     GET_HF_TOKEN_STATUS = "get_hf_token_status"

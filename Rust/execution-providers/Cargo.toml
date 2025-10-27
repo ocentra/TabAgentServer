@@ -19,6 +19,9 @@ tabagent-hardware = { path = "../hardware" }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 
+# Serialization
+serde = { workspace = true }
+
 # Logging
 log = { workspace = true }
 

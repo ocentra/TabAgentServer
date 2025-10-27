@@ -34,6 +34,9 @@ use thiserror::Error;
 
 mod cpu;
 mod gpu;
+mod memory;
+pub mod constants;
+pub mod recommendations;
 
 #[cfg(target_os = "windows")]
 mod platform_windows;
@@ -46,6 +49,15 @@ mod platform_macos;
 
 pub use cpu::{CpuArchitecture, CpuInfo, CpuVendor};
 pub use gpu::{GpuInfo, GpuVendor};
+pub use memory::{MemoryInfo, detect_memory, calculate_total_vram, get_ram_tier, get_vram_tier};
+pub use recommendations::{
+    get_bitnet_dll_variant, 
+    get_bitnet_dll_filename,
+    recommend_execution_provider,
+    recommend_loading_strategy,
+    ExecutionProviderRecommendation,
+    ModelLoadingStrategy,
+};
 
 #[derive(Debug, Error)]
 pub enum HardwareError {
@@ -69,7 +81,40 @@ pub type Result<T> = std::result::Result<T, HardwareError>;
 pub struct SystemInfo {
     pub cpu: CpuInfo,
     pub gpus: Vec<GpuInfo>,
+    pub memory: MemoryInfo,
     pub os: OsInfo,
+    
+    // Computed fields
+    pub total_vram_mb: u64,
+    pub ram_tier: String,
+    pub vram_tier: String,
+}
+
+impl SystemInfo {
+    /// Get the recommended BitNet DLL variant for this CPU
+    pub fn bitnet_dll_variant(&self) -> &'static str {
+        get_bitnet_dll_variant(self.cpu.architecture)
+    }
+    
+    /// Get the full BitNet DLL filename (Windows)
+    pub fn bitnet_dll_filename(&self) -> String {
+        get_bitnet_dll_filename(self.cpu.architecture)
+    }
+    
+    /// Get recommended execution provider
+    pub fn recommended_execution_provider(&self) -> ExecutionProviderRecommendation {
+        recommend_execution_provider(&self.gpus, &self.os.name)
+    }
+    
+    /// Get recommended loading strategy for a model
+    pub fn recommended_loading_strategy(&self, model_size_mb: u64) -> ModelLoadingStrategy {
+        recommend_loading_strategy(
+            model_size_mb,
+            self.memory.total_ram_mb,
+            self.memory.available_ram_mb,
+            &self.gpus,
+        )
+    }
 }
 
 /// Operating system information
@@ -94,9 +139,23 @@ impl OsInfo {
 pub fn detect_system() -> Result<SystemInfo> {
     let cpu = cpu::detect_cpu()?;
     let gpus = gpu::detect_gpus()?;
+    let memory = detect_memory()?;
     let os = OsInfo::detect();
     
-    Ok(SystemInfo { cpu, gpus, os })
+    // Calculate totals and tiers
+    let total_vram_mb = calculate_total_vram(&gpus);
+    let ram_tier = get_ram_tier(memory.total_ram_mb).to_string();
+    let vram_tier = get_vram_tier(total_vram_mb).to_string();
+    
+    Ok(SystemInfo { 
+        cpu, 
+        gpus, 
+        memory, 
+        os,
+        total_vram_mb,
+        ram_tier,
+        vram_tier,
+    })
 }
 
 /// Quick CPU architecture detection

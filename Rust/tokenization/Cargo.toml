@@ -1,0 +1,31 @@
+[package]
+name = "tabagent-tokenization"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "tabagent_tokenization"
+crate-type = ["rlib"]
+
+[dependencies]
+# HuggingFace tokenizers (pure Rust, fast!)
+# Updated to 0.22 for SmolLM2 and modern tokenizer format support
+tokenizers = "0.22"
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Logging
+log = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+

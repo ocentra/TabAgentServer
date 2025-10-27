@@ -1,7 +1,9 @@
 use thiserror::Error;
+use serde::{Serialize, Deserialize};
 
 /// Errors that can occur when working with execution providers
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Serialize, Deserialize)]
+#[serde(tag = "type", content = "message")]
 pub enum ProviderError {
     #[error("Provider not available: {0}")]
     NotAvailable(String),

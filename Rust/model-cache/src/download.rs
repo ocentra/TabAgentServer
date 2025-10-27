@@ -63,10 +63,22 @@ impl ModelDownloader {
         
         // ===== DOWNLOAD =====
         
-        let response = self.client
-            .get(&url)
-            .send()
-            .await?;
+        // Build request with optional HuggingFace token for gated/private repos
+        let mut request = self.client.get(&url);
+        
+        // Add authorization header if token is set (check both HF_TOKEN and HUGGINGFACE_TOKEN)
+        let token = std::env::var("HF_TOKEN")
+            .or_else(|_| std::env::var("HUGGINGFACE_TOKEN"))
+            .ok();
+        
+        if let Some(token) = token {
+            if !token.is_empty() {
+                log::debug!("Using HuggingFace token for authentication");
+                request = request.header("Authorization", format!("Bearer {}", token));
+            }
+        }
+        
+        let response = request.send().await?;
         
         if !response.status().is_success() {
             return Err(ModelCacheError::Download(format!(
@@ -104,10 +116,18 @@ impl ModelDownloader {
         
         log::info!("Fetching file list for repo: {}", repo_id);
         
-        let response = self.client
-            .get(&url)
-            .send()
-            .await?;
+        // Build request with optional HuggingFace token
+        let mut request = self.client.get(&url);
+        let token = std::env::var("HF_TOKEN")
+            .or_else(|_| std::env::var("HUGGINGFACE_TOKEN"))
+            .ok();
+        if let Some(token) = token {
+            if !token.is_empty() {
+                request = request.header("Authorization", format!("Bearer {}", token));
+            }
+        }
+        
+        let response = request.send().await?;
         
         if !response.status().is_success() {
             return Err(ModelCacheError::Download(format!(
@@ -145,10 +165,18 @@ impl ModelDownloader {
     pub async fn get_model_info(&self, repo_id: &str) -> Result<ModelInfo> {
         let url = format!("https://huggingface.co/api/models/{}", repo_id);
         
-        let response = self.client
-            .get(&url)
-            .send()
-            .await?;
+        // Build request with optional HuggingFace token
+        let mut request = self.client.get(&url);
+        let token = std::env::var("HF_TOKEN")
+            .or_else(|_| std::env::var("HUGGINGFACE_TOKEN"))
+            .ok();
+        if let Some(token) = token {
+            if !token.is_empty() {
+                request = request.header("Authorization", format!("Bearer {}", token));
+            }
+        }
+        
+        let response = request.send().await?;
         
         if !response.status().is_success() {
             return Err(ModelCacheError::Download(format!(

@@ -236,31 +236,37 @@ pub fn is_supporting_file(path: &str) -> bool {
 
 /// Check if a file is an ONNX model file
 ///
+/// Excludes external data files (.onnx_data and .onnx.data)
+///
 /// # Examples
 /// ```
 /// use model_cache::hf_client::is_onnx_file;
 ///
 /// assert!(is_onnx_file("onnx/model.onnx"));
 /// assert!(!is_onnx_file("onnx/model.onnx_data"));
+/// assert!(!is_onnx_file("onnx/model.onnx.data"));
 /// assert!(!is_onnx_file("config.json"));
 /// ```
 pub fn is_onnx_file(path: &str) -> bool {
-    use crate::tasks::{EXT_ONNX, EXT_ONNX_DATA};
-    path.ends_with(EXT_ONNX) && !path.ends_with(EXT_ONNX_DATA)
+    path.ends_with(".onnx") && !is_onnx_external_data(path)
 }
 
 /// Check if a file is ONNX external data
+///
+/// Matches BOTH patterns used in HuggingFace repos:
+/// - .onnx_data (underscore)
+/// - .onnx.data (dot)
 ///
 /// # Examples
 /// ```
 /// use model_cache::hf_client::is_onnx_external_data;
 ///
 /// assert!(is_onnx_external_data("onnx/model.onnx_data"));
+/// assert!(is_onnx_external_data("onnx/model.onnx.data"));
 /// assert!(!is_onnx_external_data("onnx/model.onnx"));
 /// ```
 pub fn is_onnx_external_data(path: &str) -> bool {
-    use crate::tasks::EXT_ONNX_DATA;
-    path.ends_with(EXT_ONNX_DATA)
+    path.ends_with(".onnx_data") || path.ends_with(".onnx.data")
 }
 
 #[cfg(test)]
@@ -291,14 +297,18 @@ mod tests {
     fn test_is_onnx_file() {
         assert!(is_onnx_file("onnx/model.onnx"));
         assert!(is_onnx_file("model_q4f16.onnx"));
-        assert!(!is_onnx_file("model.onnx_data"));
+        assert!(!is_onnx_file("model.onnx_data"), "should exclude .onnx_data");
+        assert!(!is_onnx_file("model.onnx.data"), "should exclude .onnx.data");
         assert!(!is_onnx_file("config.json"));
     }
     
     #[test]
     fn test_is_onnx_external_data() {
-        assert!(is_onnx_external_data("onnx/model.onnx_data"));
-        assert!(is_onnx_external_data("model_q4f16.onnx_data"));
+        // Test BOTH patterns used in HuggingFace repos
+        assert!(is_onnx_external_data("onnx/model.onnx_data"), "underscore pattern");
+        assert!(is_onnx_external_data("model_q4f16.onnx_data"), "underscore with quant");
+        assert!(is_onnx_external_data("onnx/model.onnx.data"), "dot pattern");
+        assert!(is_onnx_external_data("model_q4f16.onnx.data"), "dot with quant");
         assert!(!is_onnx_external_data("model.onnx"));
         assert!(!is_onnx_external_data("config.json"));
     }

@@ -52,6 +52,9 @@ pub mod text_generation;
 pub mod clip;
 pub mod janus;
 pub mod multimodal;
+pub mod onnx;
+pub mod yolo;
+pub mod segmentation;
 
 // Re-export public API (thin layer)
 pub use base::Pipeline;
@@ -66,6 +69,9 @@ pub use text_generation::TextGenerationHandler;
 pub use clip::ClipHandler;
 pub use janus::JanusHandler;
 pub use multimodal::MultimodalHandler;
+pub use onnx::OnnxPipeline;
+pub use yolo::{YoloPipeline, YOLO_CLASS_LABELS};
+pub use segmentation::{SegmentationPipeline, SegmentationType};
 
 // Re-export model-cache types for convenience (DRY - don't duplicate!)
 pub use tabagent_model_cache::{
@@ -80,7 +86,4 @@ pub use tabagent_model_cache::detection::{
     ModelInfo as DetectionModelInfo,
     Backend as CacheBackend,
 };
-
-// Re-export model-loader for GGUF/BitNet
-pub use model_loader::{Model as LoaderModel, ModelConfig as LoaderModelConfig};
 

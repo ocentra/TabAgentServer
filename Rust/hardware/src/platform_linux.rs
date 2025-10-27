@@ -59,9 +59,10 @@ pub fn detect_cpu() -> Result<CpuInfo> {
     }
     
     // Detect vendor
-    let vendor = if vendor_id.contains("intel") || vendor_id.contains("genuineintel") {
+    use crate::constants::*;
+    let vendor = if vendor_id.contains(CPU_KEYWORD_INTEL) || vendor_id.contains(CPU_KEYWORD_GENUINEINTEL) {
         CpuVendor::Intel
-    } else if vendor_id.contains("amd") || vendor_id.contains("authenticamd") {
+    } else if vendor_id.contains(CPU_KEYWORD_AMD) || vendor_id.contains(CPU_KEYWORD_AUTHENTICAMD) {
         CpuVendor::Amd
     } else {
         CpuVendor::Unknown
@@ -70,8 +71,8 @@ pub fn detect_cpu() -> Result<CpuInfo> {
     // Detect architecture
     let mut architecture = crate::cpu::detect_from_name(&model_name, vendor);
     
-    if let (Some(fam), Some(mod)) = (family, model) {
-        architecture = crate::cpu::refine_from_cpuid(architecture, vendor, fam, mod);
+    if let (Some(fam), Some(model_num)) = (family, model) {
+        architecture = crate::cpu::refine_from_cpuid(architecture, vendor, fam, model_num);
     }
     
     Ok(CpuInfo {
@@ -84,5 +85,77 @@ pub fn detect_cpu() -> Result<CpuInfo> {
         model,
         stepping,
     })
+}
+
+/// Detect GPUs on Linux using lspci and nvidia-smi
+pub fn detect_gpus() -> Result<Vec<crate::gpu::GpuInfo>> {
+    use crate::gpu::{GpuInfo, GpuVendor};
+    use std::process::Command;
+    
+    let mut gpus = Vec::new();
+    
+    // Try nvidia-smi first
+    if let Ok(output) = Command::new("nvidia-smi")
+        .args([
+            "--query-gpu=name,memory.total,driver_version",
+            "--format=csv,noheader,nounits"
+        ])
+        .output() 
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                let parts: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
+                if parts.len() >= 3 {
+                    gpus.push(GpuInfo {
+                        vendor: GpuVendor::Nvidia,
+                        name: parts[0].to_string(),
+                        vram_mb: parts[1].parse().ok(),
+                        driver_version: Some(parts[2].to_string()),
+                    });
+                }
+            }
+        }
+    }
+    
+    // Fall back to lspci
+    if gpus.is_empty() {
+        if let Ok(output) = Command::new("lspci").output() {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    use crate::constants::*;
+                    let line_lower = line.to_lowercase();
+                    if line_lower.contains(KEYWORD_VGA) || line_lower.contains(KEYWORD_3D) {
+                        let vendor = if line_lower.contains(GPU_KEYWORD_NVIDIA) {
+                            GpuVendor::Nvidia
+                        } else if line_lower.contains(GPU_KEYWORD_AMD) || line_lower.contains(GPU_KEYWORD_ATI) {
+                            GpuVendor::Amd
+                        } else if line_lower.contains(GPU_KEYWORD_INTEL) {
+                            GpuVendor::Intel
+                        } else {
+                            GpuVendor::Unknown
+                        };
+                        
+                        // Extract GPU name (after colon)
+                        let name = line.split(':')
+                            .last()
+                            .unwrap_or("Unknown GPU")
+                            .trim()
+                            .to_string();
+                        
+                        gpus.push(GpuInfo {
+                            vendor,
+                            name,
+                            vram_mb: None, // lspci doesn't provide VRAM
+                            driver_version: None,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(gpus)
 }
 

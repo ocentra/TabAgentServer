@@ -660,8 +660,10 @@ impl<'a> QueryManager<'a> {
                         }
                         visited.insert(node_id.clone());
                         
-                        // Get neighbors from hot graph (lock-free access)
-                        let neighbors_result = hot_graph.get_outgoing_neighbors(node_id.as_str());
+                        // Get neighbors from hot graph (lock-free, no lock needed)
+                        let neighbors_result = {
+                            hot_graph.get_outgoing_neighbors(node_id.as_str())
+                        };
                         
                         match neighbors_result {
                             Ok(neighbors) => {
@@ -708,8 +710,10 @@ impl<'a> QueryManager<'a> {
     ) -> QueryResult2<Vec<QueryResult>> {
         // Try to use the hot vector index for faster search
         if let Some(hot_vector) = self.indexing.get_hot_vector_index() {
-            // Perform search on hot vectors (lock-free access)
-            let hot_results = hot_vector.search(query_vector, limit + offset);
+            // Perform search on hot vectors (lock-free, no lock needed)
+            let hot_results = {
+                hot_vector.search(query_vector, limit + offset)
+            };
             
             match hot_results {
                 Ok(hot_results) => {

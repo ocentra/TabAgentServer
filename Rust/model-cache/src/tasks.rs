@@ -30,6 +30,17 @@ pub const EXT_VOCAB_JSON: &str = "vocab.json";
 pub const EXT_MERGES_TXT: &str = "merges.txt";
 pub const EXT_SPECIAL_TOKENS_MAP_JSON: &str = "special_tokens_map.json";
 
+// Standard HuggingFace model filenames
+pub const STANDARD_ONNX_MODEL: &str = "model.onnx";
+pub const STANDARD_ONNX_DATA: &str = "model.onnx_data";
+pub const STANDARD_TOKENIZER: &str = "tokenizer.json";
+
+// ONNX precision variants (common HuggingFace patterns)
+pub const ONNX_FP32: &str = "model.onnx";           // Full precision (default)
+pub const ONNX_FP16: &str = "model_fp16.onnx";      // Half precision
+pub const ONNX_INT8: &str = "model_quantized.onnx"; // 8-bit quantized
+pub const ONNX_UINT8: &str = "model_uint8.onnx";    // Unsigned 8-bit
+
 // ============================================================================
 // Backend Engine Constants
 // ============================================================================

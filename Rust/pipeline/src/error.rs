@@ -24,6 +24,12 @@ pub enum PipelineError {
     #[error("Inference failed: {0}")]
     InferenceFailed(String),
 
+    #[error("Backend error: {0}")]
+    BackendError(String),
+
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
 

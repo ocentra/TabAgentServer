@@ -1,0 +1,29 @@
+[package]
+name = "gguf-loader"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Workspace crates
+common = { path = "../common" }
+storage = { path = "../storage" }
+tabagent-hardware = { path = "../hardware" }
+
+# External dependencies
+libloading = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tabagent-model-cache = { path = "../model-cache" }
+env_logger = "0.11"
+
+[target.'cfg(windows)'.dev-dependencies]
+winapi = { version = "0.3", features = ["libloaderapi"] }

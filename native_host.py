@@ -53,7 +53,7 @@ class Config:
     
     # Backend Migration Flags (Python → Rust transition control)
     # Set to True when migrating inference to Rust
-    ONNX_USE_RUST = False      # ONNX: Currently Python (onnxruntime), will migrate to Rust
+    ONNX_USE_RUST = True       # ONNX: Using Rust (onnx-loader with ort crate)
     LITERT_USE_RUST = False    # LiteRT: Currently Python (mediapipe), will migrate to Rust
     COMMAND_TIMEOUT = 30
     MAX_MESSAGE_SIZE = 1024 * 1024
@@ -140,20 +140,27 @@ def is_mediapipe(model_path: str) -> bool:
 # RUST SERVICES (Required for ALL operations)
 # ==============================================================================
 
-# Try to import Rust handler (for GGUF/BitNet inference)
+# Try to import Rust handler (for GGUF/BitNet inference + Hardware detection)
 try:
     from tabagent_native_handler import (
         handle_message as rust_handle_message,
         detect_model_py,
         get_model_manifest_py,
-        recommend_variant_py
+        recommend_variant_py,
+        # Hardware detection functions
+        get_hardware_info as rust_get_hardware_info,
+        check_model_feasibility as rust_check_model_feasibility,
+        get_recommended_model_size as rust_get_recommended_model_size,
+        get_resource_summary as rust_get_resource_summary,
     )
     RUST_HANDLER_AVAILABLE = True
     RUST_UNIFIED_API_AVAILABLE = True
-    logging.info("Rust native handler loaded successfully (including unified API)")
+    RUST_HARDWARE_AVAILABLE = True
+    logging.info("Rust native handler loaded successfully (including unified API + hardware detection)")
 except ImportError as e:
     RUST_HANDLER_AVAILABLE = False
     RUST_UNIFIED_API_AVAILABLE = False
+    RUST_HARDWARE_AVAILABLE = False
     logging.error(f"Rust native handler not available: {e}")
     logging.error("GGUF/BitNet models will FAIL without Rust handler!")
     logging.error("Install: pip install -e Server/Rust/native-handler")
@@ -255,6 +262,115 @@ def save_message_to_db(chat_id: str, role: str, content: str, **kwargs) -> bool:
     except Exception as e:
         logging.error(f"Failed to save message to DB: {e}")
         return False
+
+# ==============================================================================
+# HARDWARE DETECTION HELPERS
+# ==============================================================================
+
+def get_hardware_info() -> Dict[str, Any]:
+    """
+    Get complete hardware information.
+    
+    Returns:
+        Hardware info dict with CPU, GPU, RAM, VRAM, recommendations
+    """
+    if not RUST_HARDWARE_AVAILABLE:
+        return {
+            "status": "error",
+            "message": "Hardware detection not available (Rust handler not loaded)"
+        }
+    
+    try:
+        result_json = rust_get_hardware_info()
+        return json.loads(result_json)
+    except Exception as e:
+        logging.error(f"Hardware detection failed: {e}")
+        return {
+            "status": "error",
+            "message": f"Hardware detection failed: {str(e)}"
+        }
+
+def check_model_can_load(model_size_mb: int) -> Dict[str, Any]:
+    """
+    Check if a model can be loaded given current hardware.
+    
+    Args:
+        model_size_mb: Model size in megabytes
+        
+    Returns:
+        Feasibility check with recommendations
+    """
+    if not RUST_HARDWARE_AVAILABLE:
+        # Fallback - assume it can load
+        return {
+            "can_load": True,
+            "recommendation": "Hardware detection not available - attempting load"
+        }
+    
+    try:
+        result_json = rust_check_model_feasibility(model_size_mb)
+        return json.loads(result_json)
+    except Exception as e:
+        logging.error(f"Model feasibility check failed: {e}")
+        return {
+            "can_load": True,  # Fail open
+            "recommendation": f"Hardware check failed: {str(e)}"
+        }
+
+def get_recommended_models() -> Dict[str, Any]:
+    """
+    Get recommended model sizes for current hardware.
+    
+    Returns:
+        Recommendations with suggested model sizes
+    """
+    if not RUST_HARDWARE_AVAILABLE:
+        return {
+            "status": "error",
+            "message": "Hardware detection not available"
+        }
+    
+    try:
+        result_json = rust_get_recommended_model_size()
+        return json.loads(result_json)
+    except Exception as e:
+        logging.error(f"Model recommendations failed: {e}")
+        return {
+            "status": "error",
+            "message": f"Recommendations failed: {str(e)}"
+        }
+
+def handle_get_hardware_info_action(message: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle get_hardware_info action from UI"""
+    hardware_info = get_hardware_info()
+    return {
+        "status": "success",
+        "payload": hardware_info
+    }
+
+def handle_check_model_feasibility_action(message: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle check_model_feasibility action from UI"""
+    model_size_mb = message.get("modelSizeMb") or message.get("model_size_mb", 0)
+    
+    if model_size_mb <= 0:
+        return {
+            "status": "error",
+            "message": "Invalid model size"
+        }
+    
+    feasibility = check_model_can_load(model_size_mb)
+    return {
+        "status": "success",
+        "payload": feasibility
+    }
+
+def handle_get_recommended_models_action(message: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle get_recommended_models action from UI"""
+    recommendations = get_recommended_models()
+    return {
+        "status": "success",
+        "payload": recommendations
+    }
 
 def handle_ping(message: Dict[str, Any]) -> Dict[str, Any]:
     """Handle ping message"""
@@ -658,9 +774,21 @@ def load_model_unified(
             elif engine == "onnxruntime":
                 # ONNX models - check migration flag
                 if Config.ONNX_USE_RUST:
-                    # Future: Rust ONNX Runtime
-                    logging.info("[Unified API] Using Rust ONNX Runtime (migration enabled)")
-                    return {"status": "error", "message": "Rust ONNX Runtime not yet implemented"}
+                    # Rust ONNX Runtime (via onnx-loader crate)
+                    if not RUST_HANDLER_AVAILABLE:
+                        return {
+                            "status": "error",
+                            "message": "ONNX model requires Rust handler (not available)"
+                        }
+                    
+                    logging.info(f"[Unified API] Routing to Rust ONNX Runtime: {source}")
+                    rust_message = {
+                        "action": "load_model",
+                        "modelPath": source,
+                        "variant": variant  # Pass the selected variant
+                    }
+                    result = rust_handle_message(json.dumps(rust_message))
+                    return json.loads(result)
                 else:
                     # Current: Extension handles ONNX via transformers.js
                     # For server-side ONNX, we would also use pipeline
@@ -1007,11 +1135,11 @@ def handle_pull_model(message: Dict[str, Any]) -> Dict[str, Any]:
         # Download via Rust
         RUST_MODEL_CACHE.download_file(repo_id, file_path, progress)
         
-            return {
-                "status": "success",
-                "message": f"Model {model_name} downloaded successfully",
-                "model": model_name
-            }
+        return {
+            "status": "success",
+            "message": f"Model {model_name} downloaded successfully",
+            "model": model_name
+        }
     
     except Exception as e:
         logging.error(f"Pull error: {e}")
@@ -1570,6 +1698,11 @@ def main():
         ActionType.ESTIMATE_MODEL_SIZE.value: handle_estimate_model_size,
         ActionType.LIST_LOADED_MODELS.value: handle_list_loaded_models,
         ActionType.SELECT_ACTIVE_MODEL.value: handle_select_active_model,
+        
+        # Hardware detection and recommendations
+        ActionType.GET_HARDWARE_INFO.value: handle_get_hardware_info_action,
+        ActionType.CHECK_MODEL_FEASIBILITY.value: handle_check_model_feasibility_action,
+        ActionType.GET_RECOMMENDED_MODELS.value: handle_get_recommended_models_action,
         
         # LM Studio lifecycle handlers
         ActionType.CHECK_LMSTUDIO.value: handle_check_lmstudio,

@@ -17,7 +17,10 @@ members = [
     # ML & Model handling
     "python-ml-bridge",        # Python ML models (Rust calls Python)
     "hardware",
-    "model-loader",
+    "execution-providers",     # Universal execution provider system
+    "tokenization",            # Shared tokenization (HuggingFace tokenizers)
+    "gguf-loader",            # GGUF/BitNet inference (was model-loader)
+    "onnx-loader",            # ONNX Runtime inference
     "model-cache",
     "pipeline",                # Pipeline interfaces (type-safe)
     
@@ -26,6 +29,12 @@ members = [
     "model-bindings",          # Model loader bindings
     "model-cache-bindings",    # Model cache bindings
     "native-handler",          # Native messaging handler (GGUF/BitNet)
+    
+    # Unified value system & server
+    "values",                  # Type-safe value system (requests/responses/data)
+    "api",                     # HTTP API crate (atomic, OpenAI-compatible)
+    "webrtc",                  # WebRTC signaling & data channels
+    "server",                  # Rust-native server (HTTP/WebRTC/Native messaging)
 ]
 
 [workspace.package]
@@ -105,3 +114,7 @@ inherits = "release"
 
 [profile.release-portable]
 inherits = "release"
+
+# Override esaxx-rs to use our local version with dynamic CRT (fixes linker error with ort-sys)
+[patch.crates-io]
+esaxx-rs = { path = "../External/esaxx-rs" }

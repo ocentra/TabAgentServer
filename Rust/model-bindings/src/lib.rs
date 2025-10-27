@@ -5,7 +5,7 @@
 
 use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
-use model_loader::{Model, ModelConfig};
+use gguf_loader::{Model, ModelConfig};
 use tabagent_hardware::detect_cpu_architecture;
 
 /// Python wrapper for Model

@@ -1,0 +1,270 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   E:\Desktop\TabAgent\TabAgentServer\Rust\server\Cargo.toml
+workspace: E:\Desktop\TabAgent\TabAgentServer\Rust\Cargo.toml
+   0.640635700s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="test_models"}: cargo::core::compiler::fingerprint: fingerprint error for gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader)/Check { test: true }/TargetInner { kind: "test", name: "test_models", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\gguf-loader\\tests\\test_models.rs", Edition2021) }
+   0.640673800s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="test_models"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\gguf-loader-6737c56674227318\test-integration-test-test_models`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_path
+   6: git_filter_source_path
+   7: git_filter_source_path
+   8: git_filter_source_path
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_filter_source_repo
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.653304100s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="variant_selection_tests"}: cargo::core::compiler::fingerprint: fingerprint error for gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader)/Check { test: true }/TargetInner { kind: "test", name: "variant_selection_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\gguf-loader\\tests\\variant_selection_tests.rs", Edition2021) }
+   0.653331400s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="variant_selection_tests"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\gguf-loader-c31328237f8d4c55\test-integration-test-variant_selection_tests`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_path
+   6: git_filter_source_path
+   7: git_filter_source_path
+   8: git_filter_source_path
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_filter_source_repo
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.654434400s  INFO prepare_target{force=false package_id=indexing v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\indexing) target="indexing"}: cargo::core::compiler::fingerprint: fingerprint error for indexing v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\indexing)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("indexing", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\indexing\\src\\lib.rs", Edition2021) }
+   0.654458800s  INFO prepare_target{force=false package_id=indexing v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\indexing) target="indexing"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\indexing-5bc61fb0a29893d7\test-lib-indexing`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_path
+   6: git_filter_source_path
+   7: git_filter_source_path
+   8: git_filter_source_path
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_filter_source_repo
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.679157800s  INFO prepare_target{force=false package_id=tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api) target="tabagent_api"}: cargo::core::compiler::fingerprint: fingerprint error for tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api)/Check { test: false }/TargetInner { ..: lib_target("tabagent_api", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\api\\src\\lib.rs", Edition2021) }
+   0.679196100s  INFO prepare_target{force=false package_id=tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api) target="tabagent_api"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\tabagent-api-d0ea68cbcf203f94\lib-tabagent_api`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_path
+   6: git_filter_source_path
+   7: git_filter_source_path
+   8: git_filter_source_path
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_filter_source_repo
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.699275300s  INFO prepare_target{force=false package_id=tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api) target="tabagent_api"}: cargo::core::compiler::fingerprint: fingerprint error for tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api)/Check { test: true }/TargetInner { ..: lib_target("tabagent_api", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\api\\src\\lib.rs", Edition2021) }
+   0.699322100s  INFO prepare_target{force=false package_id=tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api) target="tabagent_api"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\tabagent-api-2d25650de68901c8\test-lib-tabagent_api`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_path
+   6: git_filter_source_path
+   7: git_filter_source_path
+   8: git_filter_source_path
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_filter_source_repo
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.706306400s  INFO prepare_target{force=false package_id=tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api) target="integration_tests"}: cargo::core::compiler::fingerprint: fingerprint error for tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api)/Check { test: true }/TargetInner { kind: "test", name: "integration_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\api\\tests\\integration_tests.rs", Edition2021) }
+   0.706334800s  INFO prepare_target{force=false package_id=tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api) target="integration_tests"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\tabagent-api-0cafdbe1de3f2992\test-integration-test-integration_tests`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_path
+   6: git_filter_source_path
+   7: git_filter_source_path
+   8: git_filter_source_path
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_filter_source_repo
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.791573900s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="test_text_generation"}: cargo::core::compiler::fingerprint: fingerprint error for tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader)/Check { test: true }/TargetInner { kind: "test", name: "test_text_generation", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\onnx-loader\\tests\\test_text_generation.rs", Edition2021) }
+   0.791600400s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="test_text_generation"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\tabagent-onnx-loader-819fe7581a228662\test-integration-test-test_text_generation`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_path
+   6: git_filter_source_path
+   7: git_filter_source_path
+   8: git_filter_source_path
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_filter_source_repo
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.844859100s  INFO prepare_target{force=false package_id=tabagent-values v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\values) target="integration_tests"}: cargo::core::compiler::fingerprint: fingerprint error for tabagent-values v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\values)/Check { test: true }/TargetInner { kind: "test", name: "integration_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\values\\tests\\integration_tests.rs", Edition2021) }
+   0.844889300s  INFO prepare_target{force=false package_id=tabagent-values v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\values) target="integration_tests"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\tabagent-values-755201f9dd58f82f\test-integration-test-integration_tests`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_path
+   6: git_filter_source_path
+   7: git_filter_source_path
+   8: git_filter_source_path
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_filter_source_repo
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.846271400s  INFO prepare_target{force=false package_id=tabagent-values v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\values) target="request_tests"}: cargo::core::compiler::fingerprint: fingerprint error for tabagent-values v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\values)/Check { test: true }/TargetInner { kind: "test", name: "request_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\values\\tests\\request_tests.rs", Edition2021) }
+   0.846289900s  INFO prepare_target{force=false package_id=tabagent-values v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\values) target="request_tests"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\tabagent-values-f45a555e3ddc7649\test-integration-test-request_tests`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_path
+   6: git_filter_source_path
+   7: git_filter_source_path
+   8: git_filter_source_path
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_filter_source_repo
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+warning: esaxx-rs@0.1.10: cl : Command line warning D9002 : ignoring unknown option '-std=c++11'
+    Checking tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api)
+    Checking tabagent-values v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\values)
+    Checking gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader)
+    Checking tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader)
+    Checking indexing v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\indexing)
+error: could not compile `tabagent-values` (test "request_tests") due to 7 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `tabagent-values` (test "integration_tests") due to 8 previous errors
+error: could not compile `gguf-loader` (test "test_models") due to 1 previous error
+error: could not compile `gguf-loader` (test "variant_selection_tests") due to 39 previous errors
+error: could not compile `tabagent-onnx-loader` (test "test_text_generation") due to 9 previous errors
+error: could not compile `indexing` (lib test) due to 5 previous errors; 77 warnings emitted
+error: could not compile `tabagent-api` (lib) due to 1 previous error; 2 warnings emitted
+error: could not compile `tabagent-api` (lib test) due to 1 previous error; 2 warnings emitted

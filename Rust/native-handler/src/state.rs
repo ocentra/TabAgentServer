@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use common::inference_settings::InferenceSettings;
 
 /// Global registry of currently loaded models
 pub static LOADED_MODELS: Lazy<Arc<Mutex<HashMap<String, LoadedModelInfo>>>> = 
@@ -26,6 +27,14 @@ pub static ACTIVE_DOWNLOADS: Lazy<Arc<Mutex<HashMap<String, DownloadProgress>>>>
 /// System resource snapshot (updated periodically)
 pub static SYSTEM_RESOURCES_CACHE: Lazy<Arc<Mutex<Option<SystemResourcesSnapshot>>>> = 
     Lazy::new(|| Arc::new(Mutex::new(None)));
+
+/// Global registry of loaded ONNX models
+pub static LOADED_ONNX_MODELS: Lazy<Arc<Mutex<HashMap<String, tabagent_onnx_loader::OnnxSession>>>> = 
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+
+/// Global registry of loaded pipelines
+pub static LOADED_PIPELINES: Lazy<Arc<Mutex<HashMap<String, Arc<Mutex<Box<dyn tabagent_pipeline::Pipeline>>>>>>> = 
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 /// Information about a loaded model
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,6 +62,9 @@ pub struct LoadedModelInfo {
     
     /// Model configuration
     pub config: ModelConfigInfo,
+    
+    /// Inference settings for this model
+    pub settings: InferenceSettings,
 }
 
 /// Where a model is loaded
@@ -244,6 +256,48 @@ pub fn set_current_model(model_id: String) {
 pub fn get_current_model() -> Option<String> {
     let current = CURRENT_ACTIVE_MODEL.lock().expect("CURRENT_ACTIVE_MODEL mutex poisoned");
     current.clone()
+}
+
+/// Register a loaded ONNX model
+pub fn register_onnx_model(model_id: String, session: tabagent_onnx_loader::OnnxSession) {
+    let mut models = LOADED_ONNX_MODELS.lock().expect("LOADED_ONNX_MODELS mutex poisoned");
+    models.insert(model_id, session);
+}
+
+/// Unregister an ONNX model
+pub fn unregister_onnx_model(model_id: &str) -> Option<tabagent_onnx_loader::OnnxSession> {
+    let mut models = LOADED_ONNX_MODELS.lock().expect("LOADED_ONNX_MODELS mutex poisoned");
+    models.remove(model_id)
+}
+
+/// Get an ONNX model session
+pub fn get_onnx_model(model_id: &str) -> Option<tabagent_onnx_loader::OnnxSession> {
+    let models = LOADED_ONNX_MODELS.lock().expect("LOADED_ONNX_MODELS mutex poisoned");
+    models.get(model_id).cloned()
+}
+
+/// Check if an ONNX model is loaded
+pub fn is_onnx_model_loaded(model_id: &str) -> bool {
+    let models = LOADED_ONNX_MODELS.lock().expect("LOADED_ONNX_MODELS mutex poisoned");
+    models.contains_key(model_id)
+}
+
+/// Store a pipeline
+pub fn store_pipeline(model_id: &str, pipeline: Arc<Mutex<Box<dyn tabagent_pipeline::Pipeline>>>) {
+    let mut pipelines = LOADED_PIPELINES.lock().expect("LOADED_PIPELINES mutex poisoned");
+    pipelines.insert(model_id.to_string(), pipeline);
+}
+
+/// Get a pipeline
+pub fn get_pipeline(model_id: &str) -> Option<Arc<Mutex<Box<dyn tabagent_pipeline::Pipeline>>>> {
+    let pipelines = LOADED_PIPELINES.lock().expect("LOADED_PIPELINES mutex poisoned");
+    pipelines.get(model_id).cloned()
+}
+
+/// Remove a pipeline
+pub fn remove_pipeline(model_id: &str) {
+    let mut pipelines = LOADED_PIPELINES.lock().expect("LOADED_PIPELINES mutex poisoned");
+    pipelines.remove(model_id);
 }
 
 /// Clear the currently active model
