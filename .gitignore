@@ -40,3 +40,5 @@ Rust/Cargo.lock
 Thumbs.db
 
 
+/target
+/target/rust-analyzer
