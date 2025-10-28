@@ -81,8 +81,8 @@ pub trait TransportMetadata: Debug + Clone + Send + Sync + 'static {
 pub struct HttpMetadata {
     /// HTTP path (e.g., "/v1/chat/completions")
     pub path: &'static str,
-    /// HTTP method (stored as string for simplicity)
-    pub method: &'static str, // "GET", "POST", "PUT", "DELETE"
+    /// HTTP method
+    pub method: http::Method,
     /// OpenAPI tags for grouping
     pub tags: &'static [&'static str],
     /// Description for documentation (REQUIRED)
@@ -324,7 +324,7 @@ impl<Req, Resp> TestCase<Req, Resp> {
 ///     fn metadata() -> HttpMetadata {
 ///         HttpMetadata {
 ///             path: "/v1/chat/completions",
-///             method: "POST",
+///             method: http::Method::POST,
 ///             tags: &["Chat", "OpenAI"],
 ///             description: "OpenAI-compatible chat completions",
 ///             openai_compatible: true,
@@ -481,7 +481,7 @@ mod tests {
         fn metadata() -> HttpMetadata {
             HttpMetadata {
                 path: "/test",
-                method: "POST",
+                method: http::Method::POST,
                 tags: &["Test"],
                 description: "Test route",
                 openai_compatible: false,

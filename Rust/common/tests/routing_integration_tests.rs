@@ -49,7 +49,7 @@ impl RouteHandler<HttpMetadata> for HttpTestRoute {
     fn metadata() -> HttpMetadata {
         HttpMetadata {
             path: "/test",
-            method: "POST",
+            method: http::Method::POST,
             tags: &["Test"],
             description: "HTTP test route",
             openai_compatible: false,

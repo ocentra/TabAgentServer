@@ -295,7 +295,7 @@ anyhow = "1"
 
 ```rust
 use tabagent_api::{run_server, AppStateProvider};
-use tabagent_values::{RequestValue, ResponseValue};
+use tabagent_values::{RequestValue, ResponseValue, HealthStatus};
 use std::sync::Arc;
 
 struct MyState {
@@ -306,7 +306,7 @@ struct MyState {
 impl AppStateProvider for MyState {
     async fn handle_request(&self, req: RequestValue) -> anyhow::Result<ResponseValue> {
         // Your request handling logic
-        Ok(ResponseValue::health("ok"))
+        Ok(ResponseValue::health(HealthStatus::Healthy))
     }
 }
 

@@ -14,8 +14,7 @@
 //!
 //! ```rust,no_run
 //! use tabagent_api::{run_server, AppStateProvider};
-//! use tabagent_values::{RequestValue, ResponseValue};
-//! use std::sync::Arc;
+//! use tabagent_values::{RequestValue, ResponseValue, HealthStatus};
 //!
 //! struct MyState;
 //!
@@ -24,13 +23,13 @@
 //!     async fn handle_request(&self, req: RequestValue) 
 //!         -> anyhow::Result<ResponseValue> 
 //!     {
-//!         Ok(ResponseValue::health("ok"))
+//!         Ok(ResponseValue::health(HealthStatus::Healthy))
 //!     }
 //! }
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     let state = Arc::new(MyState);
+//!     let state = MyState;
 //!     tabagent_api::run_server(state, 8080).await
 //! }
 //! ```
@@ -73,19 +72,18 @@ use std::{net::SocketAddr, sync::Arc};
 /// # Example
 ///
 /// ```rust,no_run
-/// # use std::sync::Arc;
 /// # use tabagent_api::{run_server, AppStateProvider};
-/// # use tabagent_values::{RequestValue, ResponseValue};
+/// # use tabagent_values::{RequestValue, ResponseValue, HealthStatus};
 /// # struct MyState;
 /// # #[async_trait::async_trait]
 /// # impl AppStateProvider for MyState {
 /// #     async fn handle_request(&self, _req: RequestValue) -> anyhow::Result<ResponseValue> {
-/// #         Ok(ResponseValue::health("ok"))
+/// #         Ok(ResponseValue::health(HealthStatus::Healthy))
 /// #     }
 /// # }
 /// # #[tokio::main]
 /// # async fn main() -> anyhow::Result<()> {
-/// let state = Arc::new(MyState);
+/// let state = MyState;
 /// tabagent_api::run_server(state, 8080).await?;
 /// # Ok(())
 /// # }
@@ -146,7 +144,7 @@ pub async fn run_server_with_config(
 pub fn build_test_router(
     state: Arc<dyn AppStateProvider>,
 ) -> axum::Router {
-    let config = ApiConfig::development();
+    let _config = ApiConfig::development();
     let wrapped_state = AppStateWrapper(state);
     
     // Build router without calling into_make_service (tests need Router, not service)

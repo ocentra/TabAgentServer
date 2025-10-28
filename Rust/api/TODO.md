@@ -124,13 +124,74 @@ This TODO tracks the implementation of the `tabagent-api` crate - a complete, at
 - [x] **Compile-time verification via `enforce_route_handler!` macro**
 
 ### 5.2: Integration Tests 🔄
-- [ ] Create mock `AppStateProvider` implementation
-- [ ] Test full HTTP request/response cycle
+- [x] Create mock `AppStateProvider` implementation (TEMPORARY - see warning below)
+- [x] Test full HTTP request/response cycle (basic health + chat)
 - [ ] Test middleware stack integration
 - [ ] Test CORS preflight handling
 - [ ] Test timeout behavior
 - [ ] Test error response format (RFC 7807)
 - [ ] Test all 32 routes end-to-end
+
+## ⚠️ IMPORTANT - Mock Test Replacement
+
+**CURRENT STATE**: Integration tests use `MockState` that returns fake responses.
+
+**AFTER TIER 0 MIGRATION COMPLETE** (all three entry points using unified traits):
+
+1. **REMOVE MockState** from `tests/integration_tests.rs`
+2. **Wire real backend** via `server/handler.rs` implementation
+3. **Add end-to-end integration tests** that use:
+   - ✅ Real GGUF/ONNX inference engines
+   - ✅ Real model cache and loading
+   - ✅ Real database operations (sled)
+   - ✅ Real embeddings and RAG
+   - ✅ Real Python ML bridge (transformers, MediaPipe)
+4. **NO MOCKS IN FINAL IMPLEMENTATION** - all tests use actual backend logic
+
+**Why mocks exist now**: To verify HTTP routing layer works during migration.
+**When mocks go away**: After `api/src/main.rs` is wired to real `server::handler::AppState`.
+
+---
+
+## ⚠️ IMPORTANT - GET Request JSON Requirement
+
+**CURRENT LIMITATION**: The `impl_registerable_route!` macro (line 207 in `src/route_trait.rs`) always uses `axum::Json(req)` extractor, even for GET requests.
+
+**Impact**: 
+- ALL routes (including GET `/health`) require:
+  - `Content-Type: application/json` header
+  - Valid JSON body matching request type
+
+**Example (health endpoint with unit struct)**:
+```rust
+// ❌ FAILS with 415 Unsupported Media Type (no header):
+Request::builder()
+    .uri("/health")
+    .body(Body::empty())
+
+// ❌ FAILS with 422 Unprocessable Entity (wrong JSON for unit struct):
+Request::builder()
+    .uri("/health")
+    .header("content-type", "application/json")
+    .body(Body::from("{}"))  // {} is for empty structs, not unit structs
+
+// ✅ WORKS (unit struct deserializes from JSON null):
+Request::builder()
+    .uri("/health")
+    .header("content-type", "application/json")
+    .body(Body::from("null"))  // HealthRequest is a unit struct (struct Foo;)
+```
+
+**Serde JSON mapping**:
+- Unit struct `struct Foo;` → `null`
+- Empty struct `struct Foo {}` → `{}`
+- Struct with fields `struct Foo { x: i32 }` → `{"x": 42}`
+
+**After migration to `common::RouteHandler<HttpMetadata>`**:
+- [ ] Consider different extractors for GET vs POST routes
+- [ ] Maybe use query params for GET, JSON body for POST
+- [ ] Or make request body optional for GET endpoints
+- [ ] This is an **API design decision** - current approach is consistent but requires JSON for everything
 
 ### 5.3: Performance Tests ⏳
 - [ ] Benchmark concurrent request handling

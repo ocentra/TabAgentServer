@@ -57,7 +57,7 @@ impl RouteHandler<HttpMetadata> for ChatRoute {
     fn metadata() -> HttpMetadata {
         HttpMetadata {
             path: "/v1/chat/completions",
-            method: "POST",
+            method: http::Method::POST,
             tags: &["Chat"],
             description: "Chat completions",
             // ... other fields
