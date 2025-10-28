@@ -13,9 +13,10 @@ path = "src/lib.rs"
 [dependencies]
 # Workspace dependencies
 tabagent-values = { path = "../values" }
+common = { path = "../common" }
 
 # WebRTC implementation
-webrtc = "0.11"
+webrtc = "0.14.0"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }

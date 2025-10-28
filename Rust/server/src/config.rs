@@ -22,8 +22,8 @@ use anyhow::{Context, Result};
 #[command(about = "TabAgent Server - Rust-native server with HTTP, WebRTC, and native messaging")]
 #[command(version)]
 pub struct CliArgs {
-    /// Server mode: Native messaging, HTTP API, or Both simultaneously
-    #[arg(long, short = 'm', default_value = "both", env = "TABAGENT_MODE")]
+    /// Server mode: Native messaging, HTTP API, WebRTC, Both, or All
+    #[arg(long, short = 'm', default_value = "http", env = "TABAGENT_MODE")]
     pub mode: ServerMode,
 
     /// HTTP port for API server
@@ -63,8 +63,12 @@ pub enum ServerMode {
     Native,
     /// HTTP API only (for standalone server)
     Http,
+    /// WebRTC signaling and data channels only
+    WebRtc,
     /// Both native messaging and HTTP simultaneously
     Both,
+    /// All three transports: HTTP, WebRTC, and Native Messaging
+    All,
 }
 
 /// Full server configuration (merged from all sources).
