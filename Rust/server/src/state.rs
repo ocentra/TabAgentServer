@@ -30,6 +30,7 @@ use common::backend::AppStateProvider;
 
 use crate::config::CliArgs;
 use crate::python_bridge::PythonMlBridge;  // Server-specific bridge
+use crate::hf_auth::HfAuthManager;
 
 /// Shared application state (RAG: Arc for thread-safe sharing).
 #[derive(Clone)]
@@ -54,6 +55,9 @@ pub struct AppState {
     /// Python ML bridge (for transformers/mediapipe)
     /// NOTE: This is server-specific, different from python-ml-bridge crate
     pub python_ml_bridge: Arc<PythonMlBridge>,
+    
+    /// HuggingFace auth manager (secure token storage)
+    pub hf_auth: Arc<HfAuthManager>,
     
     /// Vector index manager (for RAG queries)
     pub index_manager: Arc<IndexManager>,
@@ -133,6 +137,12 @@ impl AppState {
         
         tracing::info!("Server Python ML bridge initialized (parallel build)");
 
+        // Initialize HF auth manager
+        let hf_auth = HfAuthManager::new()
+            .context("Failed to initialize HuggingFace auth manager")?;
+        
+        tracing::info!("HuggingFace auth manager initialized");
+
         // Initialize index manager
         let index_manager = IndexManager::new();
 
@@ -143,6 +153,7 @@ impl AppState {
             onnx_models: Arc::new(DashMap::new()),
             gguf_contexts: Arc::new(DashMap::new()),
             python_ml_bridge: Arc::new(python_ml_bridge),
+            hf_auth: Arc::new(hf_auth),
             index_manager: Arc::new(index_manager),
             generation_tokens: Arc::new(DashMap::new()),
         })

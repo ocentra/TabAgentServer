@@ -171,8 +171,16 @@ impl MessageRouter {
         self.register_route::<crate::routes::management::PullModelRoute>();
         self.register_route::<crate::routes::management::DeleteModelRoute>();
         self.register_route::<crate::routes::management::GetLoadedModelsRoute>();
-        // self.register_route::<crate::routes::generate::GenerateRoute>();
-        // ... etc
+        
+        // HuggingFace Auth routes (TIER1)
+        self.register_route::<crate::routes::hf_auth::SetHfTokenRoute>();
+        self.register_route::<crate::routes::hf_auth::GetHfTokenStatusRoute>();
+        self.register_route::<crate::routes::hf_auth::ClearHfTokenRoute>();
+        
+        // Hardware routes (TIER1)
+        self.register_route::<crate::routes::hardware::GetHardwareInfoRoute>();
+        self.register_route::<crate::routes::hardware::CheckModelFeasibilityRoute>();
+        self.register_route::<crate::routes::hardware::GetRecommendedModelsRoute>();
         
         tracing::info!(
             route_count = self.routes.len(),

@@ -19,6 +19,8 @@ pub mod management;
 pub mod rag_extended;
 pub mod webrtc;
 pub mod discovery;
+pub mod hf_auth;
+pub mod hardware;
 
 use utoipa::OpenApi;
 

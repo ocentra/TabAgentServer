@@ -11,6 +11,7 @@ pub mod error;
 pub mod state;
 pub mod handler;
 pub mod python_bridge;
+pub mod hf_auth;
 
 // Re-export the main types for external use
 pub use state::AppState;

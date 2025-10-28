@@ -69,6 +69,18 @@ pub fn configure_routes(
     router = routes::resources::CompatibilityRoute::register(router);
     router = routes::discovery::DiscoveryRoute::register(router);
     
+    // HuggingFace Auth routes
+    router = router
+        .route("/v1/hf/token", post(routes::hf_auth::set_hf_token::<crate::traits::AppState>))
+        .route("/v1/hf/token/status", get(routes::hf_auth::get_hf_token_status::<crate::traits::AppState>))
+        .route("/v1/hf/token", axum::routing::delete(routes::hf_auth::clear_hf_token::<crate::traits::AppState>));
+    
+    // Hardware routes
+    router = router
+        .route("/v1/hardware/info", get(routes::hardware::get_hardware_info::<crate::traits::AppState>))
+        .route("/v1/hardware/feasibility", post(routes::hardware::check_model_feasibility::<crate::traits::AppState>))
+        .route("/v1/hardware/recommendations", get(routes::hardware::get_recommended_models::<crate::traits::AppState>));
+    
     // WebRTC signaling routes (3 trait-based + 1 manual)
     router = routes::webrtc::CreateOfferRoute::register(router);
     router = routes::webrtc::SubmitAnswerRoute::register(router);

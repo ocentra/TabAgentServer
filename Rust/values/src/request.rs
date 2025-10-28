@@ -193,6 +193,30 @@ pub enum RequestType {
         model_id: String,
     },
 
+    // === HUGGINGFACE AUTHENTICATION ===
+    /// Set HuggingFace API token.
+    SetHfToken {
+        token: String,
+    },
+
+    /// Get HuggingFace token status.
+    GetHfTokenStatus,
+
+    /// Clear HuggingFace token.
+    ClearHfToken,
+
+    // === HARDWARE DETECTION ===
+    /// Get hardware information.
+    GetHardwareInfo,
+
+    /// Check if model can be loaded.
+    CheckModelFeasibility {
+        model_size_mb: u64,
+    },
+
+    /// Get recommended model sizes for current hardware.
+    GetRecommendedModels,
+
     // === WebRTC SIGNALING ===
     /// Create WebRTC offer.
     CreateWebRtcOffer {

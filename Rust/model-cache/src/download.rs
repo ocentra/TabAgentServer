@@ -30,6 +30,17 @@ impl ModelDownloader {
         file_path: &str,
         progress_callback: Option<ProgressCallback>,
     ) -> Result<Vec<u8>> {
+        self.download_file_with_token(repo_id, file_path, None, progress_callback).await
+    }
+    
+    /// Download a file with explicit token (bypasses ENV check)
+    pub async fn download_file_with_token(
+        &self,
+        repo_id: &str,
+        file_path: &str,
+        auth_token: Option<&str>,
+        progress_callback: Option<ProgressCallback>,
+    ) -> Result<Vec<u8>> {
         // ===== SAFETY CHECKS =====
         
         // 1. Validate repo_id format
@@ -66,10 +77,11 @@ impl ModelDownloader {
         // Build request with optional HuggingFace token for gated/private repos
         let mut request = self.client.get(&url);
         
-        // Add authorization header if token is set (check both HF_TOKEN and HUGGINGFACE_TOKEN)
-        let token = std::env::var("HF_TOKEN")
-            .or_else(|_| std::env::var("HUGGINGFACE_TOKEN"))
-            .ok();
+        // Priority: explicit token > ENV variable
+        let token = auth_token
+            .map(|t| t.to_string())
+            .or_else(|| std::env::var("HF_TOKEN").ok())
+            .or_else(|| std::env::var("HUGGINGFACE_TOKEN").ok());
         
         if let Some(token) = token {
             if !token.is_empty() {

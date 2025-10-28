@@ -79,6 +79,12 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 dashmap = "6.1.0"  # Thread-safe HashMap for loaded models
 parking_lot = "0.12"  # Better Mutex/RwLock
+dirs = "5.0"  # Cross-platform config directories
+keyring = { version = "3.2", optional = true }  # OS credential storage
+
+[features]
+default = ["keyring"]
+keyring = ["dep:keyring"]
 
 [dev-dependencies]
 # Testing (RAG: Comprehensive test coverage required)

@@ -57,6 +57,10 @@ pub mod management;
 pub mod audio_stream;
 pub mod video_stream;
 
+// HuggingFace Auth and Hardware routes
+pub mod hf_auth;
+pub mod hardware;
+
 // Re-export the trait (defined in route_trait.rs for full enforcement)
 pub use crate::route_trait::NativeMessagingRoute;
 
@@ -114,6 +118,16 @@ pub fn list_available_routes() -> Vec<crate::route_trait::RouteMetadata> {
         // Media routes (parity with WebRTC)
         audio_stream::AudioStreamRoute::metadata(),
         video_stream::VideoStreamRoute::metadata(),
+        
+        // HuggingFace Auth routes
+        hf_auth::SetHfTokenRoute::metadata(),
+        hf_auth::GetHfTokenStatusRoute::metadata(),
+        hf_auth::ClearHfTokenRoute::metadata(),
+        
+        // Hardware routes
+        hardware::GetHardwareInfoRoute::metadata(),
+        hardware::CheckModelFeasibilityRoute::metadata(),
+        hardware::GetRecommendedModelsRoute::metadata(),
     ]
 }
 
