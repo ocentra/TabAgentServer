@@ -76,7 +76,7 @@ impl EmbeddedDB {
         query_vector: Vec<f32>,
         top_k: usize,
         node_type: Option<String>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         // Simplified implementation
         let results = self.search_vectors(query_vector, top_k)?;
         

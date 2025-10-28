@@ -135,7 +135,7 @@ fn test_vector_search_real_embeddings() {
     // RAG Rule 17.6: Real data for vector search
     with_python(|_py| {
         // Test vector search with real embeddings
-        let embedding: Vec<f32> = vec![
+        let _embedding: Vec<f32> = vec![
             0.1, 0.2, 0.3, 0.4, 0.5,  // Real embedding values
             0.6, 0.7, 0.8, 0.9, 1.0,
         ];
@@ -146,7 +146,7 @@ fn test_vector_search_real_embeddings() {
         // 3. Verify results are ranked by similarity
         // 4. Test edge cases (empty results, identical embeddings)
         
-        assert_eq!(embedding.len(), 10);
+        assert_eq!(_embedding.len(), 10);
         Ok(())
     });
 }

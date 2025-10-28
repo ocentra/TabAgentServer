@@ -126,7 +126,7 @@ impl EmbeddedDB {
     ///
     /// Returns:
     ///     dict or None: The node as a dictionary, or None if not found
-    pub(crate) fn get_node(&self, py: Python, node_id: String) -> PyResult<Option<PyObject>> {
+    pub(crate) fn get_node(&self, py: Python, node_id: String) -> PyResult<Option<Py<PyAny>>> {
         // Try to get from appropriate database
         // First try conversations
         if let Ok(Some(msg)) = self.coordinator.get_message(&node_id) {
@@ -216,7 +216,7 @@ impl EmbeddedDB {
     ///
     /// Returns:
     ///     dict or None: The edge as a dictionary, or None if not found
-    fn get_edge(&self, py: Python, edge_id: String) -> PyResult<Option<PyObject>> {
+    fn get_edge(&self, py: Python, edge_id: String) -> PyResult<Option<Py<PyAny>>> {
         // Try conversations first, then knowledge
         if let Ok(Some(edge)) = self.coordinator.conversations_active().get_edge(&edge_id) {
             return Ok(Some(edge_to_dict(py, &edge)?));
@@ -279,7 +279,7 @@ impl EmbeddedDB {
     ///
     /// Returns:
     ///     dict or None: The embedding as a dictionary, or None if not found
-    fn get_embedding(&self, py: Python, embedding_id: String) -> PyResult<Option<PyObject>> {
+    fn get_embedding(&self, py: Python, embedding_id: String) -> PyResult<Option<Py<PyAny>>> {
         match self.coordinator.embeddings_active().get_embedding(&embedding_id) {
             Ok(Some(embedding)) => Ok(Some(embedding_to_dict(py, &embedding)?)),
             Ok(None) => Ok(None),
@@ -307,7 +307,7 @@ impl EmbeddedDB {
     ///
     /// Returns:
     ///     dict: Database statistics
-    fn stats(&self, py: Python) -> PyResult<PyObject> {
+    fn stats(&self, py: Python) -> PyResult<Py<PyAny>> {
         let dict = PyDict::new(py);
         dict.set_item("database", "embedded_db")?;
         dict.set_item("status", "operational")?;

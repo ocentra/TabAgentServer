@@ -1,11 +1,11 @@
 //! Python wrapper types for core Rust structs
 
-use common::{NodeId, EdgeId, EmbeddingId, models::*};
+use common::{NodeId, EmbeddingId, models::*};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::PyDict;
 
 /// Convert a Rust Node to a Python dictionary
-pub fn node_to_dict(py: Python, node: &Node) -> PyResult<PyObject> {
+pub fn node_to_dict(py: Python, node: &Node) -> PyResult<Py<PyAny>> {
     let dict = PyDict::new(py);
     
     match node {
@@ -278,7 +278,7 @@ pub fn dict_to_node(dict: &Bound<'_, PyDict>) -> PyResult<Node> {
 }
 
 /// Convert a Rust Edge to a Python dictionary
-pub fn edge_to_dict(py: Python, edge: &Edge) -> PyResult<PyObject> {
+pub fn edge_to_dict(py: Python, edge: &Edge) -> PyResult<Py<PyAny>> {
     let dict = PyDict::new(py);
     dict.set_item("id", edge.id.as_str())?;
     dict.set_item("from_node", edge.from_node.as_str())?;
@@ -294,7 +294,7 @@ pub fn edge_to_dict(py: Python, edge: &Edge) -> PyResult<PyObject> {
 }
 
 /// Convert a Rust Embedding to a Python dictionary
-pub fn embedding_to_dict(py: Python, embedding: &Embedding) -> PyResult<PyObject> {
+pub fn embedding_to_dict(py: Python, embedding: &Embedding) -> PyResult<Py<PyAny>> {
     let dict = PyDict::new(py);
     dict.set_item("id", embedding.id.as_str())?;
     dict.set_item("vector", &embedding.vector)?;
