@@ -767,12 +767,12 @@ mod tests {
         let id1 = EmbeddingId::from("vector1");
         let mut payload1 = Payload::new();
         payload1.add_field("category".to_string(), PayloadFieldValue::String("A".to_string()));
-        payload1.add_field("score".to_string(), PayloadFieldValue::Float(0.8));
+        payload1.add_field("score".to_string(), PayloadFieldValue::Float(OrderedFloat(0.8)));
         
         let id2 = EmbeddingId::from("vector2");
         let mut payload2 = Payload::new();
         payload2.add_field("category".to_string(), PayloadFieldValue::String("B".to_string()));
-        payload2.add_field("score".to_string(), PayloadFieldValue::Float(0.9));
+        payload2.add_field("score".to_string(), PayloadFieldValue::Float(OrderedFloat(0.9)));
         
         index.add_payload(id1.clone(), payload1).unwrap();
         index.add_payload(id2.clone(), payload2).unwrap();

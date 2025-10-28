@@ -52,9 +52,12 @@ tokio-test = "0.4"
 tower = { version = "0.5", features = ["util"] }
 axum-test = "18.1.0"
 http-body-util = "0.1"
+tabagent-api = { path = ".", features = ["test-helpers"] }
 
 [features]
 default = []
 # Enable for development/testing
 dev-tools = []
+# Enable test-helpers for integration tests
+test-helpers = []
 

@@ -1358,7 +1358,7 @@ mod tests {
         
         // Test shortest path caching
         let path_results = (vec!["node1".to_string(), "node2".to_string()], 2.5);
-        cache.put_shortest_path_results("path_start_end".to_string(), path_results);
+        cache.put_shortest_path_results("path_start_end".to_string(), path_results.clone());
         
         assert_eq!(cache.get_shortest_path_results("path_start_end"), Some(path_results));
     }

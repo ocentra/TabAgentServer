@@ -45,7 +45,7 @@ pub trait LibraryVariant {
 }
 
 /// BitNet CPU variants (TL1/TL2 optimized kernels)
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BitNetCpuVariant {
     AmdZen1,
     AmdZen2,
@@ -120,7 +120,7 @@ impl LibraryVariant for BitNetCpuVariant {
 }
 
 /// Standard CPU variant (supports all GGUF quantizations)
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StandardCpuVariant;
 
 impl LibraryVariant for StandardCpuVariant {
@@ -145,7 +145,7 @@ impl LibraryVariant for StandardCpuVariant {
 }
 
 /// BitNet GPU variants (TL1/TL2 optimized, CUDA-only, Windows/Linux only)
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BitNetGpuVariant;
 
 impl LibraryVariant for BitNetGpuVariant {
@@ -170,7 +170,7 @@ impl LibraryVariant for BitNetGpuVariant {
 }
 
 /// Standard GPU variants
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StandardGpuVariant {
     CudaVulkan,  // NVIDIA + AMD (Vulkan fallback)
     Metal,       // macOS/Apple Silicon
@@ -217,7 +217,7 @@ impl LibraryVariant for StandardGpuVariant {
 }
 
 /// Unified variant selector
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Variant {
     BitNetCpu(BitNetCpuVariant),
     BitNetGpu(BitNetGpuVariant),

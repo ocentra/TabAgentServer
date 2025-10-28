@@ -12,8 +12,7 @@ fn with_python<F>(f: F)
 where
     F: FnOnce(Python) -> PyResult<()>
 {
-    pyo3::prepare_freethreaded_python();
-    Python::with_gil(|py| {
+    pyo3::Python::attach(|py| {
         f(py)
     }).expect("Python test failed");
 }
@@ -22,7 +21,7 @@ where
 fn test_module_loads() {
     with_python(|py| {
         // Import the module
-        let sys = py.import_bound("sys")?;
+        let sys = py.import("sys")?;
         let _path = sys.getattr("path")?;
         
         // Module should be importable
@@ -52,10 +51,10 @@ fn test_embedded_db_creation() {
 fn test_node_insertion_real_data() {
     // RAG Rule 17.6: Use real data, not stubs
     with_python(|py| {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let _temp_dir = TempDir::new().expect("Failed to create temp dir");
         
         // Real node data that would be used in production
-        let node_data = PyDict::new_bound(py);
+        let node_data = PyDict::new(py);
         node_data.set_item("type", "Message")?;
         node_data.set_item("content", "Hello, World!")?;
         node_data.set_item("timestamp", 1234567890)?;
@@ -77,7 +76,7 @@ fn test_query_builder_construction() {
         // - StructuralFilter configuration
         // - GraphFilter setup
         
-        let query_params = PyDict::new_bound(py);
+        let query_params = PyDict::new(py);
         query_params.set_item("limit", 10)?;
         query_params.set_item("offset", 0)?;
         

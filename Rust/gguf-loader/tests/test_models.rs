@@ -137,7 +137,7 @@ async fn test_generate_text() {
     // Create context with default generation parameters
     let model_arc = Arc::new(model);
     let params = GenerationParams::default();
-    let context = Context::new(model_arc, params)
+    let mut context = Context::new(model_arc, params)
         .expect("Failed to create context");
     
     eprintln!("Generating text with prompt: '{}'", TEST_PROMPT);

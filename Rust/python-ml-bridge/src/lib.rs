@@ -48,6 +48,18 @@ use pyo3::types::{PyDict, PyList, PyTuple};
 use std::path::Path;
 use weaver::ml_bridge::{Entity, MlBridge};
 
+// Newtype wrapper for Entity to allow FromPyObject implementation (orphan rule)
+// This keeps Entity definition in weaver (single source of truth)
+// and python-ml-bridge only handles Python<->Rust conversion
+#[derive(Debug)]
+struct PyEntity(Entity);
+
+impl From<PyEntity> for Entity {
+    fn from(py_entity: PyEntity) -> Self {
+        py_entity.0
+    }
+}
+
 /// Error type for ML bridge operations.
 #[derive(Debug, thiserror::Error)]
 pub enum MlBridgeError {
@@ -100,16 +112,16 @@ impl PyMlBridge {
             .to_string();
 
         // Test Python initialization
-        Python::with_gil(|py| {
+        pyo3::Python::attach(|py| {
             // Add module path to sys.path
-            let sys = py.import_bound("sys").map_err(|e| {
+            let sys = py.import("sys").map_err(|e| {
                 MlBridgeError::ModuleImport(format!("Failed to import sys: {}", e))
             })?;
             let path_attr = sys
                 .getattr("path")
                 .map_err(|e| MlBridgeError::ModuleImport(format!("No sys.path: {}", e)))?;
             let sys_path = path_attr
-                .downcast::<PyList>()
+                .cast::<PyList>()
                 .map_err(|e| {
                     MlBridgeError::TypeConversion(format!("sys.path not a list: {}", e))
                 })?;
@@ -119,9 +131,9 @@ impl PyMlBridge {
             })?;
 
             // Try to import the module to validate it exists
-            let _ = py.import_bound("ml_funcs").map_err(|e| {
+            let _ = py.import("python").map_err(|e| {
                 MlBridgeError::ModuleImport(format!(
-                    "Failed to import ml_funcs from {}: {}",
+                    "Failed to import python package from {}: {}",
                     module_path, e
                 ))
             })?;
@@ -143,33 +155,32 @@ impl PyMlBridge {
     }
 
     /// Calls a Python function and converts the result.
-    fn call_python_func<T>(
+    fn call_python_func<'py, T>(
         &self,
+        py: Python<'py>,
         func_name: &str,
-        args: impl IntoPy<Py<PyTuple>>,
+        args: &Bound<'py, PyTuple>,
     ) -> Result<T, MlBridgeError>
     where
-        T: for<'py> FromPyObject<'py>,
+        T: for<'a, 'b> FromPyObject<'a, 'b>,
     {
-        Python::with_gil(|py| {
-            let module = py.import_bound("ml_funcs").map_err(|e| {
-                MlBridgeError::FunctionCall(format!("Failed to import module: {}", e))
-            })?;
+        let module = py.import("python").map_err(|e| {
+            MlBridgeError::FunctionCall(format!("Failed to import python package: {}", e))
+        })?;
 
-            let func = module.getattr(func_name).map_err(|e| {
-                MlBridgeError::FunctionCall(format!("Function {} not found: {}", func_name, e))
-            })?;
+        let func = module.getattr(func_name).map_err(|e| {
+            MlBridgeError::FunctionCall(format!("Function {} not found: {}", func_name, e))
+        })?;
 
-            let result = func.call1(args).map_err(|e| {
-                MlBridgeError::FunctionCall(format!("Function {} failed: {}", func_name, e))
-            })?;
+        let result = func.call1(args).map_err(|e| {
+            MlBridgeError::FunctionCall(format!("Function {} failed: {}", func_name, e))
+        })?;
 
-            result.extract().map_err(|e| {
-                MlBridgeError::TypeConversion(format!(
-                    "Failed to convert result from {}: {}",
-                    func_name, e
-                ))
-            })
+        result.extract().map_err(|_| {
+            MlBridgeError::TypeConversion(format!(
+                "Failed to convert result from {}",
+                func_name
+            ))
         })
     }
 }
@@ -187,9 +198,13 @@ impl MlBridge for PyMlBridge {
         };
 
         tokio::task::spawn_blocking(move || {
-            bridge
-                .call_python_func::<Vec<f32>>("generate_embedding", (text,))
-                .map_err(|e: MlBridgeError| -> common::DbError { e.into() })
+            pyo3::Python::attach(|py| {
+                let args = PyTuple::new(py, &[text.into_pyobject(py).map_err(|e| common::DbError::Other(format!("Python conversion error: {}", e)))?])
+                    .map_err(|e| common::DbError::Other(format!("PyTuple creation error: {}", e)))?;
+                bridge
+                    .call_python_func::<Vec<f32>>(py, "generate_embedding", &args)
+                    .map_err(|e: MlBridgeError| -> common::DbError { e.into() })
+            })
         })
         .await
         .map_err(|e| common::DbError::Other(format!("Task join error: {}", e)))?
@@ -204,22 +219,20 @@ impl MlBridge for PyMlBridge {
         };
 
         tokio::task::spawn_blocking(move || {
-            let py_entities: Vec<PyEntity> = bridge
-                .call_python_func("extract_entities", (text,))
-                .map_err(|e: MlBridgeError| -> common::DbError { e.into() })?;
+            pyo3::Python::attach(|py| {
+                let args = PyTuple::new(py, &[text.into_pyobject(py).map_err(|e| common::DbError::Other(format!("Python conversion error: {}", e)))?])
+                    .map_err(|e| common::DbError::Other(format!("PyTuple creation error: {}", e)))?;
+                
+                // FromPyObject is implemented for PyEntity wrapper
+                let py_entities: Vec<PyEntity> = bridge
+                    .call_python_func::<Vec<PyEntity>>(py, "extract_entities", &args)
+                    .map_err(|e: MlBridgeError| -> common::DbError { e.into() })?;
 
-            // Convert Python entities to Rust entities
-            let entities = py_entities
-                .into_iter()
-                .map(|e| Entity {
-                    text: e.text,
-                    label: e.label,
-                    start: e.start,
-                    end: e.end,
-                })
-                .collect();
+                // Convert PyEntity wrappers to Entity
+                let entities: Vec<Entity> = py_entities.into_iter().map(Into::into).collect();
 
-            Ok::<Vec<Entity>, common::DbError>(entities)
+                Ok::<Vec<Entity>, common::DbError>(entities)
+            })
         })
         .await
         .map_err(|e| common::DbError::Other(format!("Task join error: {}", e)))?
@@ -234,18 +247,22 @@ impl MlBridge for PyMlBridge {
         };
 
         tokio::task::spawn_blocking(move || {
-            bridge
-                .call_python_func::<String>("summarize", (messages,))
-                .map_err(|e: MlBridgeError| -> common::DbError { e.into() })
+            pyo3::Python::attach(|py| {
+                let args = PyTuple::new(py, &[messages.into_pyobject(py).map_err(|e| common::DbError::Other(format!("Python conversion error: {}", e)))?])
+                    .map_err(|e| common::DbError::Other(format!("PyTuple creation error: {}", e)))?;
+                bridge
+                    .call_python_func::<String>(py, "summarize", &args)
+                    .map_err(|e: MlBridgeError| -> common::DbError { e.into() })
+            })
         })
         .await
         .map_err(|e| common::DbError::Other(format!("Task join error: {}", e)))?
     }
 
     async fn health_check(&self) -> DbResult<bool> {
-        Python::with_gil(|py| {
-            // Check if Python is working and module is importable
-            match py.import_bound("ml_funcs") {
+        pyo3::Python::attach(|py| {
+            // Check if Python is working and package is importable
+            match py.import("python") {
                 Ok(_) => Ok(true),
                 Err(e) => {
                     log::error!("ML bridge health check failed: {}", e);
@@ -256,41 +273,31 @@ impl MlBridge for PyMlBridge {
     }
 }
 
-/// Helper struct for deserializing Python entity dictionaries.
-#[derive(Debug, serde::Deserialize)]
-struct PyEntity {
-    text: String,
-    label: String,
-    start: usize,
-    end: usize,
-}
+// Implement FromPyObject for the newtype wrapper
+impl<'a, 'py> FromPyObject<'a, 'py> for PyEntity {
+    type Error = PyErr;
+    
+    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
+        let any = ob.as_any();
+        let dict = any.cast::<PyDict>()?;
 
-// Implement FromPyObject for PyEntity
-impl<'source> FromPyObject<'source> for PyEntity {
-    fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        let dict: &PyDict = ob.downcast()?;
+        Ok(PyEntity(Entity {
+            text: dict.get_item("text")?
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'text' field"))?
+                .extract()?,
 
-        Ok(PyEntity {
-            text: dict.get_item("text")?.ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err("Missing 'text' field")
-            })?
-            .extract()?,
+            label: dict.get_item("label")?
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'label' field"))?
+                .extract()?,
 
-            label: dict.get_item("label")?.ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err("Missing 'label' field")
-            })?
-            .extract()?,
+            start: dict.get_item("start")?
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'start' field"))?
+                .extract()?,
 
-            start: dict.get_item("start")?.ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err("Missing 'start' field")
-            })?
-            .extract()?,
-
-            end: dict.get_item("end")?.ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err("Missing 'end' field")
-            })?
-            .extract()?,
-        })
+            end: dict.get_item("end")?
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'end' field"))?
+                .extract()?,
+        }))
     }
 }
 

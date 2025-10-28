@@ -4,27 +4,41 @@
 /// hardware configurations WITHOUT requiring actual hardware or libraries.
 
 use gguf_loader::{Variant, BitNetCpuVariant, BitNetGpuVariant, StandardCpuVariant, StandardGpuVariant};
-use tabagent_hardware::{SystemInfo, CpuInfo, GpuInfo, CpuArchitecture, GpuVendor};
+use tabagent_hardware::{SystemInfo, CpuInfo, GpuInfo, CpuArchitecture, GpuVendor, CpuVendor, MemoryInfo, OsInfo};
 
 /// Helper to create mock system info
 fn mock_system(cpu_arch: CpuArchitecture, gpus: Vec<GpuVendor>) -> SystemInfo {
+    let total_vram_mb = gpus.len() as u64 * 8192;
     SystemInfo {
         cpu: CpuInfo {
+            vendor: CpuVendor::Intel, // Default to Intel for testing
             architecture: cpu_arch,
-            name: "Mock CPU".to_string(),
+            model_name: "Mock CPU".to_string(),
             cores: 8,
             threads: 16,
-            vendor: "Mock".to_string(),
+            family: None,
+            model: None,
+            stepping: None,
         },
         gpus: gpus.into_iter().map(|vendor| GpuInfo {
             vendor,
             name: format!("Mock {:?} GPU", vendor),
-            memory_mb: 8192,
-            driver_version: "1.0".to_string(),
+            vram_mb: Some(8192),
+            driver_version: Some("1.0".to_string()),
         }).collect(),
-        total_ram_mb: 16384,
-        os: "Mock OS".to_string(),
-        os_version: "1.0".to_string(),
+        memory: MemoryInfo {
+            total_ram_mb: 16384,
+            available_ram_mb: 8192,
+            used_ram_mb: 8192,
+        },
+        os: OsInfo {
+            name: "Mock OS".to_string(),
+            version: "1.0".to_string(),
+            arch: "x86_64".to_string(),
+        },
+        total_vram_mb,
+        ram_tier: "16GB".to_string(),
+        vram_tier: if total_vram_mb > 0 { format!("{}GB", total_vram_mb / 1024) } else { "0GB".to_string() },
     }
 }
 

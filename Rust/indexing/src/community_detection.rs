@@ -305,7 +305,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph_traits::{GraphBase, UndirectedGraph, IntoNodeIdentifiers};
+    use crate::graph_traits::{GraphBase, UndirectedGraph, IntoNodeIdentifiers, Data};
     use std::collections::{HashMap, HashSet};
     
     // Simple graph implementation for testing
@@ -365,9 +365,39 @@ mod tests {
         }
     }
     
+    impl Data for TestGraph {
+        type NodeWeight = ();
+        type EdgeWeight = f32;
+        
+        fn node_weight(&self, _node_id: Self::NodeId) -> Option<&Self::NodeWeight> {
+            None
+        }
+        
+        fn edge_weight(&self, _edge_id: Self::EdgeId) -> Option<&Self::EdgeWeight> {
+            None
+        }
+        
+        fn edge_endpoints(&self, _edge_id: Self::EdgeId) -> Option<(Self::NodeId, Self::NodeId)> {
+            None
+        }
+    }
+    
     impl UndirectedGraph for TestGraph {
         fn neighbors(&self, node: Self::NodeId) -> DbResult<Vec<Self::NodeId>> {
             Ok(self.edges.get(&node).cloned().unwrap_or_default().into_iter().collect())
+        }
+        
+        fn edges(&self, node: Self::NodeId) -> DbResult<Vec<(Self::EdgeId, Self::NodeId, Self::NodeId)>> {
+            // Return edges connected to this node
+            let neighbors = self.edges.get(&node).cloned().unwrap_or_default();
+            let edges_list = neighbors.into_iter()
+                .map(|neighbor| {
+                    // Create edge ID as "from-to" string
+                    let edge_id = format!("{}-{}", node, neighbor);
+                    (edge_id, node.clone(), neighbor)
+                })
+                .collect();
+            Ok(edges_list)
         }
     }
 

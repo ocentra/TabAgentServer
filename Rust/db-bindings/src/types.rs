@@ -6,7 +6,7 @@ use pyo3::types::{PyDict, PyList};
 
 /// Convert a Rust Node to a Python dictionary
 pub fn node_to_dict(py: Python, node: &Node) -> PyResult<PyObject> {
-    let dict = PyDict::new_bound(py);
+    let dict = PyDict::new(py);
     
     match node {
         Node::Chat(chat) => {
@@ -279,7 +279,7 @@ pub fn dict_to_node(dict: &Bound<'_, PyDict>) -> PyResult<Node> {
 
 /// Convert a Rust Edge to a Python dictionary
 pub fn edge_to_dict(py: Python, edge: &Edge) -> PyResult<PyObject> {
-    let dict = PyDict::new_bound(py);
+    let dict = PyDict::new(py);
     dict.set_item("id", edge.id.as_str())?;
     dict.set_item("from_node", edge.from_node.as_str())?;
     dict.set_item("to_node", edge.to_node.as_str())?;
@@ -295,7 +295,7 @@ pub fn edge_to_dict(py: Python, edge: &Edge) -> PyResult<PyObject> {
 
 /// Convert a Rust Embedding to a Python dictionary
 pub fn embedding_to_dict(py: Python, embedding: &Embedding) -> PyResult<PyObject> {
-    let dict = PyDict::new_bound(py);
+    let dict = PyDict::new(py);
     dict.set_item("id", embedding.id.as_str())?;
     dict.set_item("vector", &embedding.vector)?;
     dict.set_item("model", &embedding.model)?;

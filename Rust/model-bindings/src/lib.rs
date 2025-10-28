@@ -14,6 +14,12 @@ struct PyModel {
     inner: Model,
 }
 
+// SAFETY: Model contains raw pointers to llama.cpp FFI, but llama.cpp is thread-safe
+// when each thread has its own context. The Model type itself is immutable after loading
+// and only accessed through &self methods. PyO3 requires Send+Sync for #[pyclass].
+unsafe impl Send for PyModel {}
+unsafe impl Sync for PyModel {}
+
 #[pymethods]
 impl PyModel {
     /// Load a GGUF model from file

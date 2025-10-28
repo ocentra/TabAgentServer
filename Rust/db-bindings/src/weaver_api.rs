@@ -59,7 +59,7 @@ impl WeaverController {
     /// Returns:
     ///     dict: Statistics about the Weaver's operation
     fn stats(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("initialized", self.is_initialized)?;
         Ok(dict.into())
     }

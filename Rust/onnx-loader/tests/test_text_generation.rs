@@ -12,8 +12,7 @@
 //! 2. Ensure the repo contains that variant
 //! 3. Update `variant` string to match manifest key
 
-use tabagent_onnx_loader::{OnnxSession, init};
-use common::InferenceSettings;
+use tabagent_onnx_loader::{OnnxSession, init, GenerationConfig};
 use tabagent_model_cache::{ModelCache, STANDARD_ONNX_DATA, STANDARD_TOKENIZER};
 use tempfile::TempDir;
 
@@ -70,7 +69,7 @@ async fn test_smollm2_360m_generation() {
     
     // Test with greedy decoding
     println!("\n=== Test 1: Greedy Decoding ===");
-    let greedy_settings = InferenceSettings {
+    let greedy_settings = GenerationConfig {
         temperature: 0.0, // Greedy (deterministic)
         max_new_tokens: 50,
         do_sample: false,
@@ -90,7 +89,7 @@ async fn test_smollm2_360m_generation() {
     
     // Test with sampling
     println!("\n=== Test 2: Sampling with Temperature ===");
-    let sampling_settings = InferenceSettings {
+    let sampling_settings = GenerationConfig {
         temperature: 0.7,
         max_new_tokens: 50,
         top_k: 40,
@@ -108,7 +107,7 @@ async fn test_smollm2_360m_generation() {
     
     // Test with higher temperature (more creative)
     println!("\n=== Test 3: High Temperature ===");
-    let creative_settings = InferenceSettings {
+    let creative_settings = GenerationConfig {
         temperature: 1.0,
         max_new_tokens: 30,
         top_k: 50,
@@ -179,7 +178,7 @@ async fn test_smollm2_1_7b_generation() {
     
     // Test generation with optimal settings for larger model
     println!("\n=== Testing SmolLM2-1.7B Generation ===");
-    let settings = InferenceSettings {
+    let settings = GenerationConfig {
         temperature: 0.7,
         max_new_tokens: 100,
         top_k: 50,
@@ -213,7 +212,7 @@ async fn test_smollm2_1_7b_generation() {
     println!("\n✅ SmolLM2-1.7B text generation tests passed!");
 }
 
-/// Test that InferenceSettings properly affect output
+/// Test that GenerationConfig properly affect output
 #[tokio::test]
 async fn test_settings_impact() {
     setup();
@@ -248,7 +247,7 @@ async fn test_settings_impact() {
     let prompt = "The capital of France is";
     
     // Greedy should be deterministic
-    let greedy = InferenceSettings {
+    let greedy = GenerationConfig {
         temperature: 0.0,
         max_new_tokens: 10,
         do_sample: false,
@@ -264,7 +263,7 @@ async fn test_settings_impact() {
     assert_eq!(out1.len(), out2.len(), "Greedy outputs should have same length");
     
     // High temperature should produce varied outputs (probabilistic)
-    let sampling = InferenceSettings {
+    let sampling = GenerationConfig {
         temperature: 1.5,
         max_new_tokens: 10,
         top_p: 0.9,

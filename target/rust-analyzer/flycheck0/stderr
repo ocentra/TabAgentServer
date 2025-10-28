@@ -1,8 +1,10 @@
-   0.517518800s  INFO prepare_target{force=false package_id=db-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\db-bindings) target="embedded_db"}: cargo::core::compiler::fingerprint: stale: changed "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\src\\storage_manager.rs"
-   0.517553700s  INFO prepare_target{force=false package_id=db-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\db-bindings) target="embedded_db"}: cargo::core::compiler::fingerprint:           (vs) "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\target\\debug\\.fingerprint\\storage-b1dea0df48a008f7\\dep-lib-storage"
-   0.517558500s  INFO prepare_target{force=false package_id=db-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\db-bindings) target="embedded_db"}: cargo::core::compiler::fingerprint:                FileTime { seconds: 13406092057, nanos: 334246800 } < FileTime { seconds: 13406092214, nanos: 196310200 }
-   0.518161300s  INFO prepare_target{force=false package_id=db-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\db-bindings) target="embedded_db"}: cargo::core::compiler::fingerprint: fingerprint error for db-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\db-bindings)/Check { test: false }/TargetInner { ..: lib_target("embedded_db", ["cdylib", "rlib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\db-bindings\\src\\lib.rs", Edition2021) }
-   0.518189900s  INFO prepare_target{force=false package_id=db-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\db-bindings) target="embedded_db"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\db-bindings-0601e6b22e954a2f\lib-embedded_db`
+   0.536281900s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="gguf_loader"}: cargo::core::compiler::fingerprint: dependency on `storage` is newer than we are 13406093214.492513700s > 13406093081.524532800s "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\gguf-loader"
+   0.536506100s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="gguf_loader"}: cargo::core::compiler::fingerprint: fingerprint dirty for gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("gguf_loader", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\gguf-loader\\src\\lib.rs", Edition2021) }
+   0.536533700s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="gguf_loader"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDependency { name: "storage", dep_mtime: FileTime { seconds: 13406093214, nanos: 492513700 }, max_mtime: FileTime { seconds: 13406093081, nanos: 524532800 } })
+   0.574581600s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="test_models"}: cargo::core::compiler::fingerprint: fingerprint dirty for gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader)/Check { test: true }/TargetInner { kind: "test", name: "test_models", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\gguf-loader\\tests\\test_models.rs", Edition2021) }
+   0.574610300s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="test_models"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "gguf_loader" })
+   0.576097300s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="variant_selection_tests"}: cargo::core::compiler::fingerprint: fingerprint error for gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader)/Check { test: true }/TargetInner { kind: "test", name: "variant_selection_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\gguf-loader\\tests\\variant_selection_tests.rs", Edition2021) }
+   0.576120300s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="variant_selection_tests"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\gguf-loader-d1bb347741fcd95f\test-integration-test-variant_selection_tests`
 
 Caused by:
     The system cannot find the file specified. (os error 2)
@@ -29,419 +31,37 @@ Stack backtrace:
   18: git_midx_writer_dump
   19: BaseThreadInitThunk
   20: RtlUserThreadStart
-   0.545918500s  INFO prepare_target{force=false package_id=python-ml-bridge v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\python-ml-bridge) target="python_ml_bridge"}: cargo::core::compiler::fingerprint: fingerprint error for python-ml-bridge v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\python-ml-bridge)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("python_ml_bridge", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\python-ml-bridge\\src\\lib.rs", Edition2021) }
-   0.545947800s  INFO prepare_target{force=false package_id=python-ml-bridge v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\python-ml-bridge) target="python_ml_bridge"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\python-ml-bridge-6fa52f059b3b46de\lib-python_ml_bridge`
-
-Caused by:
-    The system cannot find the file specified. (os error 2)
-
-Stack backtrace:
-   0: git_midx_writer_dump
-   1: git_midx_writer_dump
-   2: git_midx_writer_dump
-   3: git_midx_writer_dump
-   4: git_filter_source_repo
-   5: git_filter_source_path
-   6: git_filter_source_path
-   7: git_filter_source_path
-   8: git_filter_source_path
-   9: git_filter_source_path
-  10: git_filter_source_repo
-  11: git_filter_source_repo
-  12: git_filter_source_repo
-  13: git_filter_source_repo
-  14: git_filter_source_repo
-  15: <unknown>
-  16: <unknown>
-  17: git_midx_writer_dump
-  18: git_filter_source_repo
-  19: git_midx_writer_dump
-  20: BaseThreadInitThunk
-  21: RtlUserThreadStart
-   0.547376200s  INFO prepare_target{force=false package_id=weaver v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\weaver) target="weaver"}: cargo::core::compiler::fingerprint: fingerprint dirty for weaver v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\weaver)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("weaver", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\weaver\\src\\lib.rs", Edition2021) }
-   0.547394100s  INFO prepare_target{force=false package_id=weaver v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\weaver) target="weaver"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "query" })
-   0.548064900s  INFO prepare_target{force=false package_id=query v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\query) target="query"}: cargo::core::compiler::fingerprint: fingerprint dirty for query v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\query)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("query", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\query\\src\\lib.rs", Edition2021) }
-   0.548080500s  INFO prepare_target{force=false package_id=query v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\query) target="query"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.548719700s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="storage"}: cargo::core::compiler::fingerprint: fingerprint dirty for storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("storage", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\src\\lib.rs", Edition2021) }
-   0.548734900s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="storage"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleItem(ChangedFile { reference: "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\target\\debug\\.fingerprint\\storage-b1dea0df48a008f7\\dep-lib-storage", reference_mtime: FileTime { seconds: 13406092057, nanos: 334246800 }, stale: "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\src\\storage_manager.rs", stale_mtime: FileTime { seconds: 13406092214, nanos: 196310200 } }))
-   0.549733700s  INFO prepare_target{force=false package_id=db-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\db-bindings) target="embedded_db"}: cargo::core::compiler::fingerprint: fingerprint error for db-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\db-bindings)/Check { test: true }/TargetInner { ..: lib_target("embedded_db", ["cdylib", "rlib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\db-bindings\\src\\lib.rs", Edition2021) }
-   0.549749800s  INFO prepare_target{force=false package_id=db-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\db-bindings) target="embedded_db"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\db-bindings-f044bd57fd5413e4\test-lib-embedded_db`
-
-Caused by:
-    The system cannot find the file specified. (os error 2)
-
-Stack backtrace:
-   0: git_midx_writer_dump
-   1: git_midx_writer_dump
-   2: git_midx_writer_dump
-   3: git_midx_writer_dump
-   4: git_filter_source_repo
-   5: git_filter_source_path
-   6: git_filter_source_path
-   7: git_filter_source_path
-   8: git_filter_source_path
-   9: git_filter_source_repo
-  10: git_filter_source_repo
-  11: git_filter_source_repo
-  12: git_filter_source_repo
-  13: git_filter_source_repo
-  14: <unknown>
-  15: <unknown>
-  16: git_midx_writer_dump
-  17: git_filter_source_repo
-  18: git_midx_writer_dump
-  19: BaseThreadInitThunk
-  20: RtlUserThreadStart
-   0.550384600s  INFO prepare_target{force=false package_id=db-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\db-bindings) target="db_tests"}: cargo::core::compiler::fingerprint: fingerprint error for db-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\db-bindings)/Check { test: true }/TargetInner { kind: "test", name: "db_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\db-bindings\\tests\\db_tests.rs", Edition2021) }
-   0.550400300s  INFO prepare_target{force=false package_id=db-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\db-bindings) target="db_tests"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\db-bindings-85a19f49471744cc\test-integration-test-db_tests`
-
-Caused by:
-    The system cannot find the file specified. (os error 2)
-
-Stack backtrace:
-   0: git_midx_writer_dump
-   1: git_midx_writer_dump
-   2: git_midx_writer_dump
-   3: git_midx_writer_dump
-   4: git_filter_source_repo
-   5: git_filter_source_path
-   6: git_filter_source_path
-   7: git_filter_source_path
-   8: git_filter_source_path
-   9: git_filter_source_repo
-  10: git_filter_source_repo
-  11: git_filter_source_repo
-  12: git_filter_source_repo
-  13: git_filter_source_repo
-  14: <unknown>
-  15: <unknown>
-  16: git_midx_writer_dump
-  17: git_filter_source_repo
-  18: git_midx_writer_dump
-  19: BaseThreadInitThunk
-  20: RtlUserThreadStart
-   0.555386300s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="gguf_loader"}: cargo::core::compiler::fingerprint: fingerprint dirty for gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("gguf_loader", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\gguf-loader\\src\\lib.rs", Edition2021) }
-   0.555406900s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="gguf_loader"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.578321900s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="gguf_loader"}: cargo::core::compiler::fingerprint: fingerprint dirty for gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("gguf_loader", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\gguf-loader\\src\\lib.rs", Edition2021) }
-   0.578364900s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="gguf_loader"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.598599100s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="test_models"}: cargo::core::compiler::fingerprint: fingerprint error for gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader)/Check { test: true }/TargetInner { kind: "test", name: "test_models", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\gguf-loader\\tests\\test_models.rs", Edition2021) }
-   0.598629600s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="test_models"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\gguf-loader-ac0eb2fa1f648a8d\test-integration-test-test_models`
-
-Caused by:
-    The system cannot find the file specified. (os error 2)
-
-Stack backtrace:
-   0: git_midx_writer_dump
-   1: git_midx_writer_dump
-   2: git_midx_writer_dump
-   3: git_midx_writer_dump
-   4: git_filter_source_repo
-   5: git_filter_source_path
-   6: git_filter_source_path
-   7: git_filter_source_path
-   8: git_filter_source_path
-   9: git_filter_source_repo
-  10: git_filter_source_repo
-  11: git_filter_source_repo
-  12: git_filter_source_repo
-  13: git_filter_source_repo
-  14: <unknown>
-  15: <unknown>
-  16: git_midx_writer_dump
-  17: git_filter_source_repo
-  18: git_midx_writer_dump
-  19: BaseThreadInitThunk
-  20: RtlUserThreadStart
-   0.599978200s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="variant_selection_tests"}: cargo::core::compiler::fingerprint: fingerprint error for gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader)/Check { test: true }/TargetInner { kind: "test", name: "variant_selection_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\gguf-loader\\tests\\variant_selection_tests.rs", Edition2021) }
-   0.599996700s  INFO prepare_target{force=false package_id=gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader) target="variant_selection_tests"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\gguf-loader-c2376d08a611488e\test-integration-test-variant_selection_tests`
-
-Caused by:
-    The system cannot find the file specified. (os error 2)
-
-Stack backtrace:
-   0: git_midx_writer_dump
-   1: git_midx_writer_dump
-   2: git_midx_writer_dump
-   3: git_midx_writer_dump
-   4: git_filter_source_repo
-   5: git_filter_source_path
-   6: git_filter_source_path
-   7: git_filter_source_path
-   8: git_filter_source_path
-   9: git_filter_source_repo
-  10: git_filter_source_repo
-  11: git_filter_source_repo
-  12: git_filter_source_repo
-  13: git_filter_source_repo
-  14: <unknown>
-  15: <unknown>
-  16: git_midx_writer_dump
-  17: git_filter_source_repo
-  18: git_midx_writer_dump
-  19: BaseThreadInitThunk
-  20: RtlUserThreadStart
-   0.600998500s  INFO prepare_target{force=false package_id=indexing v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\indexing) target="indexing"}: cargo::core::compiler::fingerprint: fingerprint error for indexing v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\indexing)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("indexing", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\indexing\\src\\lib.rs", Edition2021) }
-   0.601017000s  INFO prepare_target{force=false package_id=indexing v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\indexing) target="indexing"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\indexing-61be1eb958cde4c6\test-lib-indexing`
-
-Caused by:
-    The system cannot find the file specified. (os error 2)
-
-Stack backtrace:
-   0: git_midx_writer_dump
-   1: git_midx_writer_dump
-   2: git_midx_writer_dump
-   3: git_midx_writer_dump
-   4: git_filter_source_repo
-   5: git_filter_source_path
-   6: git_filter_source_path
-   7: git_filter_source_path
-   8: git_filter_source_path
-   9: git_filter_source_repo
-  10: git_filter_source_repo
-  11: git_filter_source_repo
-  12: git_filter_source_repo
-  13: git_filter_source_repo
-  14: <unknown>
-  15: <unknown>
-  16: git_midx_writer_dump
-  17: git_filter_source_repo
-  18: git_midx_writer_dump
-  19: BaseThreadInitThunk
-  20: RtlUserThreadStart
-   0.603714100s  INFO prepare_target{force=false package_id=knowledge-graph v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\knowledge-graph) target="knowledge_graph"}: cargo::core::compiler::fingerprint: fingerprint dirty for knowledge-graph v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\knowledge-graph)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("knowledge_graph", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\knowledge-graph\\src\\lib.rs", Edition2021) }
-   0.603731900s  INFO prepare_target{force=false package_id=knowledge-graph v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\knowledge-graph) target="knowledge_graph"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.604429800s  INFO prepare_target{force=false package_id=knowledge-graph v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\knowledge-graph) target="knowledge_graph"}: cargo::core::compiler::fingerprint: fingerprint dirty for knowledge-graph v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\knowledge-graph)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("knowledge_graph", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\knowledge-graph\\src\\lib.rs", Edition2021) }
-   0.604447800s  INFO prepare_target{force=false package_id=knowledge-graph v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\knowledge-graph) target="knowledge_graph"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.605092000s  INFO prepare_target{force=false package_id=python-ml-bridge v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\python-ml-bridge) target="python_ml_bridge"}: cargo::core::compiler::fingerprint: fingerprint error for python-ml-bridge v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\python-ml-bridge)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("python_ml_bridge", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\python-ml-bridge\\src\\lib.rs", Edition2021) }
-   0.605111900s  INFO prepare_target{force=false package_id=python-ml-bridge v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\python-ml-bridge) target="python_ml_bridge"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\python-ml-bridge-159e26c8b476b5a7\test-lib-python_ml_bridge`
-
-Caused by:
-    The system cannot find the file specified. (os error 2)
-
-Stack backtrace:
-   0: git_midx_writer_dump
-   1: git_midx_writer_dump
-   2: git_midx_writer_dump
-   3: git_midx_writer_dump
-   4: git_filter_source_repo
-   5: git_filter_source_path
-   6: git_filter_source_path
-   7: git_filter_source_path
-   8: git_filter_source_path
-   9: git_filter_source_repo
-  10: git_filter_source_repo
-  11: git_filter_source_repo
-  12: git_filter_source_repo
-  13: git_filter_source_repo
-  14: <unknown>
-  15: <unknown>
-  16: git_midx_writer_dump
-  17: git_filter_source_repo
-  18: git_midx_writer_dump
-  19: BaseThreadInitThunk
-  20: RtlUserThreadStart
-   0.605765100s  INFO prepare_target{force=false package_id=python-ml-bridge v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\python-ml-bridge) target="bridge_tests"}: cargo::core::compiler::fingerprint: fingerprint error for python-ml-bridge v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\python-ml-bridge)/Check { test: true }/TargetInner { kind: "test", name: "bridge_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\python-ml-bridge\\tests\\bridge_tests.rs", Edition2021) }
-   0.605782800s  INFO prepare_target{force=false package_id=python-ml-bridge v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\python-ml-bridge) target="bridge_tests"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\python-ml-bridge-bcd52bea75c5574c\test-integration-test-bridge_tests`
-
-Caused by:
-    The system cannot find the file specified. (os error 2)
-
-Stack backtrace:
-   0: git_midx_writer_dump
-   1: git_midx_writer_dump
-   2: git_midx_writer_dump
-   3: git_midx_writer_dump
-   4: git_filter_source_repo
-   5: git_filter_source_path
-   6: git_filter_source_path
-   7: git_filter_source_path
-   8: git_filter_source_path
-   9: git_filter_source_repo
-  10: git_filter_source_repo
-  11: git_filter_source_repo
-  12: git_filter_source_repo
-  13: git_filter_source_repo
-  14: <unknown>
-  15: <unknown>
-  16: git_midx_writer_dump
-  17: git_filter_source_repo
-  18: git_midx_writer_dump
-  19: BaseThreadInitThunk
-  20: RtlUserThreadStart
-   0.606590900s  INFO prepare_target{force=false package_id=query v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\query) target="query"}: cargo::core::compiler::fingerprint: fingerprint dirty for query v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\query)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("query", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\query\\src\\lib.rs", Edition2021) }
-   0.606603700s  INFO prepare_target{force=false package_id=query v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\query) target="query"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.607831800s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="storage"}: cargo::core::compiler::fingerprint: stale: changed "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\src\\storage_manager.rs"
-   0.607857500s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="storage"}: cargo::core::compiler::fingerprint:           (vs) "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\target\\debug\\.fingerprint\\storage-94237a8d45bd5499\\dep-test-lib-storage"
-   0.607862200s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="storage"}: cargo::core::compiler::fingerprint:                FileTime { seconds: 13406092057, nanos: 375270900 } < FileTime { seconds: 13406092214, nanos: 196310200 }
-   0.608000800s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="storage"}: cargo::core::compiler::fingerprint: fingerprint dirty for storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("storage", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\src\\lib.rs", Edition2021) }
-   0.608024100s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="storage"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleItem(ChangedFile { reference: "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\target\\debug\\.fingerprint\\storage-94237a8d45bd5499\\dep-test-lib-storage", reference_mtime: FileTime { seconds: 13406092057, nanos: 375270900 }, stale: "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\src\\storage_manager.rs", stale_mtime: FileTime { seconds: 13406092214, nanos: 196310200 } }))
-   0.609382100s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="concurrency_tests"}: cargo::core::compiler::fingerprint: fingerprint dirty for storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage)/Check { test: true }/TargetInner { kind: "test", name: "concurrency_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\tests\\concurrency_tests.rs", Edition2021) }
-   0.609400700s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="concurrency_tests"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.610290500s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="coordinator_tests"}: cargo::core::compiler::fingerprint: fingerprint dirty for storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage)/Check { test: true }/TargetInner { kind: "test", name: "coordinator_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\tests\\coordinator_tests.rs", Edition2021) }
-   0.610307400s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="coordinator_tests"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.611096400s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="coordinator_unit_tests"}: cargo::core::compiler::fingerprint: fingerprint dirty for storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage)/Check { test: true }/TargetInner { kind: "test", name: "coordinator_unit_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\tests\\coordinator_unit_tests.rs", Edition2021) }
-   0.611112200s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="coordinator_unit_tests"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.611936600s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="database_type_tests"}: cargo::core::compiler::fingerprint: fingerprint dirty for storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage)/Check { test: true }/TargetInner { kind: "test", name: "database_type_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\tests\\database_type_tests.rs", Edition2021) }
-   0.611953100s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="database_type_tests"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.612710600s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="demo_file_locking_issues"}: cargo::core::compiler::fingerprint: fingerprint dirty for storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage)/Check { test: true }/TargetInner { kind: "test", name: "demo_file_locking_issues", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\tests\\demo_file_locking_issues.rs", Edition2021) }
-   0.612726300s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="demo_file_locking_issues"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.613520400s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="file_locking_tests"}: cargo::core::compiler::fingerprint: fingerprint dirty for storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage)/Check { test: true }/TargetInner { kind: "test", name: "file_locking_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\tests\\file_locking_tests.rs", Edition2021) }
-   0.613536400s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="file_locking_tests"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.614412400s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="mod"}: cargo::core::compiler::fingerprint: fingerprint dirty for storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage)/Check { test: true }/TargetInner { kind: "test", name: "mod", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\tests\\mod.rs", Edition2021) }
-   0.614427400s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="mod"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.615201000s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="storage_tests"}: cargo::core::compiler::fingerprint: fingerprint dirty for storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage)/Check { test: true }/TargetInner { kind: "test", name: "storage_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\tests\\storage_tests.rs", Edition2021) }
-   0.615217100s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="storage_tests"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.616036400s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="time_scope_tests"}: cargo::core::compiler::fingerprint: fingerprint dirty for storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage)/Check { test: true }/TargetInner { kind: "test", name: "time_scope_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\storage\\tests\\time_scope_tests.rs", Edition2021) }
-   0.616051900s  INFO prepare_target{force=false package_id=storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage) target="time_scope_tests"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "storage" })
-   0.650953800s  INFO prepare_target{force=false package_id=tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api) target="integration_tests"}: cargo::core::compiler::fingerprint: fingerprint error for tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api)/Check { test: true }/TargetInner { kind: "test", name: "integration_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\api\\tests\\integration_tests.rs", Edition2021) }
-   0.650981600s  INFO prepare_target{force=false package_id=tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api) target="integration_tests"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\tabagent-api-5129c51ed5de44b8\test-integration-test-integration_tests`
-
-Caused by:
-    The system cannot find the file specified. (os error 2)
-
-Stack backtrace:
-   0: git_midx_writer_dump
-   1: git_midx_writer_dump
-   2: git_midx_writer_dump
-   3: git_midx_writer_dump
-   4: git_filter_source_repo
-   5: git_filter_source_path
-   6: git_filter_source_path
-   7: git_filter_source_path
-   8: git_filter_source_path
-   9: git_filter_source_repo
-  10: git_filter_source_repo
-  11: git_filter_source_repo
-  12: git_filter_source_repo
-  13: git_filter_source_repo
-  14: <unknown>
-  15: <unknown>
-  16: git_midx_writer_dump
-  17: git_filter_source_repo
-  18: git_midx_writer_dump
-  19: BaseThreadInitThunk
-  20: RtlUserThreadStart
-   0.652435900s  INFO prepare_target{force=false package_id=tabagent-execution-providers v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\execution-providers) target="tabagent_execution_providers"}: cargo::core::compiler::fingerprint: dependency on `common` is newer than we are 13406089818.336816600s > 13406087120.671493500s "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\execution-providers"
-   0.652676300s  INFO prepare_target{force=false package_id=tabagent-execution-providers v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\execution-providers) target="tabagent_execution_providers"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-execution-providers v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\execution-providers)/Check { test: false }/TargetInner { ..: lib_target("tabagent_execution_providers", ["rlib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\execution-providers\\src\\lib.rs", Edition2021) }
-   0.652695100s  INFO prepare_target{force=false package_id=tabagent-execution-providers v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\execution-providers) target="tabagent_execution_providers"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDependency { name: "common", dep_mtime: FileTime { seconds: 13406089818, nanos: 336816600 }, max_mtime: FileTime { seconds: 13406087120, nanos: 671493500 } })
-   0.654345900s  INFO prepare_target{force=false package_id=tabagent-execution-providers v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\execution-providers) target="provider_tests"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-execution-providers v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\execution-providers)/Check { test: true }/TargetInner { kind: "test", name: "provider_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\execution-providers\\tests\\provider_tests.rs", Edition2021) }
-   0.654363000s  INFO prepare_target{force=false package_id=tabagent-execution-providers v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\execution-providers) target="provider_tests"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_execution_providers" })
-   0.655694100s  INFO prepare_target{force=false package_id=tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings) target="tabagent_model"}: cargo::core::compiler::fingerprint: fingerprint error for tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings)/Check { test: false }/TargetInner { ..: lib_target("tabagent_model", ["cdylib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\model-bindings\\src\\lib.rs", Edition2021) }
-   0.655711300s  INFO prepare_target{force=false package_id=tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings) target="tabagent_model"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\tabagent-model-bindings-5f1ea24150cb05d3\lib-tabagent_model`
-
-Caused by:
-    The system cannot find the file specified. (os error 2)
-
-Stack backtrace:
-   0: git_midx_writer_dump
-   1: git_midx_writer_dump
-   2: git_midx_writer_dump
-   3: git_midx_writer_dump
-   4: git_filter_source_repo
-   5: git_filter_source_path
-   6: git_filter_source_path
-   7: git_filter_source_path
-   8: git_filter_source_path
-   9: git_filter_source_repo
-  10: git_filter_source_repo
-  11: git_filter_source_repo
-  12: git_filter_source_repo
-  13: git_filter_source_repo
-  14: <unknown>
-  15: <unknown>
-  16: git_midx_writer_dump
-  17: git_filter_source_repo
-  18: git_midx_writer_dump
-  19: BaseThreadInitThunk
-  20: RtlUserThreadStart
-   0.656439100s  INFO prepare_target{force=false package_id=tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings) target="tabagent_model"}: cargo::core::compiler::fingerprint: fingerprint error for tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings)/Check { test: true }/TargetInner { ..: lib_target("tabagent_model", ["cdylib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\model-bindings\\src\\lib.rs", Edition2021) }
-   0.656456300s  INFO prepare_target{force=false package_id=tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings) target="tabagent_model"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\tabagent-model-bindings-03c076245cce20b2\test-lib-tabagent_model`
-
-Caused by:
-    The system cannot find the file specified. (os error 2)
-
-Stack backtrace:
-   0: git_midx_writer_dump
-   1: git_midx_writer_dump
-   2: git_midx_writer_dump
-   3: git_midx_writer_dump
-   4: git_filter_source_repo
-   5: git_filter_source_path
-   6: git_filter_source_path
-   7: git_filter_source_path
-   8: git_filter_source_path
-   9: git_filter_source_repo
-  10: git_filter_source_repo
-  11: git_filter_source_repo
-  12: git_filter_source_repo
-  13: git_filter_source_repo
-  14: <unknown>
-  15: <unknown>
-  16: git_midx_writer_dump
-  17: git_filter_source_repo
-  18: git_midx_writer_dump
-  19: BaseThreadInitThunk
-  20: RtlUserThreadStart
-   0.712688800s  INFO prepare_target{force=false package_id=tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler) target="tabagent_native_handler"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler)/Check { test: false }/TargetInner { ..: lib_target("tabagent_native_handler", ["cdylib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\native-handler\\src\\lib.rs", Edition2021) }
-   0.712724400s  INFO prepare_target{force=false package_id=tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler) target="tabagent_native_handler"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_execution_providers" })
-   0.714492000s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="tabagent_onnx_loader"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader)/Check { test: false }/TargetInner { ..: lib_target("tabagent_onnx_loader", ["rlib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\onnx-loader\\src\\lib.rs", Edition2021) }
-   0.714509900s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="tabagent_onnx_loader"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_execution_providers" })
-   0.729343400s  INFO prepare_target{force=false package_id=tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline) target="tabagent_pipeline"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline)/Check { test: false }/TargetInner { ..: lib_target("tabagent_pipeline", ["rlib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\pipeline\\src\\lib.rs", Edition2021) }
-   0.729369600s  INFO prepare_target{force=false package_id=tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline) target="tabagent_pipeline"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_onnx_loader" })
-   0.731096800s  INFO prepare_target{force=false package_id=tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler) target="tabagent_native_handler"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler)/Check { test: true }/TargetInner { ..: lib_target("tabagent_native_handler", ["cdylib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\native-handler\\src\\lib.rs", Edition2021) }
-   0.731133800s  INFO prepare_target{force=false package_id=tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler) target="tabagent_native_handler"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_execution_providers" })
-   0.741737500s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="tabagent_onnx_loader"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader)/Check { test: true }/TargetInner { ..: lib_target("tabagent_onnx_loader", ["rlib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\onnx-loader\\src\\lib.rs", Edition2021) }
-   0.741767900s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="tabagent_onnx_loader"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_execution_providers" })
-   0.743684400s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="integration_test"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader)/Check { test: true }/TargetInner { kind: "test", name: "integration_test", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\onnx-loader\\tests\\integration_test.rs", Edition2021) }
-   0.743705000s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="integration_test"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_execution_providers" })
-   0.744994600s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="test_text_generation"}: cargo::core::compiler::fingerprint: fingerprint error for tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader)/Check { test: true }/TargetInner { kind: "test", name: "test_text_generation", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\onnx-loader\\tests\\test_text_generation.rs", Edition2021) }
-   0.745010300s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="test_text_generation"}: cargo::core::compiler::fingerprint:     err: failed to read `E:\Desktop\TabAgent\TabAgentServer\Rust\target\debug\.fingerprint\tabagent-onnx-loader-023e8ee5a58df399\test-integration-test-test_text_generation`
-
-Caused by:
-    The system cannot find the file specified. (os error 2)
-
-Stack backtrace:
-   0: git_midx_writer_dump
-   1: git_midx_writer_dump
-   2: git_midx_writer_dump
-   3: git_midx_writer_dump
-   4: git_filter_source_repo
-   5: git_filter_source_path
-   6: git_filter_source_path
-   7: git_filter_source_path
-   8: git_filter_source_path
-   9: git_filter_source_repo
-  10: git_filter_source_repo
-  11: git_filter_source_repo
-  12: git_filter_source_repo
-  13: git_filter_source_repo
-  14: <unknown>
-  15: <unknown>
-  16: git_midx_writer_dump
-  17: git_filter_source_repo
-  18: git_midx_writer_dump
-  19: BaseThreadInitThunk
-  20: RtlUserThreadStart
-   0.746491700s  INFO prepare_target{force=false package_id=tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline) target="tabagent_pipeline"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline)/Check { test: true }/TargetInner { ..: lib_target("tabagent_pipeline", ["rlib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\pipeline\\src\\lib.rs", Edition2021) }
-   0.746508700s  INFO prepare_target{force=false package_id=tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline) target="tabagent_pipeline"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_onnx_loader" })
-   0.747940600s  INFO prepare_target{force=false package_id=tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline) target="pipeline_tests"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline)/Check { test: true }/TargetInner { kind: "test", name: "pipeline_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\pipeline\\tests\\pipeline_tests.rs", Edition2021) }
-   0.747960500s  INFO prepare_target{force=false package_id=tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline) target="pipeline_tests"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_pipeline" })
-   0.766289300s  INFO prepare_target{force=false package_id=tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server) target="tabagent-server"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server)/Check { test: false }/TargetInner { name: "tabagent-server", doc: true, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\server\\src\\main.rs", Edition2021) }
-   0.766323600s  INFO prepare_target{force=false package_id=tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server) target="tabagent-server"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_native_handler" })
-   0.788361600s  INFO prepare_target{force=false package_id=tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server) target="tabagent-server"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server)/Check { test: true }/TargetInner { name: "tabagent-server", doc: true, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\server\\src\\main.rs", Edition2021) }
-   0.788391500s  INFO prepare_target{force=false package_id=tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server) target="tabagent-server"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_native_handler" })
-   0.803511300s  INFO prepare_target{force=false package_id=weaver v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\weaver) target="weaver"}: cargo::core::compiler::fingerprint: fingerprint dirty for weaver v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\weaver)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("weaver", ["lib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\weaver\\src\\lib.rs", Edition2021) }
-   0.803539900s  INFO prepare_target{force=false package_id=weaver v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\weaver) target="weaver"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "query" })
-    Checking storage v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\storage)
+   0.627408600s  INFO prepare_target{force=false package_id=tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings) target="tabagent_model"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings)/Check { test: false }/TargetInner { ..: lib_target("tabagent_model", ["cdylib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\model-bindings\\src\\lib.rs", Edition2021) }
+   0.627439200s  INFO prepare_target{force=false package_id=tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings) target="tabagent_model"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "gguf_loader" })
+   0.628533700s  INFO prepare_target{force=false package_id=tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings) target="tabagent_model"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings)/Check { test: true }/TargetInner { ..: lib_target("tabagent_model", ["cdylib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\model-bindings\\src\\lib.rs", Edition2021) }
+   0.628552100s  INFO prepare_target{force=false package_id=tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings) target="tabagent_model"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "gguf_loader" })
+   0.687065600s  INFO prepare_target{force=false package_id=tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler) target="tabagent_native_handler"}: cargo::core::compiler::fingerprint: dependency on `build_script_build` is newer than we are 13406093165.067109200s > 13406092569.761334600s "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\onnx-loader"
+   0.687402000s  INFO prepare_target{force=false package_id=tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler) target="tabagent_native_handler"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler)/Check { test: false }/TargetInner { ..: lib_target("tabagent_native_handler", ["cdylib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\native-handler\\src\\lib.rs", Edition2021) }
+   0.687426700s  INFO prepare_target{force=false package_id=tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler) target="tabagent_native_handler"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_pipeline" })
+   0.689529900s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="tabagent_onnx_loader"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader)/Check { test: false }/TargetInner { ..: lib_target("tabagent_onnx_loader", ["rlib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\onnx-loader\\src\\lib.rs", Edition2021) }
+   0.689555800s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="tabagent_onnx_loader"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDependency { name: "build_script_build", dep_mtime: FileTime { seconds: 13406093165, nanos: 67109200 }, max_mtime: FileTime { seconds: 13406092569, nanos: 761334600 } })
+   0.703056800s  INFO prepare_target{force=false package_id=tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline) target="tabagent_pipeline"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline)/Check { test: false }/TargetInner { ..: lib_target("tabagent_pipeline", ["rlib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\pipeline\\src\\lib.rs", Edition2021) }
+   0.703084700s  INFO prepare_target{force=false package_id=tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline) target="tabagent_pipeline"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_onnx_loader" })
+   0.704725200s  INFO prepare_target{force=false package_id=tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler) target="tabagent_native_handler"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler)/Check { test: true }/TargetInner { ..: lib_target("tabagent_native_handler", ["cdylib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\native-handler\\src\\lib.rs", Edition2021) }
+   0.704745600s  INFO prepare_target{force=false package_id=tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler) target="tabagent_native_handler"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_pipeline" })
+   0.714655800s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="integration_test"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader)/Check { test: true }/TargetInner { kind: "test", name: "integration_test", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\onnx-loader\\tests\\integration_test.rs", Edition2021) }
+   0.714688000s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="integration_test"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_onnx_loader" })
+   0.716464900s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="test_text_generation"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader)/Check { test: true }/TargetInner { kind: "test", name: "test_text_generation", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\onnx-loader\\tests\\test_text_generation.rs", Edition2021) }
+   0.716487000s  INFO prepare_target{force=false package_id=tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader) target="test_text_generation"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_onnx_loader" })
+   0.717930100s  INFO prepare_target{force=false package_id=tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline) target="tabagent_pipeline"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline)/Check { test: true }/TargetInner { ..: lib_target("tabagent_pipeline", ["rlib"], "E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\pipeline\\src\\lib.rs", Edition2021) }
+   0.717950400s  INFO prepare_target{force=false package_id=tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline) target="tabagent_pipeline"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_onnx_loader" })
+   0.719355800s  INFO prepare_target{force=false package_id=tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline) target="pipeline_tests"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline)/Check { test: true }/TargetInner { kind: "test", name: "pipeline_tests", benched: false, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\pipeline\\tests\\pipeline_tests.rs", Edition2021) }
+   0.719373700s  INFO prepare_target{force=false package_id=tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline) target="pipeline_tests"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_pipeline" })
+   0.736924200s  INFO prepare_target{force=false package_id=tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server) target="tabagent-server"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server)/Check { test: false }/TargetInner { name: "tabagent-server", doc: true, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\server\\src\\main.rs", Edition2021) }
+   0.736960300s  INFO prepare_target{force=false package_id=tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server) target="tabagent-server"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_native_handler" })
+   0.756677500s  INFO prepare_target{force=false package_id=tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server) target="tabagent-server"}: cargo::core::compiler::fingerprint: fingerprint dirty for tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server)/Check { test: true }/TargetInner { name: "tabagent-server", doc: true, ..: with_path("E:\\Desktop\\TabAgent\\TabAgentServer\\Rust\\server\\src\\main.rs", Edition2021) }
+   0.756716800s  INFO prepare_target{force=false package_id=tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server) target="tabagent-server"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "tabagent_native_handler" })
 warning: esaxx-rs@0.1.10: cl : Command line warning D9002 : ignoring unknown option '-std=c++11'
-    Checking tabagent-execution-providers v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\execution-providers)
-    Checking tabagent-api v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\api)
-    Checking indexing v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\indexing)
-error: could not compile `storage` (lib) due to 6 previous errors
-warning: build failed, waiting for other jobs to finish...
     Checking tabagent-onnx-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\onnx-loader)
-error: could not compile `tabagent-api` (test "integration_tests") due to 1 previous error
-error: could not compile `storage` (lib test) due to 6 previous errors
+    Checking gguf-loader v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\gguf-loader)
     Checking tabagent-pipeline v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\pipeline)
-error: could not compile `tabagent-onnx-loader` (test "test_text_generation") due to 9 previous errors
-error: could not compile `indexing` (lib test) due to 5 previous errors; 78 warnings emitted
+    Checking tabagent-model-bindings v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\model-bindings)
+    Checking tabagent-native-handler v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\native-handler)
+error: could not compile `gguf-loader` (test "variant_selection_tests") due to 25 previous errors
+warning: build failed, waiting for other jobs to finish...
+    Checking tabagent-server v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\Rust\server)

@@ -308,7 +308,7 @@ impl EmbeddedDB {
     /// Returns:
     ///     dict: Database statistics
     fn stats(&self, py: Python) -> PyResult<PyObject> {
-        let dict = PyDict::new_bound(py);
+        let dict = PyDict::new(py);
         dict.set_item("database", "embedded_db")?;
         dict.set_item("status", "operational")?;
         Ok(dict.into())

@@ -142,7 +142,7 @@ pub async fn run_server_with_config(
 ///
 /// This is a convenience function for integration tests.
 /// Returns an Axum Router that can be used with `tower::ServiceExt::oneshot`.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-helpers"))]
 pub fn build_test_router(
     state: Arc<dyn AppStateProvider>,
 ) -> axum::Router {
