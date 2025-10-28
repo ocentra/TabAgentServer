@@ -460,6 +460,17 @@ impl RequestValue {
         }
     }
 
+    /// Create a health check request.
+    pub fn health() -> Self {
+        Value {
+            inner: ValueInner {
+                data: ValueData::Request(Box::new(RequestType::Health)),
+                dtype: ValueType::Health,
+            },
+            _marker: std::marker::PhantomData,
+        }
+    }
+
     /// Create a stop generation request.
     pub fn stop_generation(request_id: impl Into<String>) -> Self {
         Value {

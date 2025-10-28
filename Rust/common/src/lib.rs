@@ -1,14 +1,32 @@
-//! Common types and utilities shared across the embedded database crates.
+//! Common types, traits, and utilities shared across all TabAgent crates.
 //!
-//! This crate provides foundational types, type aliases, and error definitions
-//! that are used by multiple crates in the workspace (storage, indexing, query-engine, etc.).
+//! This crate provides foundational infrastructure used by all TabAgent components:
+//! - **Unified Backend Trait** (`AppStateProvider`): Single trait for all entry points
+//! - **Unified Routing Trait** (`RouteHandler<T>`): Single trait for all route handlers
+//! - **Database Types**: IDs, errors, serialization helpers
+//! - **Platform Types**: Models, actions, inference settings
 //!
 //! # Architecture
 //!
 //! The `common` crate sits at the bottom of the dependency hierarchy:
-//! - Has NO dependencies on other workspace crates
-//! - Provides shared types that all other crates can use
-//! - Ensures type consistency across the entire system
+//! - Has NO dependencies on other workspace crates (except `tabagent-values`)
+//! - Provides shared types and traits that all other crates use
+//! - Ensures type consistency and DRY principles across the entire system
+//!
+//! # Key Exports
+//!
+//! ## Backend Infrastructure
+//! - `AppStateProvider`: Unified trait for backend request handling
+//! - `AppStateWrapper`: Axum-compatible wrapper for trait objects
+//!
+//! ## Routing Infrastructure
+//! - `RouteHandler<M>`: Unified trait for route handlers (HTTP, Native Messaging, WebRTC)
+//! - `HttpMetadata`, `NativeMessagingMetadata`, `WebRtcMetadata`: Transport-specific metadata
+//! - `TestCase`: Test case support for routes
+//!
+//! ## Database Types
+//! - `NodeId`, `EdgeId`, `EmbeddingId`: Type-safe IDs for knowledge graph
+//! - `DbError`, `DbResult`: Error handling for database operations
 
 pub mod models;
 pub mod platform;
@@ -16,10 +34,19 @@ pub mod actions;
 pub mod errors;
 pub mod inference_settings;
 pub mod hardware_constants;
+pub mod backend;
+pub mod routing;
 
 // Re-export commonly used types
 pub use inference_settings::InferenceSettings;
 pub use hardware_constants as hw_const;
+pub use backend::{AppStateProvider, AppStateWrapper};
+pub use routing::{
+    RouteHandler, RegisterableRoute, TransportMetadata, TestCase,
+    HttpTransport, NativeMessagingTransport, WebRtcTransport,
+    HttpMetadata, NativeMessagingMetadata, WebRtcMetadata,
+    MediaType,
+};
 
 // --- Core Newtype Wrappers (RAG Rule 8.1) ---
 
