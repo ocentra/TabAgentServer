@@ -38,6 +38,10 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1"
 
+# Media processing (for video/audio codec validation and handling)
+# Note: These provide validation and metadata parsing, not full encoding/decoding
+bytes = "1"
+
 [dev-dependencies]
 tokio-test = "0.4"
 

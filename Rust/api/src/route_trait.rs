@@ -180,43 +180,51 @@ pub trait RouteHandler: Send + Sync + 'static {
 pub trait RegisterableRoute: RouteHandler {
     /// Register this route with the Axum router.
     ///
-    /// This is auto-implemented for all RouteHandler implementations.
-    /// Uses concrete Arc<dyn AppStateProvider> type for Axum 0.8 compatibility.
+    /// NOTE: Each route must implement this manually to provide a concrete handler function.
+    /// This is necessary for Axum 0.8 compatibility - closures don't satisfy Handler trait.
     fn register(
-        router: axum::Router<std::sync::Arc<dyn crate::traits::AppStateProvider>>
-    ) -> axum::Router<std::sync::Arc<dyn crate::traits::AppStateProvider>> {
-        let metadata = Self::metadata();
-        
-        // Type alias for the concrete state type
-        type AppState = std::sync::Arc<dyn crate::traits::AppStateProvider>;
-        
-        // Create the handler function
-        let handler = |axum::extract::State(state): axum::extract::State<AppState>,
-                       axum::Json(req): axum::Json<Self::Request>| async move {
-            // Enforce validation
-            Self::validate_request(&req).await?;
-            
-            // Handle request - pass &Arc directly since Arc<dyn T> now implements T
-            let response = Self::handle(req, &state).await?;
-            
-            // Return JSON response
-            Ok::<_, ApiError>(axum::Json(response))
-        };
-        
-        // Register route with appropriate method
-        match metadata.method {
-            Method::GET => router.route(metadata.path, axum::routing::get(handler)),
-            Method::POST => router.route(metadata.path, axum::routing::post(handler)),
-            Method::PUT => router.route(metadata.path, axum::routing::put(handler)),
-            Method::DELETE => router.route(metadata.path, axum::routing::delete(handler)),
-            Method::PATCH => router.route(metadata.path, axum::routing::patch(handler)),
-            _ => panic!("Unsupported HTTP method: {}", metadata.method),
-        }
-    }
+        router: axum::Router<crate::traits::AppStateWrapper>
+    ) -> axum::Router<crate::traits::AppStateWrapper>;
 }
 
-// Auto-implement RegisterableRoute for all RouteHandler implementations
-impl<T: RouteHandler> RegisterableRoute for T {}
+/// Macro to implement RegisterableRoute for a RouteHandler
+///
+/// This generates a concrete async function that Axum 0.8 can work with.
+#[macro_export]
+macro_rules! impl_registerable_route {
+    ($route_type:ty) => {
+        impl $crate::route_trait::RegisterableRoute for $route_type {
+            fn register(
+                router: axum::Router<$crate::traits::AppStateWrapper>
+            ) -> axum::Router<$crate::traits::AppStateWrapper> {
+                use $crate::route_trait::RouteHandler;
+                
+                let metadata = <$route_type>::metadata();
+                
+                // Create concrete handler function (not closure!)
+                async fn handler(
+                    axum::extract::State(state): axum::extract::State<$crate::traits::AppStateWrapper>,
+                    axum::Json(req): axum::Json<<$route_type as RouteHandler>::Request>,
+                ) -> Result<axum::Json<<$route_type as RouteHandler>::Response>, $crate::error::ApiError> {
+                    <$route_type>::validate_request(&req).await?;
+                    let response = <$route_type>::handle(req, &state).await?;
+                    Ok(axum::Json(response))
+                }
+                
+                // Register based on method
+                use axum::http::Method;
+                match metadata.method {
+                    Method::GET => router.route(metadata.path, axum::routing::get(handler)),
+                    Method::POST => router.route(metadata.path, axum::routing::post(handler)),
+                    Method::PUT => router.route(metadata.path, axum::routing::put(handler)),
+                    Method::DELETE => router.route(metadata.path, axum::routing::delete(handler)),
+                    Method::PATCH => router.route(metadata.path, axum::routing::patch(handler)),
+                    _ => panic!("Unsupported HTTP method: {}", metadata.method),
+                }
+            }
+        }
+    };
+}
 
 /// Macro to enforce route handler implementation AND verify rules.
 ///
@@ -233,6 +241,7 @@ impl<T: RouteHandler> RegisterableRoute for T {}
 macro_rules! enforce_route_handler {
     ($route_type:ty) => {
         // Compile-time assertion that the type implements traits
+        #[allow(dead_code)]
         const _: () = {
             fn assert_route_handler<T: $crate::route_trait::RouteHandler>() {}
             fn assert_registerable<T: $crate::route_trait::RegisterableRoute>() {}
@@ -328,7 +337,9 @@ pub mod validators {
     
     /// Validates a number is in range
     pub struct InRange<T> {
+        /// Minimum value (inclusive)
         pub min: T,
+        /// Maximum value (inclusive)
         pub max: T,
     }
     
@@ -364,6 +375,7 @@ pub mod validators {
     pub struct VecNotEmpty<T>(std::marker::PhantomData<T>);
     
     impl<T> VecNotEmpty<T> {
+        /// Creates a new VecNotEmpty validator
         pub const fn new() -> Self {
             Self(std::marker::PhantomData)
         }

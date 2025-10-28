@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyAny, PyDict, PyList};
 use ::tabagent_model_cache::{ModelCache, ManifestEntry, QuantStatus, ProgressCallback};
 use std::sync::Arc;
 
@@ -27,20 +27,20 @@ impl PyModelCache {
     }
     
     /// Scan a HuggingFace repository and update manifest
-    fn scan_repo(&self, repo_id: String) -> PyResult<PyObject> {
+    fn scan_repo(&self, repo_id: String) -> PyResult<Py<PyAny>> {
         let cache = Arc::clone(&self.cache);
         
         let manifest = self.runtime.block_on(async move {
             cache.scan_repo(&repo_id).await
         }).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to scan repo: {}", e)))?;
         
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             manifest_to_dict(py, &manifest)
         })
     }
     
     /// Get manifest for a repository
-    fn get_manifest(&self, repo_id: String) -> PyResult<Option<PyObject>> {
+    fn get_manifest(&self, repo_id: String) -> PyResult<Option<Py<PyAny>>> {
         let cache = Arc::clone(&self.cache);
         
         let manifest = self.runtime.block_on(async move {
@@ -48,19 +48,19 @@ impl PyModelCache {
         }).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to get manifest: {}", e)))?;
         
         match manifest {
-            Some(m) => Python::with_gil(|py| Ok(Some(manifest_to_dict(py, &m)?))),
+            Some(m) => Python::attach(|py| Ok(Some(manifest_to_dict(py, &m)?))),
             None => Ok(None),
         }
     }
     
     /// Download a specific file
-    fn download_file(&self, repo_id: String, file_path: String, progress_callback: Option<PyObject>) -> PyResult<()> {
+    fn download_file(&self, repo_id: String, file_path: String, progress_callback: Option<Py<PyAny>>) -> PyResult<()> {
         let cache = Arc::clone(&self.cache);
         
         // Convert Python callback to Rust callback
         let callback = progress_callback.map(|cb| {
             Arc::new(move |loaded: u64, total: u64| {
-                Python::with_gil(|py| {
+                Python::attach(|py| {
                     let _ = cb.call1(py, (loaded, total));
                 });
             }) as ProgressCallback
@@ -74,12 +74,12 @@ impl PyModelCache {
     }
     
     /// Download all files for a quantization variant
-    fn download_quant(&self, repo_id: String, quant_key: String, progress_callback: Option<PyObject>) -> PyResult<()> {
+    fn download_quant(&self, repo_id: String, quant_key: String, progress_callback: Option<Py<PyAny>>) -> PyResult<()> {
         let cache = Arc::clone(&self.cache);
         
         let callback = progress_callback.map(|cb| {
             Arc::new(move |loaded: u64, total: u64| {
-                Python::with_gil(|py| {
+                Python::attach(|py| {
                     let _ = cb.call1(py, (loaded, total));
                 });
             }) as ProgressCallback
@@ -119,15 +119,15 @@ impl PyModelCache {
     }
     
     /// Get cache statistics
-    fn get_stats(&self) -> PyResult<PyObject> {
+    fn get_stats(&self) -> PyResult<Py<PyAny>> {
         let cache = Arc::clone(&self.cache);
         
         let stats = self.runtime.block_on(async move {
             cache.get_stats().await
         }).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to get stats: {}", e)))?;
         
-        Python::with_gil(|py| {
-            let dict = PyDict::new_bound(py);
+        Python::attach(|py| {
+            let dict = PyDict::new(py);
             dict.set_item("total_repos", stats.total_repos)?;
             dict.set_item("total_size", stats.total_size)?;
             Ok(dict.into())
@@ -136,17 +136,17 @@ impl PyModelCache {
 }
 
 /// Convert ManifestEntry to Python dict
-fn manifest_to_dict(py: Python, manifest: &ManifestEntry) -> PyResult<PyObject> {
-    let dict = PyDict::new_bound(py);
+fn manifest_to_dict(py: Python, manifest: &ManifestEntry) -> PyResult<Py<PyAny>> {
+    let dict = PyDict::new(py);
     dict.set_item("repo_id", &manifest.repo_id)?;
     dict.set_item("task", &manifest.task)?;
     dict.set_item("created_at", manifest.created_at)?;
     dict.set_item("updated_at", manifest.updated_at)?;
     
     // Convert quants HashMap to dict
-    let quants_dict = PyDict::new_bound(py);
+    let quants_dict = PyDict::new(py);
     for (key, info) in &manifest.quants {
-        let info_dict = PyDict::new_bound(py);
+        let info_dict = PyDict::new(py);
         
         let status_str = match info.status {
             QuantStatus::Available => "available",
@@ -160,7 +160,8 @@ fn manifest_to_dict(py: Python, manifest: &ManifestEntry) -> PyResult<PyObject> 
         };
         
         info_dict.set_item("status", status_str)?;
-        info_dict.set_item("files", PyList::new_bound(py, &info.files))?;
+        let files_list = PyList::new(py, &info.files)?;
+        info_dict.set_item("files", files_list)?;
         info_dict.set_item("total_size", info.total_size)?;
         info_dict.set_item("downloaded_size", info.downloaded_size)?;
         info_dict.set_item("last_updated", info.last_updated)?;

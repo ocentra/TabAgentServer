@@ -128,6 +128,9 @@ impl RouteHandler for GetStatsRoute {
 
 crate::enforce_route_handler!(GetStatsRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(GetStatsRoute);
+
 #[cfg(test)]
 mod tests {
     use super::*;

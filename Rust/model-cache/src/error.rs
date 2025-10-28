@@ -6,7 +6,7 @@ pub enum ModelCacheError {
     Sled(#[from] sled::Error),
     
     #[error("Serialization error: {0}")]
-    Serialization(#[from] bincode::Error),
+    Serialization(String),
     
     #[error("Network error: {0}")]
     Network(#[from] reqwest::Error),
@@ -37,4 +37,16 @@ pub enum ModelCacheError {
 }
 
 pub type Result<T> = std::result::Result<T, ModelCacheError>;
+
+impl From<bincode::error::EncodeError> for ModelCacheError {
+    fn from(err: bincode::error::EncodeError) -> Self {
+        ModelCacheError::Serialization(err.to_string())
+    }
+}
+
+impl From<bincode::error::DecodeError> for ModelCacheError {
+    fn from(err: bincode::error::DecodeError) -> Self {
+        ModelCacheError::Serialization(err.to_string())
+    }
+}
 

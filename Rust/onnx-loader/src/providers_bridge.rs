@@ -5,13 +5,6 @@
 
 use crate::error::{OnnxError, Result};
 use tabagent_execution_providers::{ExecutionProvider, BackendType};
-use ort::execution_providers::{
-    ExecutionProviderDispatch,
-    CUDAExecutionProvider as OrtCUDA,
-    TensorRTExecutionProvider as OrtTensorRT,
-    DirectMLExecutionProvider as OrtDirectML,
-    CPUExecutionProvider as OrtCPU,
-};
 use std::sync::Arc;
 
 /// Convert tabagent execution providers to ort execution providers
@@ -26,7 +19,7 @@ use std::sync::Arc;
 /// Not all providers may be supported. Unsupported providers are logged and skipped.
 pub fn bridge_to_ort(
     providers: &[Arc<dyn ExecutionProvider>]
-) -> Result<Vec<ExecutionProviderDispatch>> {
+) -> Result<Vec<ort::execution_providers::ExecutionProviderDispatch>> {
     let mut ort_providers = Vec::new();
     
     for provider in providers {
@@ -47,138 +40,169 @@ pub fn bridge_to_ort(
     
     if ort_providers.is_empty() {
         log::warn!("No providers successfully bridged, falling back to CPU");
-        ort_providers.push(OrtCPU::default().build());
+        ort_providers.push(ort::execution_providers::CPUExecutionProvider::default().build());
     }
     
     Ok(ort_providers)
 }
 
 /// Convert a single execution provider to ort format
-fn convert_provider(provider: &Arc<dyn ExecutionProvider>) -> Option<ExecutionProviderDispatch> {
+fn convert_provider(provider: &Arc<dyn ExecutionProvider>) -> Option<ort::execution_providers::ExecutionProviderDispatch> {
     use tabagent_execution_providers::constants::*;
     
     let config = provider.config();
     
     match provider.backend_type() {
         BackendType::Cuda => {
-            let mut cuda = OrtCUDA::default();
-            
-            // Device selection
-            if let Some(device_id) = config.get(DEVICE_ID) {
-                if let Ok(id) = device_id.parse::<i32>() {
-                    cuda = cuda.with_device_id(id);
+            #[cfg(feature = "cuda")]
+            {
+                let mut cuda = ort::execution_providers::CUDAExecutionProvider::default();
+                
+                // Device selection
+                if let Some(device_id) = config.get(DEVICE_ID) {
+                    if let Ok(id) = device_id.parse::<i32>() {
+                        cuda = cuda.with_device_id(id);
+                    }
                 }
-            }
-            
-            // Memory limit
-            if let Some(mem_limit) = config.get(GPU_MEM_LIMIT) {
-                if let Ok(limit) = mem_limit.parse::<usize>() {
-                    cuda = cuda.with_memory_limit(limit);
+                
+                // Memory limit
+                if let Some(mem_limit) = config.get(GPU_MEM_LIMIT) {
+                    if let Ok(limit) = mem_limit.parse::<usize>() {
+                        cuda = cuda.with_memory_limit(limit);
+                    }
                 }
+                
+                log::debug!("Configured CUDA provider with {} options", config.iter().count());
+                Some(cuda.build())
             }
-            
-            // Arena extend strategy (ort expects enum, skip for now)
-            // TODO: Map string to ArenaExtendStrategy enum
-            
-            // cuDNN convolution algorithm search (ort expects enum, skip for now)
-            // TODO: Map string to CuDNNConvAlgorithmSearch enum
-            
-            // Copy in default stream not available in ort 2.0.0-rc.10
-            
-            log::debug!("Configured CUDA provider with {} options", config.iter().count());
-            Some(cuda.build())
+            #[cfg(not(feature = "cuda"))]
+            {
+                log::warn!("CUDA provider requested but cuda feature not enabled");
+                None
+            }
         }
         
         BackendType::TensorRT => {
-            let mut trt = OrtTensorRT::default();
-            
-            // Device selection
-            if let Some(device_id) = config.get(DEVICE_ID) {
-                if let Ok(id) = device_id.parse::<i32>() {
-                    trt = trt.with_device_id(id);
+            #[cfg(feature = "tensorrt")]
+            {
+                let mut trt = ort::execution_providers::TensorRTExecutionProvider::default();
+                
+                // Device selection
+                if let Some(device_id) = config.get(DEVICE_ID) {
+                    if let Ok(id) = device_id.parse::<i32>() {
+                        trt = trt.with_device_id(id);
+                    }
                 }
-            }
-            
-            // FP16 mode
-            if config.get(TRT_FP16_ENABLE) == Some(&"true".to_string()) ||
-               config.get(TRT_FP16_ENABLE) == Some(&"1".to_string()) {
-                trt = trt.with_fp16(true);
-            }
-            
-            // INT8 mode
-            if config.get(TRT_INT8_ENABLE) == Some(&"true".to_string()) {
-                trt = trt.with_int8(true);
-            }
-            
-            // Max workspace size
-            if let Some(max_ws) = config.get(TRT_MAX_WORKSPACE_SIZE) {
-                if let Ok(size) = max_ws.parse::<usize>() {
-                    trt = trt.with_max_workspace_size(size);
+                
+                // FP16 mode
+                if config.get(TRT_FP16_ENABLE) == Some(&"true".to_string()) ||
+                   config.get(TRT_FP16_ENABLE) == Some(&"1".to_string()) {
+                    trt = trt.with_fp16(true);
                 }
-            }
-            
-            // Engine cache
-            if config.get(TRT_ENGINE_CACHE_ENABLE) == Some(&"true".to_string()) {
-                if let Some(cache_path) = config.get(TRT_ENGINE_CACHE_PATH) {
-                    trt = trt.with_engine_cache(true).with_engine_cache_path(cache_path);
+                
+                // INT8 mode
+                if config.get(TRT_INT8_ENABLE) == Some(&"true".to_string()) {
+                    trt = trt.with_int8(true);
                 }
+                
+                // Max workspace size
+                if let Some(max_ws) = config.get(TRT_MAX_WORKSPACE_SIZE) {
+                    if let Ok(size) = max_ws.parse::<usize>() {
+                        trt = trt.with_max_workspace_size(size);
+                    }
+                }
+                
+                // Engine cache
+                if config.get(TRT_ENGINE_CACHE_ENABLE) == Some(&"true".to_string()) {
+                    if let Some(cache_path) = config.get(TRT_ENGINE_CACHE_PATH) {
+                        trt = trt.with_engine_cache(true).with_engine_cache_path(cache_path);
+                    }
+                }
+                
+                // Timing cache
+                if config.get(TRT_TIMING_CACHE_ENABLE) == Some(&"true".to_string()) {
+                    trt = trt.with_timing_cache(true);
+                }
+                
+                log::debug!("Configured TensorRT provider with {} options", config.iter().count());
+                Some(trt.build())
             }
-            
-            // Timing cache
-            if config.get(TRT_TIMING_CACHE_ENABLE) == Some(&"true".to_string()) {
-                trt = trt.with_timing_cache(true);
+            #[cfg(not(feature = "tensorrt"))]
+            {
+                log::warn!("TensorRT provider requested but tensorrt feature not enabled");
+                None
             }
-            
-            log::debug!("Configured TensorRT provider with {} options", config.iter().count());
-            Some(trt.build())
         }
         
         BackendType::DirectML => {
-            let mut dml = OrtDirectML::default();
-            
-            // Device selection
-            if let Some(device_id) = config.get(DEVICE_ID) {
-                if let Ok(id) = device_id.parse::<i32>() {
-                    dml = dml.with_device_id(id);
+            #[cfg(feature = "directml")]
+            {
+                let mut dml = ort::execution_providers::DirectMLExecutionProvider::default();
+                
+                // Device selection
+                if let Some(device_id) = config.get(DEVICE_ID) {
+                    if let Ok(id) = device_id.parse::<i32>() {
+                        dml = dml.with_device_id(id);
+                    }
                 }
+                
+                log::debug!("Configured DirectML provider");
+                Some(dml.build())
             }
-            
-            log::debug!("Configured DirectML provider");
-            Some(dml.build())
+            #[cfg(not(feature = "directml"))]
+            {
+                log::warn!("DirectML provider requested but directml feature not enabled");
+                None
+            }
         }
         
         BackendType::CoreML => {
-            #[cfg(target_os = "macos")]
+            #[cfg(all(target_os = "macos", feature = "coreml"))]
             {
-                use ort::execution_providers::CoreMLExecutionProvider;
-                let coreml = CoreMLExecutionProvider::default();
+                let coreml = ort::execution_providers::CoreMLExecutionProvider::default();
                 log::debug!("Configured CoreML provider");
                 Some(coreml.build())
             }
-            #[cfg(not(target_os = "macos"))]
+            #[cfg(not(all(target_os = "macos", feature = "coreml")))]
             {
-                log::warn!("CoreML only available on macOS");
+                log::warn!("CoreML only available on macOS with coreml feature");
                 None
             }
         }
         
         BackendType::CPU => {
-            let cpu = OrtCPU::default();
+            let cpu = ort::execution_providers::CPUExecutionProvider::default();
             log::debug!("Configured CPU provider");
             Some(cpu.build())
         }
         
         // Add more providers as needed
         BackendType::ROCm => {
-            // ROCm support would go here
-            log::warn!("ROCm provider not yet implemented for ort bridge");
-            None
+            #[cfg(feature = "rocm")]
+            {
+                let rocm = ort::execution_providers::ROCmExecutionProvider::default();
+                log::debug!("Configured ROCm provider");
+                Some(rocm.build())
+            }
+            #[cfg(not(feature = "rocm"))]
+            {
+                log::warn!("ROCm provider not enabled");
+                None
+            }
         }
         
         BackendType::OpenVINO => {
-            // OpenVINO support would go here
-            log::warn!("OpenVINO provider not yet implemented for ort bridge");
-            None
+            #[cfg(feature = "openvino")]
+            {
+                let openvino = ort::execution_providers::OpenVINOExecutionProvider::default();
+                log::debug!("Configured OpenVINO provider");
+                Some(openvino.build())
+            }
+            #[cfg(not(feature = "openvino"))]
+            {
+                log::warn!("OpenVINO provider not enabled");
+                None
+            }
         }
         
         _ => {
@@ -193,7 +217,7 @@ fn convert_provider(provider: &Arc<dyn ExecutionProvider>) -> Option<ExecutionPr
 /// This is a convenience function that uses the hardware detection
 /// from tabagent-execution-providers to automatically select the best
 /// providers for the current system.
-pub fn auto_select_providers() -> Result<Vec<ExecutionProviderDispatch>> {
+pub fn auto_select_providers() -> Result<Vec<ort::execution_providers::ExecutionProviderDispatch>> {
     use tabagent_execution_providers::{
         CUDAExecutionProvider, TensorRTExecutionProvider,
         DirectMLExecutionProvider, CPUExecutionProvider
@@ -250,5 +274,3 @@ pub fn auto_select_providers() -> Result<Vec<ExecutionProviderDispatch>> {
     // Convert to ort providers
     bridge_to_ort(&providers)
 }
-
-

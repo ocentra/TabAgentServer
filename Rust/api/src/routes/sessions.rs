@@ -166,6 +166,9 @@ impl RouteHandler for GetHistoryRoute {
 
 crate::enforce_route_handler!(GetHistoryRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(GetHistoryRoute);
+
 // ==================== SAVE MESSAGE ====================
 
 /// Save message request.
@@ -379,6 +382,9 @@ impl RouteHandler for SaveMessageRoute {
 }
 
 crate::enforce_route_handler!(SaveMessageRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(SaveMessageRoute);
 
 #[cfg(test)]
 mod tests {

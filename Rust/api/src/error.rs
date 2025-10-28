@@ -19,8 +19,11 @@ pub enum ApiError {
 
     /// Validation error (400) - specific field validation failed
     ValidationError {
+        /// The field that failed validation
         field: String,
+        /// The validation error message
         message: String,
+        /// Optional request ID for tracking
         request_id: Option<String>,
     },
 

@@ -177,6 +177,9 @@ impl RouteHandler for GetResourcesRoute {
 
 crate::enforce_route_handler!(GetResourcesRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(GetResourcesRoute);
+
 // ==================== ESTIMATE MEMORY ====================
 
 /// Estimate memory route handler.
@@ -290,6 +293,9 @@ impl RouteHandler for EstimateMemoryRoute {
 }
 
 crate::enforce_route_handler!(EstimateMemoryRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(EstimateMemoryRoute);
 
 // ==================== COMPATIBILITY CHECK ====================
 
@@ -483,6 +489,9 @@ impl RouteHandler for CompatibilityRoute {
 }
 
 crate::enforce_route_handler!(CompatibilityRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(CompatibilityRoute);
 
 #[cfg(test)]
 mod tests {

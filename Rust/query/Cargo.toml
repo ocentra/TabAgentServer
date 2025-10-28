@@ -17,10 +17,10 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 # Collections
-hashbrown = "0.15"
+hashbrown = "0.16.0"
 
 # Graph algorithms (for shortest path)
-petgraph = "0.6"
+petgraph = "0.8.3"
 
 [dev-dependencies]
 tempfile = "3.8"

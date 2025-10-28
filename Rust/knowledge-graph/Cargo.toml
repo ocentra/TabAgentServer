@@ -23,7 +23,7 @@ petgraph = { workspace = true }
 sled = { workspace = true }
 
 # Collections
-hashbrown = "0.15"
+hashbrown = "0.16.0"
 
 # Logging
 log = { workspace = true }

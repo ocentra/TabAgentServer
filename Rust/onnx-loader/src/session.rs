@@ -7,10 +7,12 @@ use std::sync::{Arc, Mutex};
 use tabagent_tokenization::Tokenizer;
 use tabagent_execution_providers::ExecutionProvider;
 use common::InferenceSettings;
-use ort::session::{Session, builder::GraphOptimizationLevel};
-use ort::value::Value;
-use ort::tensor::Shape;
-use ort::inputs;
+use ort::{
+    inputs,
+    session::{Session, builder::GraphOptimizationLevel},
+    tensor::Shape,
+    value::Value
+};
 
 /// ONNX inference session with smart defaults + full `ort` API access
 /// 

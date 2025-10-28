@@ -54,8 +54,11 @@ impl Default for WebRtcConfig {
 /// TURN server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TurnServer {
+    /// TURN server URLs
     pub urls: Vec<String>,
+    /// Authentication username
     pub username: String,
+    /// Authentication credential/password
     pub credential: String,
 }
 

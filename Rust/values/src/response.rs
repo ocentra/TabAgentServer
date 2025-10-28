@@ -91,6 +91,77 @@ pub enum ResponseType {
         details: Option<serde_json::Value>,
     },
 
+    /// Parameters response.
+    ParamsResponse {
+        temperature: Option<f32>,
+        max_tokens: Option<u32>,
+        top_p: Option<f32>,
+        frequency_penalty: Option<f32>,
+        presence_penalty: Option<f32>,
+        stop: Option<Vec<String>>,
+    },
+
+    /// Stop generation result.
+    StopGenerationResponse {
+        stopped_count: u32,
+    },
+
+    /// Halt status response.
+    HaltStatusResponse {
+        is_halted: bool,
+        active_requests: u32,
+        last_halt_time: Option<i64>,
+    },
+
+    /// Resource usage response.
+    ResourcesResponse {
+        cpu_usage: f32,
+        memory_usage: u64,
+        memory_total: u64,
+        gpu_usage: Option<f32>,
+        gpu_memory_usage: Option<u64>,
+        gpu_memory_total: Option<u64>,
+        disk_usage: u64,
+        disk_total: u64,
+    },
+
+    /// Memory estimate response.
+    MemoryEstimateResponse {
+        estimated_memory_mb: u64,
+        estimated_vram_mb: Option<u64>,
+        can_load: bool,
+        reason: Option<String>,
+    },
+
+    /// Compatibility check response.
+    CompatibilityResponse {
+        compatible: bool,
+        requirements: Vec<String>,
+        missing_requirements: Vec<String>,
+        recommendations: Vec<String>,
+    },
+
+    /// Pull model result.
+    PullModelResponse {
+        success: bool,
+        progress: Option<f32>,
+    },
+
+    /// Delete model result.
+    DeleteModelResponse {
+        success: bool,
+    },
+
+    /// Loaded models response.
+    LoadedModelsResponse {
+        models: Vec<LoadedModelInfo>,
+    },
+
+    /// Message saved response.
+    MessageSavedResponse {
+        message_id: String,
+    },
+
     // === WebRTC SIGNALING ===
     /// WebRTC session created response.
     WebRtcSessionCreated {
@@ -142,6 +213,57 @@ pub enum FinishReason {
     Length,
     ContentFilter,
     Error,
+}
+
+/// Loaded model information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoadedModelInfo {
+    pub id: String,
+    pub name: String,
+    pub memory_usage: u64,
+    pub load_time: i64,
+}
+
+/// Parameters response structure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParamsResponse {
+    pub temperature: Option<f32>,
+    pub max_tokens: Option<u32>,
+    pub top_p: Option<f32>,
+    pub frequency_penalty: Option<f32>,
+    pub presence_penalty: Option<f32>,
+    pub stop: Option<Vec<String>>,
+}
+
+/// Resources response structure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourcesResponse {
+    pub cpu_usage: f32,
+    pub memory_usage: u64,
+    pub memory_total: u64,
+    pub gpu_usage: Option<f32>,
+    pub gpu_memory_usage: Option<u64>,
+    pub gpu_memory_total: Option<u64>,
+    pub disk_usage: u64,
+    pub disk_total: u64,
+}
+
+/// Memory estimate response structure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryEstimateResponse {
+    pub estimated_memory_mb: u64,
+    pub estimated_vram_mb: Option<u64>,
+    pub can_load: bool,
+    pub reason: Option<String>,
+}
+
+/// Compatibility response structure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompatibilityResponse {
+    pub compatible: bool,
+    pub requirements: Vec<String>,
+    pub missing_requirements: Vec<String>,
+    pub recommendations: Vec<String>,
 }
 
 /// Rerank result.
@@ -448,6 +570,116 @@ impl ResponseValue {
         match self.response_type() {
             ResponseType::Error { code, message, .. } => {
                 Some((code.as_str(), message.as_str()))
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract parameters response data.
+    pub fn as_params(&self) -> Option<(Option<f32>, Option<u32>, Option<f32>, Option<f32>, Option<f32>, &Option<Vec<String>>)> {
+        match self.response_type() {
+            ResponseType::ParamsResponse { temperature, max_tokens, top_p, frequency_penalty, presence_penalty, stop } => {
+                Some((*temperature, *max_tokens, *top_p, *frequency_penalty, *presence_penalty, stop))
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract stop generation result.
+    pub fn as_stop_result(&self) -> Option<&u32> {
+        match self.response_type() {
+            ResponseType::StopGenerationResponse { stopped_count } => {
+                Some(stopped_count)
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract halt status response data.
+    pub fn as_halt_status(&self) -> Option<(&bool, &u32, &Option<i64>)> {
+        match self.response_type() {
+            ResponseType::HaltStatusResponse { is_halted, active_requests, last_halt_time } => {
+                Some((is_halted, active_requests, last_halt_time))
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract resources response data.
+    pub fn as_resources(&self) -> Option<(f32, u64, u64, Option<f32>, Option<u64>, Option<u64>, u64, u64)> {
+        match self.response_type() {
+            ResponseType::ResourcesResponse { cpu_usage, memory_usage, memory_total, gpu_usage, gpu_memory_usage, gpu_memory_total, disk_usage, disk_total } => {
+                Some((*cpu_usage, *memory_usage, *memory_total, *gpu_usage, *gpu_memory_usage, *gpu_memory_total, *disk_usage, *disk_total))
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract memory estimate response data.
+    pub fn as_memory_estimate(&self) -> Option<(u64, Option<u64>, bool, &Option<String>)> {
+        match self.response_type() {
+            ResponseType::MemoryEstimateResponse { estimated_memory_mb, estimated_vram_mb, can_load, reason } => {
+                Some((*estimated_memory_mb, *estimated_vram_mb, *can_load, reason))
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract compatibility response data.
+    pub fn as_compatibility(&self) -> Option<(bool, &Vec<String>, &Vec<String>, &Vec<String>)> {
+        match self.response_type() {
+            ResponseType::CompatibilityResponse { compatible, requirements, missing_requirements, recommendations } => {
+                Some((*compatible, requirements, missing_requirements, recommendations))
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract pull model result.
+    pub fn as_pull_result(&self) -> Option<(&bool, &Option<f32>)> {
+        match self.response_type() {
+            ResponseType::PullModelResponse { success, progress } => {
+                Some((success, progress))
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract delete model result.
+    pub fn as_delete_result(&self) -> Option<&bool> {
+        match self.response_type() {
+            ResponseType::DeleteModelResponse { success } => {
+                Some(success)
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract loaded models response data.
+    pub fn as_loaded_models(&self) -> Option<&[LoadedModelInfo]> {
+        match self.response_type() {
+            ResponseType::LoadedModelsResponse { models } => {
+                Some(models.as_slice())
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract message ID from saved message response.
+    pub fn as_message_id(&self) -> Option<&str> {
+        match self.response_type() {
+            ResponseType::MessageSavedResponse { message_id } => {
+                Some(message_id.as_str())
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract model info response data.
+    pub fn as_model_info(&self) -> Option<&ModelInfo> {
+        match self.response_type() {
+            ResponseType::ModelInfoResponse { info } => {
+                Some(info)
             }
             _ => None,
         }

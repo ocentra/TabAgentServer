@@ -129,6 +129,12 @@ impl RouteHandler for CreateOfferRoute {
     }
 }
 
+// Enforce compile-time rules
+crate::enforce_route_handler!(CreateOfferRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(CreateOfferRoute);
+
 // ============================================================================
 // POST /v1/webrtc/answer - Submit WebRTC Answer
 // ============================================================================
@@ -231,6 +237,12 @@ impl RouteHandler for SubmitAnswerRoute {
     }
 }
 
+// Enforce compile-time rules
+crate::enforce_route_handler!(SubmitAnswerRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(SubmitAnswerRoute);
+
 // ============================================================================
 // POST /v1/webrtc/ice - Add ICE Candidate
 // ============================================================================
@@ -332,6 +344,12 @@ impl RouteHandler for AddIceCandidateRoute {
         ]
     }
 }
+
+// Enforce compile-time rules
+crate::enforce_route_handler!(AddIceCandidateRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(AddIceCandidateRoute);
 
 // ============================================================================
 // GET /v1/webrtc/session/{session_id} - Get Session State

@@ -44,8 +44,9 @@ mod manager;
 mod session;
 mod types;
 mod data_channel;
-pub mod routes;  // Public module - same as API
-pub mod traits;  // Public module - same as API
+pub mod routes;       // Public module for route handlers
+pub mod traits;       // Public module for trait definitions
+pub mod route_trait;  // Public module for compile-time enforcement system
 
 // Re-exports
 pub use config::{WebRtcConfig, TurnServer};
@@ -55,4 +56,7 @@ pub use session::{WebRtcSession, SessionState};
 pub use types::{IceCandidate, SessionInfo, WebRtcStats};
 pub use data_channel::DataChannelHandler;
 pub use routes::DataChannelRoute;
+pub use route_trait::{
+    RouteMetadata, MediaType, ValidationRule, TestCase, RouteCollection,
+};
 

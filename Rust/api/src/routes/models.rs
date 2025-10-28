@@ -153,6 +153,9 @@ impl RouteHandler for ListModelsRoute {
 
 crate::enforce_route_handler!(ListModelsRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(ListModelsRoute);
+
 // ==================== LOAD MODEL ====================
 
 /// Load model request.
@@ -308,6 +311,9 @@ impl RouteHandler for LoadModelRoute {
 
 crate::enforce_route_handler!(LoadModelRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(LoadModelRoute);
+
 // ==================== UNLOAD MODEL ====================
 
 /// Unload model request.
@@ -442,6 +448,9 @@ impl RouteHandler for UnloadModelRoute {
 }
 
 crate::enforce_route_handler!(UnloadModelRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(UnloadModelRoute);
 
 // ==================== MODEL INFO ====================
 
@@ -586,6 +595,9 @@ impl RouteHandler for ModelInfoRoute {
 }
 
 crate::enforce_route_handler!(ModelInfoRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(ModelInfoRoute);
 
 #[cfg(test)]
 mod tests {

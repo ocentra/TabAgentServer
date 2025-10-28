@@ -19,17 +19,18 @@ use crate::{
     routes,
 };
 
-/// Configure routes on a STATEFUL router.
+/// Configure routes and middleware with Axum 0.8 compatibility.
 ///
-/// This function takes a `Router<Arc<dyn AppStateProvider>>` and adds all application routes to it.
+/// KEY FIX: Middleware layers applied BEFORE .with_state() for proper type inference.
+/// Returns a MakeService ready to be passed to axum::serve().
 pub fn configure_routes(
-    mut router: Router<std::sync::Arc<dyn crate::traits::AppStateProvider>>, 
+    state: crate::traits::AppStateWrapper,
     config: &ApiConfig,
-) -> Router<std::sync::Arc<dyn crate::traits::AppStateProvider>> {
+) -> axum::routing::IntoMakeService<Router> {
     use crate::route_trait::RegisterableRoute;
     
-    // Type alias for readability
-    type AppState = std::sync::Arc<dyn crate::traits::AppStateProvider>;
+    // Start with stateless router
+    let mut router = Router::new();
     
     // Register trait-based routes (converted routes)
     router = routes::health::HealthRoute::register(router);
@@ -75,7 +76,7 @@ pub fn configure_routes(
     // WebRTC GET session route (manual - needs Path parameter)
     router = router
         .route("/v1/webrtc/session/:session_id", get(|
-            axum::extract::State(state): axum::extract::State<AppState>,
+            axum::extract::State(_state): axum::extract::State<crate::traits::AppStateWrapper>,
             axum::extract::Path(session_id): axum::extract::Path<String>| async move {
             let request_id = uuid::Uuid::new_v4();
             tracing::info!(request_id = %request_id, session_id = %session_id, "Get WebRTC session");
@@ -85,7 +86,7 @@ pub fn configure_routes(
                 return Err(crate::error::ApiError::BadRequest("Session ID cannot be empty".into()));
             }
             
-            let request = tabagent_values::RequestValue::get_webrtc_session(&session_id);
+            let _request = tabagent_values::RequestValue::get_webrtc_session(&session_id);
             
             // TODO: Call backend once handler is implemented
             // For now, return a placeholder response
@@ -106,7 +107,7 @@ pub fn configure_routes(
     // /v1/halt POST alias for /v1/generation/stop
     router = router
         .route("/v1/halt", post(|
-            axum::extract::State(state): axum::extract::State<AppState>,
+            axum::extract::State(state): axum::extract::State<crate::traits::AppStateWrapper>,
             axum::Json(req): axum::Json<routes::generation::StopGenerationRequest>| async move {
             use crate::route_trait::RouteHandler;
             routes::generation::StopGenerationRoute::validate_request(&req).await?;
@@ -117,7 +118,7 @@ pub fn configure_routes(
     // /v1/load alias for /v1/models/load
     router = router
         .route("/v1/load", post(|
-            axum::extract::State(state): axum::extract::State<AppState>,
+            axum::extract::State(state): axum::extract::State<crate::traits::AppStateWrapper>,
             axum::Json(req): axum::Json<routes::models::LoadModelRequest>| async move {
             use crate::route_trait::RouteHandler;
             routes::models::LoadModelRoute::validate_request(&req).await?;
@@ -128,7 +129,7 @@ pub fn configure_routes(
     // /v1/unload alias for /v1/models/unload
     router = router
         .route("/v1/unload", post(|
-            axum::extract::State(state): axum::extract::State<AppState>,
+            axum::extract::State(state): axum::extract::State<crate::traits::AppStateWrapper>,
             axum::Json(req): axum::Json<routes::models::UnloadModelRequest>| async move {
             use crate::route_trait::RouteHandler;
             routes::models::UnloadModelRoute::validate_request(&req).await?;
@@ -139,7 +140,7 @@ pub fn configure_routes(
     // /v1/resources/loaded-models alias for /v1/models/loaded
     router = router
         .route("/v1/resources/loaded-models", get(|
-            axum::extract::State(state): axum::extract::State<AppState>| async move {
+            axum::extract::State(state): axum::extract::State<crate::traits::AppStateWrapper>| async move {
             use crate::route_trait::RouteHandler;
             let req = routes::management::GetLoadedModelsRequest;
             routes::management::GetLoadedModelsRoute::validate_request(&req).await?;
@@ -172,7 +173,8 @@ pub fn configure_routes(
         router
     };
 
-    // Apply middleware stack (order matters: outer to inner)
+    // AXUM 0.8 FIX: Apply middleware layers BEFORE .with_state()
+    // Order matters: outer to inner
     router = router
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http()
@@ -180,9 +182,10 @@ pub fn configure_routes(
             .on_response(DefaultOnResponse::new().include_headers(true)))
         .layer(middleware::cors_layer(config));
     
-    // Note: Timeout handling moved to handler level for proper error messages
-    // Each handler logs request_id and provides traceable errors
-
-    router
+    // CRITICAL: Apply state LAST for Axum 0.8 + trait objects
+    let router_with_state = router.with_state(state);
+    
+    // Convert to MakeService immediately
+    router_with_state.into_make_service()
 }
 

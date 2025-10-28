@@ -161,6 +161,9 @@ impl RouteHandler for GetParamsRoute {
 
 crate::enforce_route_handler!(GetParamsRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(GetParamsRoute);
+
 // ==================== SET PARAMS ====================
 
 /// Set generation parameters route handler.
@@ -410,6 +413,9 @@ impl RouteHandler for SetParamsRoute {
 }
 
 crate::enforce_route_handler!(SetParamsRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(SetParamsRoute);
 
 #[cfg(test)]
 mod tests {

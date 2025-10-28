@@ -247,6 +247,9 @@ impl RouteHandler for RagRoute {
 
 crate::enforce_route_handler!(RagRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(RagRoute);
+
 #[cfg(test)]
 mod tests {
     use super::*;

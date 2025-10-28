@@ -19,7 +19,9 @@ pub enum WebRtcError {
     
     /// Validation error (400) - specific field validation failed
     ValidationError {
+        /// The field that failed validation
         field: String,
+        /// Detailed validation error message
         message: String,
     },
     
@@ -28,13 +30,21 @@ pub enum WebRtcError {
     
     /// Invalid state (409) - operation not allowed in current session state
     InvalidState {
+        /// Session identifier
         session_id: String,
+        /// Expected session state
         expected: String,
+        /// Actual session state
         actual: String,
     },
     
     /// Session limit reached (429) - rate limit
-    SessionLimitReached { current: usize, max: usize },
+    SessionLimitReached { 
+        /// Current number of sessions
+        current: usize, 
+        /// Maximum allowed sessions
+        max: usize 
+    },
     
     /// Internal error (500)
     InternalError(String),

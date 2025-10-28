@@ -156,6 +156,9 @@ impl RouteHandler for StopGenerationRoute {
 
 crate::enforce_route_handler!(StopGenerationRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(StopGenerationRoute);
+
 // ==================== GET HALT STATUS ====================
 
 /// Get halt status request (no parameters).
@@ -262,6 +265,9 @@ impl RouteHandler for GetHaltStatusRoute {
 }
 
 crate::enforce_route_handler!(GetHaltStatusRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(GetHaltStatusRoute);
 
 #[cfg(test)]
 mod tests {

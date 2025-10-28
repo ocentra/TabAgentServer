@@ -291,6 +291,9 @@ impl RouteHandler for EmbeddingsRoute {
 
 crate::enforce_route_handler!(EmbeddingsRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(EmbeddingsRoute);
+
 #[cfg(test)]
 mod tests {
     use super::*;

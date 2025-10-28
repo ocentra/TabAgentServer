@@ -223,7 +223,8 @@ impl StorageManager {
 
         match self.nodes.get(id.as_bytes())? {
             Some(bytes) => {
-                let node: common::models::Node = bincode::deserialize(&bytes)?;
+                let (node, _): (common::models::Node, usize) = bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
+                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
                 Ok(Some(node))
             }
             None => Ok(None),
@@ -254,7 +255,8 @@ impl StorageManager {
             ));
         }
 
-        let bytes = bincode::serialize(node)?;
+        let bytes = bincode::serde::encode_to_vec(node, bincode::config::standard())
+            .map_err(|e| common::DbError::Serialization(e.to_string()))?;
         self.nodes.insert(id.as_str().as_bytes(), bytes)?;
 
         // Update indexes if indexing is enabled
@@ -291,7 +293,8 @@ impl StorageManager {
 
         match self.nodes.remove(id.as_bytes())? {
             Some(bytes) => {
-                let node: common::models::Node = bincode::deserialize(&bytes)?;
+                let (node, _): (common::models::Node, usize) = bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
+                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
 
                 // Update indexes if indexing is enabled
                 if let Some(ref idx) = self.index_manager {
@@ -332,7 +335,8 @@ impl StorageManager {
 
         match self.edges.get(id.as_bytes())? {
             Some(bytes) => {
-                let edge: common::models::Edge = bincode::deserialize(&bytes)?;
+                let (edge, _): (common::models::Edge, usize) = bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
+                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
                 Ok(Some(edge))
             }
             None => Ok(None),
@@ -358,7 +362,8 @@ impl StorageManager {
             ));
         }
 
-        let bytes = bincode::serialize(edge)?;
+        let bytes = bincode::serde::encode_to_vec(edge, bincode::config::standard())
+            .map_err(|e| common::DbError::Serialization(e.to_string()))?;
         self.edges.insert(edge.id.as_str().as_bytes(), bytes)?;
 
         // Update indexes if indexing is enabled
@@ -395,7 +400,8 @@ impl StorageManager {
 
         match self.edges.remove(id.as_bytes())? {
             Some(bytes) => {
-                let edge: common::models::Edge = bincode::deserialize(&bytes)?;
+                let (edge, _): (common::models::Edge, usize) = bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
+                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
 
                 // Update indexes if indexing is enabled
                 if let Some(ref idx) = self.index_manager {
@@ -436,7 +442,8 @@ impl StorageManager {
 
         match self.embeddings.get(id.as_bytes())? {
             Some(bytes) => {
-                let embedding: common::models::Embedding = bincode::deserialize(&bytes)?;
+                let (embedding, _): (common::models::Embedding, usize) = bincode::decode_from_slice(&bytes, bincode::config::standard())
+                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
                 Ok(Some(embedding))
             }
             None => Ok(None),
@@ -492,7 +499,8 @@ impl StorageManager {
             ));
         }
 
-        let bytes = bincode::serialize(embedding)?;
+        let bytes = bincode::encode_to_vec(embedding, bincode::config::standard())
+            .map_err(|e| common::DbError::Serialization(e.to_string()))?;
         self.embeddings
             .insert(embedding.id.as_str().as_bytes(), bytes)?;
 
@@ -530,7 +538,8 @@ impl StorageManager {
 
         match self.embeddings.remove(id.as_bytes())? {
             Some(bytes) => {
-                let embedding: common::models::Embedding = bincode::deserialize(&bytes)?;
+                let (embedding, _): (common::models::Embedding, usize) = bincode::decode_from_slice(&bytes, bincode::config::standard())
+                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
 
                 // Update indexes if indexing is enabled
                 if let Some(ref idx) = self.index_manager {

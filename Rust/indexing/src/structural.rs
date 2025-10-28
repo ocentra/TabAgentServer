@@ -50,7 +50,7 @@ impl StructuralIndex {
         // Get existing set or create new
         let mut id_set: HashSet<NodeId> = self.tree
             .get(&key)?
-            .map(|bytes| bincode::deserialize(&bytes))
+            .map(|bytes| bincode::decode_from_slice(&bytes, bincode::config::standard()).map(|(v, _)| v))
             .transpose()
             .map_err(|e| DbError::Serialization(e.to_string()))?
             .unwrap_or_default();
@@ -59,7 +59,7 @@ impl StructuralIndex {
         id_set.insert(NodeId::from(node_id));
         
         // Store back
-        let serialized = bincode::serialize(&id_set)
+        let serialized = bincode::encode_to_vec(&id_set, bincode::config::standard())
             .map_err(|e| DbError::Serialization(e.to_string()))?;
         self.tree.insert(key.as_bytes(), serialized)?;
         
@@ -72,7 +72,7 @@ impl StructuralIndex {
         
         // Get existing set
         if let Some(bytes) = self.tree.get(&key)? {
-            let mut id_set: HashSet<NodeId> = bincode::deserialize(&bytes)
+            let (mut id_set, _): (HashSet<NodeId>, usize) = bincode::decode_from_slice(&bytes, bincode::config::standard())
                 .map_err(|e| DbError::Serialization(e.to_string()))?;
             
             // Remove node ID (convert &str to NodeId for lookup)
@@ -83,7 +83,7 @@ impl StructuralIndex {
                 self.tree.remove(key.as_bytes())?;
             } else {
                 // Store back
-                let serialized = bincode::serialize(&id_set)
+                let serialized = bincode::encode_to_vec(&id_set, bincode::config::standard())
                     .map_err(|e| DbError::Serialization(e.to_string()))?;
                 self.tree.insert(key.as_bytes(), serialized)?;
             }
@@ -109,7 +109,7 @@ impl StructuralIndex {
         
         let id_set: HashSet<NodeId> = self.tree
             .get(&key)?
-            .map(|bytes| bincode::deserialize(&bytes))
+            .map(|bytes| bincode::decode_from_slice(&bytes, bincode::config::standard()).map(|(v, _)| v))
             .transpose()
             .map_err(|e| DbError::Serialization(e.to_string()))?
             .unwrap_or_default();
@@ -123,7 +123,7 @@ impl StructuralIndex {
         
         let id_set: HashSet<NodeId> = self.tree
             .get(&key)?
-            .map(|bytes| bincode::deserialize(&bytes))
+            .map(|bytes| bincode::decode_from_slice(&bytes, bincode::config::standard()).map(|(v, _)| v))
             .transpose()
             .map_err(|e| DbError::Serialization(e.to_string()))?
             .unwrap_or_default();

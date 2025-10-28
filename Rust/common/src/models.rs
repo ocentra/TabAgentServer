@@ -462,7 +462,7 @@ pub struct ActionOutcome {
 /// User feedback on agent actions.
 ///
 /// Captures user approval, correction, or rejection of agent behavior.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, bincode::Encode, bincode::Decode)]
 pub struct UserFeedback {
     /// Type of feedback provided.
     pub feedback_type: FeedbackType,
@@ -475,7 +475,7 @@ pub struct UserFeedback {
 }
 
 /// Types of user feedback.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, bincode::Encode, bincode::Decode)]
 pub enum FeedbackType {
     /// User corrected the agent's action.
     Correction,
@@ -505,7 +505,7 @@ pub enum FeedbackType {
 ///
 /// assert_eq!(embedding.vector.len(), 3);
 /// ```
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, bincode::Encode, bincode::Decode)]
 pub struct Embedding {
     /// Unique identifier for this embedding.
     pub id: EmbeddingId,

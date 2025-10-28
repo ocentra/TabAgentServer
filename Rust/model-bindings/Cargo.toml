@@ -16,4 +16,4 @@ serde_json = { workspace = true }
 num_cpus = { workspace = true }
 
 [build-dependencies]
-pyo3-build-config = "0.21"
+pyo3-build-config = "0.27.1"

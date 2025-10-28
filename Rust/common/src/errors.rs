@@ -129,8 +129,14 @@ impl Clone for SerializationError {
     }
 }
 
-impl From<bincode::Error> for SerializationError {
-    fn from(err: bincode::Error) -> Self {
+impl From<bincode::error::EncodeError> for SerializationError {
+    fn from(err: bincode::error::EncodeError) -> Self {
+        SerializationError::Bincode(err.to_string())
+    }
+}
+
+impl From<bincode::error::DecodeError> for SerializationError {
+    fn from(err: bincode::error::DecodeError) -> Self {
         SerializationError::Bincode(err.to_string())
     }
 }

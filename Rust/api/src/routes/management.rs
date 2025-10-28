@@ -140,6 +140,9 @@ impl RouteHandler for PullModelRoute {
 
 crate::enforce_route_handler!(PullModelRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(PullModelRoute);
+
 // ==================== DELETE MODEL ====================
 
 /// Delete model request.
@@ -227,6 +230,9 @@ impl RouteHandler for DeleteModelRoute {
 
 crate::enforce_route_handler!(DeleteModelRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(DeleteModelRoute);
+
 // ==================== GET LOADED MODELS ====================
 
 /// Get loaded models request (no parameters).
@@ -295,6 +301,9 @@ impl RouteHandler for GetLoadedModelsRoute {
 }
 
 crate::enforce_route_handler!(GetLoadedModelsRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(GetLoadedModelsRoute);
 
 // ==================== SELECT MODEL ====================
 
@@ -383,6 +392,9 @@ impl RouteHandler for SelectModelRoute {
 
 crate::enforce_route_handler!(SelectModelRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(SelectModelRoute);
+
 // ==================== GET EMBEDDING MODELS ====================
 
 /// Get embedding models request (no parameters).
@@ -451,6 +463,9 @@ impl RouteHandler for GetEmbeddingModelsRoute {
 }
 
 crate::enforce_route_handler!(GetEmbeddingModelsRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(GetEmbeddingModelsRoute);
 
 // ==================== GET RECIPES ====================
 
@@ -549,6 +564,9 @@ impl RouteHandler for GetRecipesRoute {
 
 crate::enforce_route_handler!(GetRecipesRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(GetRecipesRoute);
+
 // ==================== GET REGISTERED MODELS ====================
 
 /// Get registered models request (no parameters).
@@ -618,6 +636,9 @@ impl RouteHandler for GetRegisteredModelsRoute {
 }
 
 crate::enforce_route_handler!(GetRegisteredModelsRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(GetRegisteredModelsRoute);
 
 #[cfg(test)]
 mod tests {

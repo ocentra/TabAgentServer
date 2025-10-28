@@ -27,14 +27,14 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 
 # Web framework (RAG: Axum for enterprise-grade HTTP)
-axum = { version = "0.7", features = ["macros"] }
-tower = { version = "0.4", features = ["util", "timeout", "load-shed", "limit"] }
-tower-http = { version = "0.5", features = ["fs", "cors", "trace", "compression-full"] }
+axum = { version = "0.8.6", features = ["macros"] }
+tower = { version = "0.5.2", features = ["util", "timeout", "load-shed", "limit"] }
+tower-http = { version = "0.6.6", features = ["fs", "cors", "trace", "compression-full"] }
 hyper = { version = "1", features = ["full"] }
 
 # WebRTC
-webrtc = "0.9"
-tokio-tungstenite = "0.21"  # For WebSocket signaling
+webrtc = "0.14.0"
+tokio-tungstenite = "0.28.0"  # For WebSocket signaling
 
 # Serialization (RAG: Type-safe JSON handling)
 serde = { version = "1", features = ["derive"] }
@@ -43,22 +43,22 @@ bytes = "1"
 
 # Error handling (RAG: thiserror for library, anyhow for application)
 anyhow = "1"
-thiserror = "1"
+thiserror = "2.0.17"
 
 # Logging (RAG: tracing for structured logging)
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # API documentation (RAG: OpenAPI/Swagger compliance)
-utoipa = { version = "4", features = ["axum_extras", "chrono", "uuid"] }
-utoipa-swagger-ui = { version = "6", features = ["axum"] }
-utoipa-rapidoc = { version = "3", features = ["axum"] }
-utoipa-redoc = { version = "3", features = ["axum"] }
+utoipa = { version = "5.4.0", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
+utoipa-rapidoc = { version = "6.0.0", features = ["axum"] }
+utoipa-redoc = { version = "6.0.0", features = ["axum"] }
 
 # Configuration
-config = "0.14"
+config = "0.15.18"
 clap = { version = "4", features = ["derive", "env"] }
-toml = "0.8"
+toml = "0.9.8"
 
 # Python bridge (RAG: PyO3 for FFI with proper safety)
 pyo3 = { workspace = true, features = ["auto-initialize"] }
@@ -66,7 +66,7 @@ pyo3 = { workspace = true, features = ["auto-initialize"] }
 # Utilities
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-dashmap = "5"  # Thread-safe HashMap for loaded models
+dashmap = "6.1.0"  # Thread-safe HashMap for loaded models
 parking_lot = "0.12"  # Better Mutex/RwLock
 
 [dev-dependencies]
@@ -74,15 +74,4 @@ parking_lot = "0.12"  # Better Mutex/RwLock
 tokio-test = "0.4"
 tempfile = "3"
 proptest = "1"
-criterion = "0.5"
-
-[profile.release]
-opt-level = 3
-lto = "thin"
-codegen-units = 1
-strip = true
-
-[profile.dev]
-opt-level = 0
-debug = true
-
+criterion = "0.7.0"

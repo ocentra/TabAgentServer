@@ -14,7 +14,7 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
 /// Serialized representation of a vector index for persistence.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
 struct SerializedVectorIndex {
     /// Mapping from embedding ID to internal index
     id_to_index: HashMap<EmbeddingId, usize>,
@@ -79,7 +79,7 @@ impl PersistentVectorIndex {
         reader.read_to_end(&mut buffer)?;
         
         // Deserialize the index
-        let serialized: SerializedVectorIndex = bincode::deserialize(&buffer)
+        let (serialized, _): (SerializedVectorIndex, usize) = bincode::decode_from_slice(&buffer, bincode::config::standard())
             .map_err(|e| DbError::Serialization(e.to_string()))?;
         
         // Create a new vector index
@@ -112,8 +112,9 @@ impl PersistentVectorIndex {
             .truncate(true)
             .open(&self.persist_path)?;
         let mut writer = BufWriter::new(file);
-        bincode::serialize_into(&mut writer, &serialized)
+        let bytes = bincode::encode_to_vec(&serialized, bincode::config::standard())
             .map_err(|e| DbError::Serialization(e.to_string()))?;
+        writer.write_all(&bytes)?;
         
         self.dirty = false;
         Ok(())

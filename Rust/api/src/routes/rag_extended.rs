@@ -120,6 +120,9 @@ impl RouteHandler for SemanticSearchRoute {
 
 crate::enforce_route_handler!(SemanticSearchRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(SemanticSearchRoute);
+
 // ==================== SIMILARITY ====================
 
 /// Similarity request.
@@ -215,6 +218,9 @@ impl RouteHandler for SimilarityRoute {
 
 crate::enforce_route_handler!(SimilarityRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(SimilarityRoute);
+
 // ==================== EVALUATE EMBEDDINGS ====================
 
 /// Evaluate embeddings request.
@@ -309,6 +315,9 @@ impl RouteHandler for EvaluateEmbeddingsRoute {
 }
 
 crate::enforce_route_handler!(EvaluateEmbeddingsRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(EvaluateEmbeddingsRoute);
 
 // ==================== CLUSTER ====================
 
@@ -412,6 +421,9 @@ impl RouteHandler for ClusterRoute {
 }
 
 crate::enforce_route_handler!(ClusterRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(ClusterRoute);
 
 // ==================== RECOMMEND ====================
 
@@ -521,6 +533,9 @@ impl RouteHandler for RecommendRoute {
 }
 
 crate::enforce_route_handler!(RecommendRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(RecommendRoute);
 
 #[cfg(test)]
 mod tests {

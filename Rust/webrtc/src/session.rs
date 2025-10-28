@@ -23,6 +23,7 @@ pub enum SessionState {
 }
 
 impl SessionState {
+    /// Convert session state to string representation
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::WaitingForAnswer => "waiting_for_answer",

@@ -73,3 +73,18 @@ impl AppStateProvider for std::sync::Arc<dyn AppStateProvider> {
     }
 }
 
+/// Concrete wrapper for trait object state (Axum 0.8 compatibility).
+///
+/// Axum 0.8 requires Router state to be Clone. This wrapper provides a concrete
+/// Clone type that wraps the trait object, allowing middleware layers to work
+/// properly with `into_make_service()`.
+#[derive(Clone)]
+pub struct AppStateWrapper(pub std::sync::Arc<dyn AppStateProvider>);
+
+#[async_trait]
+impl AppStateProvider for AppStateWrapper {
+    async fn handle_request(&self, request: RequestValue) -> anyhow::Result<ResponseValue> {
+        self.0.handle_request(request).await
+    }
+}
+

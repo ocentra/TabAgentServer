@@ -300,6 +300,9 @@ impl RouteHandler for GenerateRoute {
 
 crate::enforce_route_handler!(GenerateRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(GenerateRoute);
+
 #[cfg(test)]
 mod tests {
     use super::*;

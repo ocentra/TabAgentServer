@@ -29,7 +29,7 @@ pub use hardware_constants as hw_const;
 /// 
 /// **Type Safety**: Using newtype pattern instead of alias prevents accidental mixing
 /// of NodeId with EdgeId or EmbeddingId at compile time.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
 pub struct NodeId(String);
 
 impl NodeId {
@@ -72,7 +72,7 @@ impl From<&str> for NodeId {
 /// Edges represent typed relationships like "CONTAINS_MESSAGE", "MENTIONS", etc.
 /// 
 /// **Type Safety**: Using newtype pattern prevents mixing with NodeId or EmbeddingId.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
 pub struct EdgeId(String);
 
 impl EdgeId {
@@ -115,7 +115,7 @@ impl From<&str> for EdgeId {
 /// Embeddings are high-dimensional vectors used for semantic search.
 /// 
 /// **Type Safety**: Using newtype pattern prevents mixing with NodeId or EdgeId.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
 pub struct EmbeddingId(String);
 
 impl EmbeddingId {
@@ -187,8 +187,14 @@ pub enum DbError {
 }
 
 // Implement From for bincode errors manually to convert to String
-impl From<bincode::Error> for DbError {
-    fn from(err: bincode::Error) -> Self {
+impl From<bincode::error::EncodeError> for DbError {
+    fn from(err: bincode::error::EncodeError) -> Self {
+        DbError::Serialization(err.to_string())
+    }
+}
+
+impl From<bincode::error::DecodeError> for DbError {
+    fn from(err: bincode::error::DecodeError) -> Self {
         DbError::Serialization(err.to_string())
     }
 }

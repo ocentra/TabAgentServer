@@ -14,7 +14,7 @@ pub struct ChunkStorage {
     metadata: sled::Tree,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, bincode::Encode, bincode::Decode)]
 pub struct FileMetadata {
     pub repo_id: String,
     pub file_path: String,
@@ -25,7 +25,7 @@ pub struct FileMetadata {
     pub created_at: i64,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
 pub struct ChunkManifest {
     pub id: String, // "{repo_id}/{file_path}:manifest"
     pub manifest_type: String, // "manifest"
@@ -82,7 +82,7 @@ impl ChunkStorage {
         };
         
         let meta_key = format!("meta:{}:{}", repo_id, file_path);
-        let meta_bytes = bincode::serialize(&metadata)?;
+        let meta_bytes = bincode::encode_to_vec(&metadata, bincode::config::standard())?;
         self.metadata.insert(meta_key.as_bytes(), meta_bytes)?;
         
         self._db.flush()?;
@@ -139,7 +139,7 @@ impl ChunkStorage {
         };
         
         let manifest_key = format!("manifest:{}:{}", repo_id, file_path);
-        let manifest_bytes = bincode::serialize(&manifest)?;
+        let manifest_bytes = bincode::encode_to_vec(&manifest, bincode::config::standard())?;
         self.metadata.insert(manifest_key.as_bytes(), manifest_bytes)?;
         
         // 2. Stream and save chunks (exactly like extension's saveChunkedFileSafe)
@@ -227,14 +227,14 @@ impl ChunkStorage {
         };
         
         let meta_key = format!("meta:{}:{}", repo_id, file_path);
-        let meta_bytes = bincode::serialize(&metadata)?;
+        let meta_bytes = bincode::encode_to_vec(&metadata, bincode::config::standard())?;
         self.metadata.insert(meta_key.as_bytes(), meta_bytes)?;
         
         // 5. Update manifest status to "present"
         let mut final_manifest = manifest;
         final_manifest.status = "present".to_string();
         final_manifest.total_chunks = chunk_index;
-        let manifest_bytes = bincode::serialize(&final_manifest)?;
+        let manifest_bytes = bincode::encode_to_vec(&final_manifest, bincode::config::standard())?;
         self.metadata.insert(manifest_key.as_bytes(), manifest_bytes)?;
         
         self._db.flush()?;
@@ -257,7 +257,7 @@ impl ChunkStorage {
             None => return Ok(None),
         };
         
-        let metadata: FileMetadata = bincode::deserialize(&meta_bytes)?;
+        let (metadata, _): (FileMetadata, usize) = bincode::decode_from_slice(&meta_bytes, bincode::config::standard())?;
         
         // Reconstruct file from chunks
         let mut file_data = Vec::with_capacity(metadata.total_size as usize);
@@ -288,7 +288,7 @@ impl ChunkStorage {
             None => return Ok(None),
         };
         
-        let metadata: FileMetadata = bincode::deserialize(&meta_bytes)?;
+        let (metadata, _): (FileMetadata, usize) = bincode::decode_from_slice(&meta_bytes, bincode::config::standard())?;
         
         // Create temp file with proper extension
         let file_name = file_path.split('/').last().unwrap_or("model");
@@ -325,7 +325,7 @@ impl ChunkStorage {
             None => return Ok(None),
         };
         
-        let metadata: FileMetadata = bincode::deserialize(&meta_bytes)?;
+        let (metadata, _): (FileMetadata, usize) = bincode::decode_from_slice(&meta_bytes, bincode::config::standard())?;
         Ok(Some(metadata))
     }
     
@@ -340,7 +340,7 @@ impl ChunkStorage {
         // Get metadata to know how many chunks to delete
         let meta_key = format!("meta:{}:{}", repo_id, file_path);
         if let Some(meta_bytes) = self.metadata.get(meta_key.as_bytes())? {
-            let metadata: FileMetadata = bincode::deserialize(&meta_bytes)?;
+            let (metadata, _): (FileMetadata, usize) = bincode::decode_from_slice(&meta_bytes, bincode::config::standard())?;
             
             // Delete all chunks
             for i in 0..metadata.chunk_count {
@@ -364,7 +364,7 @@ impl ChunkStorage {
         
         for item in self.metadata.scan_prefix(prefix.as_bytes()) {
             let (_key, value) = item?;
-            let metadata: FileMetadata = bincode::deserialize(&value)?;
+            let (metadata, _): (FileMetadata, usize) = bincode::decode_from_slice(&value, bincode::config::standard())?;
             files.push(metadata.file_path);
         }
         
@@ -378,7 +378,7 @@ impl ChunkStorage {
         
         for item in self.metadata.scan_prefix(prefix.as_bytes()) {
             let (_key, value) = item?;
-            let metadata: FileMetadata = bincode::deserialize(&value)?;
+            let (metadata, _): (FileMetadata, usize) = bincode::decode_from_slice(&value, bincode::config::standard())?;
             total += metadata.total_size;
         }
         
@@ -418,7 +418,7 @@ impl ChunkStorage {
             None => return Ok(None),
         };
         
-        let metadata: FileMetadata = bincode::deserialize(&meta_bytes)?;
+        let (metadata, _): (FileMetadata, usize) = bincode::decode_from_slice(&meta_bytes, bincode::config::standard())?;
         
         Ok(Some(FileChunkIterator {
             storage: self,

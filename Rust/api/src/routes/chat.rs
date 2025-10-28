@@ -566,6 +566,9 @@ impl RouteHandler for ChatRoute {
 // Enforce compile-time rules
 crate::enforce_route_handler!(ChatRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(ChatRoute);
+
 // ==================== RESPONSES (Alternative Format) ====================
 
 /// Responses request (alternative format).
@@ -807,6 +810,9 @@ impl RouteHandler for ResponsesRoute {
 }
 
 crate::enforce_route_handler!(ResponsesRoute);
+
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(ResponsesRoute);
 
 #[cfg(test)]
 mod tests {

@@ -275,6 +275,9 @@ impl RouteHandler for RerankRoute {
 
 crate::enforce_route_handler!(RerankRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(RerankRoute);
+
 #[cfg(test)]
 mod tests {
     use super::*;

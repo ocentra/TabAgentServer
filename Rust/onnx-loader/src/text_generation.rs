@@ -69,11 +69,9 @@ impl TextGenerator {
         
         // Autoregressive generation loop
         for step in 0..config.max_new_tokens {
-            // Create input tensor
-            let input = TensorRef::from_array_view((
-                vec![1, 1, token_ids.len() as i64],
-                token_ids.as_slice()
-            )).map_err(|e| OnnxError::InferenceFailed(format!("Failed to create input tensor: {}", e)))?;
+            // Create input tensor - following official ort gpt2 example pattern
+            let input = TensorRef::from_array_view((vec![1, 1, token_ids.len() as i64], token_ids.as_slice()))
+                .map_err(|e| OnnxError::InferenceFailed(format!("Failed to create input tensor: {}", e)))?;
             
             // Run inference
             let mut session_lock = ort_session.lock()
@@ -155,10 +153,8 @@ impl TextGenerator {
         let mut full_generated = String::new();
         
         for step in 0..config.max_new_tokens {
-            let input = TensorRef::from_array_view((
-                vec![1, 1, token_ids.len() as i64],
-                token_ids.as_slice()
-            )).map_err(|e| OnnxError::InferenceFailed(e.to_string()))?;
+            let input = TensorRef::from_array_view((vec![1, 1, token_ids.len() as i64], token_ids.as_slice()))
+                .map_err(|e| OnnxError::InferenceFailed(e.to_string()))?;
             
             let mut session_lock = ort_session.lock()
                 .map_err(|e| OnnxError::InferenceFailed(e.to_string()))?;
@@ -214,8 +210,7 @@ fn sample_token(
     top_k: usize,
     top_p: f32,
 ) -> Result<i64> {
-    use rand::distributions::WeightedIndex;
-    use rand::prelude::*;
+    use rand::Rng;
     
     // Apply temperature
     let probs: Vec<f32> = logits.iter().map(|&x| (x / temperature).exp()).collect();
@@ -246,21 +241,13 @@ fn sample_token(
         indexed_probs.truncate(cutoff_idx);
     }
     
-    // Normalize probabilities
-    let total: f32 = indexed_probs.iter().map(|(_, p)| p).sum();
-    for (_, p) in indexed_probs.iter_mut() {
-        *p /= total;
-    }
-    
-    // Sample from distribution
-    let indices: Vec<usize> = indexed_probs.iter().map(|(idx, _)| *idx).collect();
-    let weights: Vec<f32> = indexed_probs.iter().map(|(_, p)| *p).collect();
-    
-    let dist = WeightedIndex::new(&weights)
-        .map_err(|e| OnnxError::InferenceFailed(format!("Failed to create distribution: {}", e)))?;
-    
-    let mut rng = thread_rng();
-    let selected_idx = indices[dist.sample(&mut rng)];
+    // Sample randomly from the filtered candidates - following official ort gpt2 example pattern
+    let mut rng = rand::rng();
+    let selected_idx = if indexed_probs.is_empty() {
+        0
+    } else {
+        indexed_probs[rng.random_range(0..indexed_probs.len())].0
+    };
     
     Ok(selected_idx as i64)
 }

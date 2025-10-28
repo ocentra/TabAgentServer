@@ -14,12 +14,12 @@ sysinfo.workspace = true
 
 # Platform-specific dependencies
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.56", features = [
+windows = { version = "0.62.2", features = [
     "Win32_Foundation",
     "Win32_System_SystemInformation",
     "Win32_System_SystemServices",
 ] }
-winreg = "0.52"
+winreg = "0.55.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Linux-specific if needed

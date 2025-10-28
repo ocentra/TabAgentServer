@@ -139,6 +139,9 @@ impl RouteHandler for HealthRoute {
 // Enforce compile-time rules
 crate::enforce_route_handler!(HealthRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(HealthRoute);
+
 #[cfg(test)]
 mod tests {
     use super::*;

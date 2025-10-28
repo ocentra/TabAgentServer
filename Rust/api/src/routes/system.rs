@@ -122,6 +122,9 @@ impl RouteHandler for SystemRoute {
 
 crate::enforce_route_handler!(SystemRoute);
 
+// Implement RegisterableRoute with Axum 0.8 compatible handler
+crate::impl_registerable_route!(SystemRoute);
+
 #[cfg(test)]
 mod tests {
     use super::*;

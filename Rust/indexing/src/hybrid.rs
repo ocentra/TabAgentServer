@@ -1469,8 +1469,8 @@ impl HotGraphIndex {
     
     /// Fast approximate centrality computation using sampling
     pub fn approximate_centrality(&mut self, sample_size: usize) -> HashMap<String, f32> {
-        use rand::seq::SliceRandom;
-        use rand::thread_rng;
+        use rand::prelude::IndexedRandom;
+        use rand::Rng;
         
         let mut centrality: HashMap<String, f32> = self.adjacency_list.keys()
             .map(|node| (node.clone(), 0.0))
@@ -1481,7 +1481,7 @@ impl HotGraphIndex {
         let sampled_nodes: Vec<String> = if sample_size >= node_list.len() {
             node_list.clone()
         } else {
-            let mut rng = thread_rng();
+            let mut rng = rand::rng();
             node_list.choose_multiple(&mut rng, sample_size).cloned().collect()
         };
         
@@ -1860,10 +1860,10 @@ impl HotVectorIndex {
         let sample_size = (self.vectors.len() as f32 * precision) as usize;
         let sample_size = sample_size.max(1).min(self.vectors.len());
         
-        use rand::seq::SliceRandom;
-        use rand::thread_rng;
+        use rand::prelude::IndexedRandom;
+        use rand::Rng;
         
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         let vector_ids: Vec<String> = self.vectors.keys().cloned().collect();
         let sampled_ids: Vec<String> = vector_ids.choose_multiple(&mut rng, sample_size).cloned().collect();
         

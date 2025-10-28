@@ -43,7 +43,7 @@ impl ModelCache {
         let key = format!("manifest:{}", repo_id);
         
         if let Some(bytes) = manifests.get(key.as_bytes())? {
-            let entry: ManifestEntry = bincode::deserialize(&bytes)?;
+            let (entry, _): (ManifestEntry, usize) = bincode::decode_from_slice(&bytes, bincode::config::standard())?;
             return Ok(Some(entry));
         }
         
@@ -54,7 +54,7 @@ impl ModelCache {
     pub async fn save_manifest(&self, entry: &ManifestEntry) -> Result<()> {
         let manifests = self.manifests.write().await;
         let key = format!("manifest:{}", entry.repo_id);
-        let bytes = bincode::serialize(entry)?;
+        let bytes = bincode::encode_to_vec(entry, bincode::config::standard())?;
         manifests.insert(key.as_bytes(), bytes)?;
         manifests.flush()?;
         Ok(())
@@ -343,7 +343,7 @@ impl ModelCache {
         
         for item in manifests.iter() {
             let (_key, value) = item?;
-            let entry: ManifestEntry = bincode::deserialize(&value)?;
+            let (entry, _): (ManifestEntry, usize) = bincode::decode_from_slice(&value, bincode::config::standard())?;
             total_repos += 1;
             total_size += self.storage.get_repo_size(&entry.repo_id)?;
         }

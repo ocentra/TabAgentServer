@@ -147,7 +147,7 @@ impl GraphIndex {
         // Get existing set or create new
         let mut edge_set: HashSet<EdgeId> = tree
             .get(&key)?
-            .map(|bytes| bincode::deserialize(&bytes))
+            .map(|bytes| bincode::decode_from_slice(&bytes, bincode::config::standard()).map(|(v, _)| v))
             .transpose()
             .map_err(|e| DbError::Serialization(e.to_string()))?
             .unwrap_or_default();
@@ -156,7 +156,7 @@ impl GraphIndex {
         edge_set.insert(EdgeId::from(edge_id));
         
         // Store back
-        let serialized = bincode::serialize(&edge_set)
+        let serialized = bincode::encode_to_vec(&edge_set, bincode::config::standard())
             .map_err(|e| DbError::Serialization(e.to_string()))?;
         tree.insert(key.as_bytes(), serialized)?;
         
@@ -172,7 +172,7 @@ impl GraphIndex {
         };
         
         if let Some(bytes) = tree.get(&key)? {
-            let mut edge_set: HashSet<EdgeId> = bincode::deserialize(&bytes)
+            let (mut edge_set, _): (HashSet<EdgeId>, usize) = bincode::decode_from_slice(&bytes, bincode::config::standard())
                 .map_err(|e| DbError::Serialization(e.to_string()))?;
             
             edge_set.remove(&EdgeId::from(edge_id));
@@ -180,7 +180,7 @@ impl GraphIndex {
             if edge_set.is_empty() {
                 tree.remove(key.as_bytes())?;
             } else {
-                let serialized = bincode::serialize(&edge_set)
+                let serialized = bincode::encode_to_vec(&edge_set, bincode::config::standard())
                     .map_err(|e| DbError::Serialization(e.to_string()))?;
                 tree.insert(key.as_bytes(), serialized)?;
             }
@@ -199,7 +199,7 @@ impl GraphIndex {
         
         let edge_set: HashSet<EdgeId> = tree
             .get(&key)?
-            .map(|bytes| bincode::deserialize(&bytes))
+            .map(|bytes| bincode::decode_from_slice(&bytes, bincode::config::standard()).map(|(v, _)| v))
             .transpose()
             .map_err(|e| DbError::Serialization(e.to_string()))?
             .unwrap_or_default();

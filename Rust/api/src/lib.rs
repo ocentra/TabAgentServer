@@ -50,7 +50,7 @@ pub mod route_trait;
 // Re-export public API
 pub use config::ApiConfig;
 pub use error::{ApiError, ApiResult};
-pub use traits::AppStateProvider;
+pub use traits::{AppStateProvider, AppStateWrapper};
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -114,8 +114,6 @@ pub async fn run_server_with_config(
     config: ApiConfig,
 ) -> anyhow::Result<()> 
 {
-    use axum::Router;
-    
     // Bind to address first
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -128,23 +126,45 @@ pub async fn run_server_with_config(
         tracing::info!("📄 OpenAPI Spec:  http://{}/api-doc/openapi.json", addr);
     }
 
-    // CORRECT Axum 0.8 pattern with CONCRETE state type:
-    // 1. Use Arc<dyn AppStateProvider> as CONCRETE state (not generic S)
-    // 2. Create Router::new().with_state(state) to get Router<Arc<dyn AppStateProvider>>
-    // 3. Add all routes
-    // 4. into_make_service() works on concrete Router<Arc<dyn AppStateProvider>>!
+    // Axum 0.8 fix: Wrap trait object in concrete Clone type
+    let wrapped_state = crate::traits::AppStateWrapper(state);
     
-    // Step 1: Create stateful router with CONCRETE state type
-    let app = Router::new().with_state(state);
+    // Configure all routes and middleware (returns MakeService)
+    let service = router::configure_routes(wrapped_state, &config);
     
-    // Step 2: Configure all routes and middleware
-    let app = router::configure_routes(app, &config);
-    
-    // Step 3: Convert router to service and serve
-    // Axum 0.8 pattern: use into_make_service_with_connect_info
-    let service = app.into_make_service_with_connect_info::<SocketAddr>();
+    // Axum 0.8: Serve the MakeService directly
     axum::serve(listener, service).await?;
 
     Ok(())
+}
+
+/// Build a router for testing purposes.
+///
+/// This is a convenience function for integration tests.
+/// Returns an Axum Router that can be used with `tower::ServiceExt::oneshot`.
+#[cfg(test)]
+pub fn build_test_router(
+    state: Arc<dyn AppStateProvider>,
+) -> axum::Router {
+    let config = ApiConfig::development();
+    let wrapped_state = AppStateWrapper(state);
+    
+    // Build router without calling into_make_service (tests need Router, not service)
+    let mut router = axum::Router::new();
+    
+    use crate::route_trait::RegisterableRoute;
+    
+    // Register just essential routes for testing
+    router = routes::health::HealthRoute::register(router);
+    router = routes::chat::ChatRoute::register(router);
+    
+    // Apply middleware
+    use tower_http::{trace::TraceLayer, compression::CompressionLayer};
+    router = router
+        .layer(CompressionLayer::new())
+        .layer(TraceLayer::new_for_http());
+    
+    // Apply state last
+    router.with_state(wrapped_state)
 }
 

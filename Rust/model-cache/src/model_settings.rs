@@ -20,7 +20,7 @@ impl ModelSettingsStore {
     pub fn get(&self, repo_id: &str, variant: &str) -> Result<Option<InferenceSettings>> {
         let key = format!("{}:{}", repo_id, variant);
         if let Some(bytes) = self.tree.get(key.as_bytes())? {
-            let settings: InferenceSettings = bincode::deserialize(&bytes)?;
+            let (settings, _): (InferenceSettings, usize) = bincode::decode_from_slice(&bytes, bincode::config::standard())?;
             Ok(Some(settings))
         } else {
             Ok(None)
@@ -43,7 +43,7 @@ impl ModelSettingsStore {
     /// Save settings for a model
     pub fn save(&self, repo_id: &str, variant: &str, settings: &InferenceSettings) -> Result<()> {
         let key = format!("{}:{}", repo_id, variant);
-        let bytes = bincode::serialize(settings)?;
+        let bytes = bincode::encode_to_vec(settings, bincode::config::standard())?;
         self.tree.insert(key.as_bytes(), bytes)?;
         self.tree.flush()?;
         Ok(())
