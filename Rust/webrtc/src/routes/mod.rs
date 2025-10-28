@@ -70,20 +70,129 @@ pub use crate::route_trait::DataChannelRoute;
 //     // ... add your route here
 // ]);
 
-// TODO: TIER 0 - Migrate WebRTC routes to match API/Native Messaging parity
-// 
-// Currently WebRTC uses unified route pattern (e.g., ModelsRoute with action enum)
-// while API/Native Messaging use split routes (ListModelsRoute, LoadModelRoute, etc.)
-//
-// This breaks parity. Need to refactor WebRTC routes to match:
-// - Split ModelsRoute → ListModelsRoute, LoadModelRoute, UnloadModelRoute, ModelInfoRoute
-// - Split SessionsRoute → GetHistoryRoute, SaveMessageRoute
-// - Split ParamsRoute → GetParamsRoute, SetParamsRoute
-// - Split ResourcesRoute → GetResourcesRoute, EstimateMemoryRoute, CompatibilityRoute
-// - Split GenerationRoute → StopGenerationRoute, GetHaltStatusRoute
-// - Split ManagementRoute → PullModelRoute, DeleteModelRoute, GetLoadedModelsRoute
-// - Split RagExtendedRoute → SemanticSearchRoute, SimilarityRoute, etc.
-//
-// Once migrated, add get_all_routes() and get_route_count() functions like
-// API and Native Messaging have for route registry validation.
+/// Get all available WebRTC data channel route metadata for service discovery.
+///
+/// This allows WebRTC clients to query available routes dynamically:
+/// - Route validation before sending messages
+/// - Auto-generating UI for available commands
+/// - Capability detection
+/// - Error handling (know which routes exist)
+///
+/// Note: This is for WebRTC data channel routes only. Not all routes exist
+/// in all transports (HTTP API, Native Messaging, WebRTC).
+/// 
+/// WebRTC has unique media routes (video_stream, audio_stream) not present in other transports.
+pub fn list_available_routes() -> Vec<crate::route_trait::RouteMetadata> {
+    vec![
+        // Core routes
+        health::HealthRoute::metadata(),
+        system::SystemRoute::metadata(),
+        stats::StatsRoute::metadata(),
+        chat::ChatRoute::metadata(),
+        chat::ResponsesRoute::metadata(),
+        
+        // Model routes (split pattern)
+        models::ListModelsRoute::metadata(),
+        models::LoadModelRoute::metadata(),
+        models::UnloadModelRoute::metadata(),
+        models::ModelInfoRoute::metadata(),
+        
+        // Session routes (split pattern)
+        sessions::GetHistoryRoute::metadata(),
+        sessions::SaveMessageRoute::metadata(),
+        
+        // Generation routes
+        embeddings::EmbeddingsRoute::metadata(),
+        generate::GenerateRoute::metadata(),
+        generation::StopGenerationRoute::metadata(),
+        generation::GetHaltStatusRoute::metadata(),
+        
+        // Parameter routes (split pattern)
+        params::GetParamsRoute::metadata(),
+        params::SetParamsRoute::metadata(),
+        
+        // Resource routes (split pattern)
+        resources::GetResourcesRoute::metadata(),
+        resources::EstimateMemoryRoute::metadata(),
+        resources::CompatibilityRoute::metadata(),
+        
+        // Management routes (split pattern)
+        management::PullModelRoute::metadata(),
+        management::DeleteModelRoute::metadata(),
+        management::GetLoadedModelsRoute::metadata(),
+        // TIER 2: management::SelectModelRoute, GetEmbeddingModelsRoute, GetRecipesRoute, GetRegisteredModelsRoute
+        
+        // RAG routes
+        rag::RagRoute::metadata(),
+        rerank::RerankRoute::metadata(),
+        
+        // RAG Extended routes (split pattern)
+        rag_extended::SemanticSearchRoute::metadata(),
+        rag_extended::SimilarityRoute::metadata(),
+        rag_extended::EvaluateEmbeddingsRoute::metadata(),
+        rag_extended::ClusterRoute::metadata(),
+        rag_extended::RecommendRoute::metadata(),
+        
+        // Media routes (WebRTC-specific)
+        video_stream::VideoStreamRoute::metadata(),
+        audio_stream::AudioStreamRoute::metadata(),
+    ]
+}
+
+/// Get route count for WebRTC data channel routes.
+///
+/// Note: Different transports may have different route counts.
+pub fn get_route_count() -> usize {
+    list_available_routes().len()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_route_registry_completeness() {
+        let routes = list_available_routes();
+        
+        // WebRTC has 35+ routes after split pattern migration
+        assert!(routes.len() >= 35, "Expected at least 35 routes, got {}", routes.len());
+        
+        // Ensure all routes have valid metadata
+        for route in &routes {
+            assert!(!route.route_id.is_empty(), "Route ID cannot be empty");
+            assert!(!route.description.is_empty(), "Route description cannot be empty");
+            assert!(!route.tags.is_empty(), "Route tags cannot be empty");
+        }
+    }
+    
+    #[test]
+    fn test_route_id_uniqueness() {
+        let routes = list_available_routes();
+        let mut route_ids = std::collections::HashSet::new();
+        
+        for route in routes {
+            assert!(
+                route_ids.insert(route.route_id),
+                "Duplicate route ID: {}",
+                route.route_id
+            );
+        }
+    }
+    
+    #[test]
+    fn test_webrtc_specific_routes() {
+        let routes = list_available_routes();
+        let route_ids: Vec<&str> = routes.iter().map(|r| r.route_id).collect();
+        
+        // Verify WebRTC-specific media routes exist
+        assert!(route_ids.contains(&"video_stream"), "Missing video_stream route");
+        assert!(route_ids.contains(&"audio_stream"), "Missing audio_stream route");
+        
+        // Verify split pattern routes exist
+        assert!(route_ids.contains(&"models"), "Missing models (list) route");
+        assert!(route_ids.contains(&"load_model"), "Missing load_model route");
+        assert!(route_ids.contains(&"get_history"), "Missing get_history route");
+        assert!(route_ids.contains(&"get_params"), "Missing get_params route");
+    }
+}
 

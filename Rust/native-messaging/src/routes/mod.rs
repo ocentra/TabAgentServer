@@ -53,6 +53,10 @@ pub mod stats;
 pub mod resources;
 pub mod management;
 
+// Media routes (parity with WebRTC)
+pub mod audio_stream;
+pub mod video_stream;
+
 // Re-export the trait (defined in route_trait.rs for full enforcement)
 pub use crate::route_trait::NativeMessagingRoute;
 
@@ -106,6 +110,10 @@ pub fn list_available_routes() -> Vec<crate::route_trait::RouteMetadata> {
         management::PullModelRoute::metadata(),
         management::DeleteModelRoute::metadata(),
         management::GetLoadedModelsRoute::metadata(),
+        
+        // Media routes (parity with WebRTC)
+        audio_stream::AudioStreamRoute::metadata(),
+        video_stream::VideoStreamRoute::metadata(),
     ]
 }
 
