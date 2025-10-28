@@ -201,8 +201,16 @@ impl MessageRouter {
         );
         
         // Find route handler
-        let dispatcher = self.routes.get(&route)
-            .ok_or_else(|| NativeMessagingError::route_not_found(&route))?;
+        let dispatcher = match self.routes.get(&route) {
+            Some(d) => d,
+            None => {
+                // Route not found - return error response
+                let error = NativeMessagingError::route_not_found(&route);
+                let mut error_response: ErrorResponse = error.into();
+                error_response.request_id = Some(request_id.clone());
+                return Ok(OutgoingMessage::error(request_id, error_response));
+            }
+        };
         
         // Dispatch to handler
         match dispatcher.dispatch(message.payload, &self.state).await {
@@ -259,13 +267,9 @@ mod tests {
     
     #[async_trait::async_trait]
     impl AppStateProvider for MockAppState {
-        async fn handle_request(&self, request: RequestValue) -> anyhow::Result<ResponseValue> {
-            match request.request_type() {
-                tabagent_values::RequestType::Health => {
-                    Ok(ResponseValue::health(HealthStatus::Healthy))
-                }
-                _ => Ok(ResponseValue::health(HealthStatus::Healthy)),
-            }
+        async fn handle_request(&self, _request: RequestValue) -> anyhow::Result<ResponseValue> {
+            // Return a valid health response that the health route expects
+            Ok(ResponseValue::health(HealthStatus::Healthy))
         }
     }
     
@@ -302,14 +306,15 @@ mod tests {
         let message = IncomingMessage {
             route: "health".to_string(),
             request_id: "test-123".to_string(),
-            payload: serde_json::json!({}),
+            // HealthRequest is a unit struct, deserializes from null (not {})
+            payload: serde_json::json!(null),
         };
         
-        let response = router.dispatch(message).await.unwrap();
-        assert!(response.success);
+        let response = router.dispatch(message).await.expect("dispatch should succeed");
+        assert!(response.success, "Response should be successful");
         assert_eq!(response.request_id, "test-123");
-        assert!(response.data.is_some());
-        assert!(response.error.is_none());
+        assert!(response.data.is_some(), "Response should have data");
+        assert!(response.error.is_none(), "Response should not have error");
     }
     
     #[tokio::test]
@@ -323,7 +328,8 @@ mod tests {
             payload: serde_json::json!({}),
         };
         
-        let response = router.dispatch(message).await.unwrap();
+        // Router returns OutgoingMessage with error, not Err
+        let response = router.dispatch(message).await.expect("dispatch should return OutgoingMessage");
         assert!(!response.success);
         assert_eq!(response.request_id, "test-456");
         assert!(response.data.is_none());

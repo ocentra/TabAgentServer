@@ -1,79 +1,13 @@
 //! Traits for native messaging integration.
 //!
-//! This module defines the contract between the native messaging layer
-//! and the application state, mirroring the patterns established in the
-//! API and WebRTC crates for consistency.
+//! This module re-exports unified traits from `common` and defines
+//! native-messaging-specific traits for middleware and routing.
 
 use tabagent_values::{RequestValue, ResponseValue};
 use async_trait::async_trait;
 
-/// Trait that application state must implement to handle native messaging requests.
-///
-/// This trait is identical to the AppStateProvider trait in the API crate,
-/// ensuring that the same backend services can handle requests from HTTP,
-/// WebRTC, and native messaging clients without modification.
-///
-/// # Example
-///
-/// ```rust
-/// use tabagent_native_messaging::AppStateProvider;
-/// use tabagent_values::{RequestValue, ResponseValue};
-/// use async_trait::async_trait;
-///
-/// struct MyAppState {
-///     // Your state fields
-/// }
-///
-/// #[async_trait]
-/// impl AppStateProvider for MyAppState {
-///     async fn handle_request(&self, request: RequestValue) 
-///         -> anyhow::Result<ResponseValue> 
-///     {
-///         // Route to appropriate handler based on request type
-///         match request.request_type() {
-///             _ => Ok(ResponseValue::health("ok"))
-///         }
-///     }
-/// }
-/// ```
-#[async_trait]
-pub trait AppStateProvider: Send + Sync + 'static {
-    /// Handle an incoming native messaging request.
-    ///
-    /// This method receives a type-safe `RequestValue` and must return
-    /// a `ResponseValue` or an error. The implementation should be identical
-    /// to the HTTP API handler to ensure consistent behavior.
-    ///
-    /// # Arguments
-    ///
-    /// * `request` - The incoming request (already parsed and validated)
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(ResponseValue)` - Successful response
-    /// * `Err(anyhow::Error)` - Error that will be converted to native messaging error response
-    ///
-    /// # Errors
-    ///
-    /// Implementations should return errors for:
-    /// - Model not found/loaded
-    /// - Invalid parameters
-    /// - Backend failures (ONNX, GGUF, Python)
-    /// - Database errors
-    /// - Resource exhaustion
-    async fn handle_request(&self, request: RequestValue) -> anyhow::Result<ResponseValue>;
-}
-
-// Blanket implementation for Arc<dyn AppStateProvider>
-// This allows using Arc<dyn AppStateProvider> as a concrete state type
-// Without this, Arc<T> doesn't automatically implement T even if T is a trait
-#[async_trait]
-impl AppStateProvider for std::sync::Arc<dyn AppStateProvider> {
-    async fn handle_request(&self, request: RequestValue) -> anyhow::Result<ResponseValue> {
-        // Delegate to the inner trait object by dereferencing the Arc
-        (**self).handle_request(request).await
-    }
-}
+// Re-export unified backend trait from common
+pub use common::backend::AppStateProvider;
 
 /// Trait for request handlers that can be used in middleware chains.
 ///
@@ -166,7 +100,7 @@ impl RouteAuth for NoAuth {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tabagent_values::{HealthStatus, TokenUsage};
+    use tabagent_values::HealthStatus;
     
     struct MockAppState;
     

@@ -5,6 +5,10 @@ edition = "2021"
 authors = ["TabAgent Team"]
 description = "Rust-native server for TabAgent with native messaging, HTTP API, and WebRTC support"
 
+[lib]
+name = "tabagent_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "tabagent-server"
 path = "src/main.rs"
@@ -19,6 +23,7 @@ gguf-loader = { path = "../gguf-loader" }
 tabagent-hardware = { path = "../hardware" }
 tabagent-native-handler = { path = "../native-handler" }
 tabagent-values = { path = "../values" }
+async-trait = "0.1"
 # Note: python-ml-bridge exists but is for Weaver's MlBridge trait
 # Server uses its own python_bridge module for general inference
 

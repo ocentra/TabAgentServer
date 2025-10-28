@@ -17,6 +17,7 @@ use std::path::PathBuf;
 use dashmap::DashMap;
 use tokio::sync::Mutex;
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 
 // Real imports from our existing crates
 use storage::{DatabaseCoordinator, Message as DbMessage};
@@ -24,6 +25,8 @@ use tabagent_model_cache::ModelCache;
 use tabagent_onnx_loader::OnnxSession;
 use gguf_loader::{Model as GgufModel, Context as GgufContext};
 use tabagent_hardware::{detect_system, SystemInfo};
+use tabagent_values::{RequestValue, ResponseValue};
+use common::backend::AppStateProvider;
 
 use crate::config::CliArgs;
 use crate::python_bridge::PythonMlBridge;  // Server-specific bridge
@@ -217,6 +220,16 @@ impl AppState {
             token.cancel();
             tracing::info!("Generation cancelled: {}", request_id);
         }
+    }
+}
+
+// ========== Implement common::backend::AppStateProvider ==========
+
+#[async_trait]
+impl AppStateProvider for AppState {
+    async fn handle_request(&self, request: RequestValue) -> anyhow::Result<ResponseValue> {
+        crate::handler::handle_request(self, request).await
+            .map_err(|e| anyhow::anyhow!("Server error: {}", e))
     }
 }
 

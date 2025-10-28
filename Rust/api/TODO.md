@@ -132,18 +132,37 @@ This TODO tracks the implementation of the `tabagent-api` crate - a complete, at
 - [ ] Test error response format (RFC 7807)
 - [ ] Test all 32 routes end-to-end
 
-## ⚠️ IMPORTANT - Mock Test Replacement
+## 🔥 CRITICAL - Integration Tests Now Use REAL Backend!
 
-**CURRENT STATE**: Integration tests use `MockState` that returns fake responses.
+**✅ DONE**: `MockState` has been REMOVED! Tests now use **REAL** `tabagent-server::AppState`
 
-**AFTER TIER 0 MIGRATION COMPLETE** (all three entry points using unified traits):
+**CURRENT STATUS**:
+- ✅ Integration tests use real backend (no more fakes!)
+- ❌ **TESTS CURRENTLY FAIL** - This is EXPECTED and GOOD!
+- ❌ Failures due to: Model loading not set up in test environment
 
-1. **REMOVE MockState** from `tests/integration_tests.rs`
-2. **Wire real backend** via `server/handler.rs` implementation
-3. **Add end-to-end integration tests** that use:
-   - ✅ Real GGUF/ONNX inference engines
-   - ✅ Real model cache and loading
-   - ✅ Real database operations (sled)
+**WHY FAILING TESTS ARE BETTER**:
+1. **Honest feedback** - Shows what really needs to be fixed
+2. **No false confidence** - Passing mocks hide real problems
+3. **Forces proper setup** - Can't claim "working" without actually working
+4. **When they pass, it's REAL** - End-to-end actually works!
+
+**EXPECTED FAILURES**:
+- `test_chat_completions` → 404 (model not found/loaded)
+- Chat endpoint needs model infrastructure to work
+
+**NEXT STEPS** (TIER 1+):
+1. Set up test fixtures with small pre-downloaded models (e.g., tinyllama)
+2. Add model loading helpers for tests  
+3. Configure test environment with model paths
+4. Tests will naturally pass once model infrastructure is ready
+5. **Until then: LET THEM FAIL - It's showing the truth!**
+
+**Integration tests that work NOW**:
+- ✅ Real database operations (sled)
+- ✅ Real state initialization
+- ✅ Real routing/middleware
+- ❌ Model-dependent operations (need setup)
    - ✅ Real embeddings and RAG
    - ✅ Real Python ML bridge (transformers, MediaPipe)
 4. **NO MOCKS IN FINAL IMPLEMENTATION** - all tests use actual backend logic

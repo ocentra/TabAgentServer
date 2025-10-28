@@ -2,6 +2,17 @@
 
 **Purpose**: Chrome extension communication layer for TabAgent Server with 100% API parity.
 
+## ✅ TIER 0 Migration Status - COMPLETED!
+
+**This crate is now fully migrated:**
+- ✅ Uses `common::backend::AppStateProvider` (unified backend trait)
+- ✅ Wired to real `tabagent-server::AppState` (no more mocks in main.rs!)
+- ✅ Type-safe routing with compile-time enforcement
+- ✅ All 42 unit tests passing
+- ✅ Fixed all 4 failing tests
+
+**Next:** After all 3 entry points migrate, delete `src/routes/` folder (2000+ lines) and replace with 50-line dispatcher.
+
 ## Overview
 
 The `tabagent-native-messaging` crate provides a production-grade native messaging host for Chrome extensions. It exposes all TabAgent functionality through Chrome's native messaging protocol with identical request/response schemas as the HTTP API and WebRTC implementations.

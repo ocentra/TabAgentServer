@@ -1,44 +1,47 @@
 //! Integration tests for the API.
 
 use std::sync::Arc;
+use std::path::PathBuf;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt; // for `oneshot`
 use serde_json::json;
 
-use tabagent_api::{AppStateProvider, build_test_router};
-use tabagent_values::{RequestValue, ResponseValue, HealthStatus, RequestType, TokenUsage};
+use tabagent_api::build_test_router;
+use tabagent_server::{AppState, CliArgs, ServerMode};
 
-/// Mock application state for testing.
-struct MockState;
-
-#[async_trait::async_trait]
-impl AppStateProvider for MockState {
-    async fn handle_request(&self, request: RequestValue) -> anyhow::Result<ResponseValue> {
-        // Return appropriate response based on request type
-        match request.request_type() {
-            RequestType::Chat { .. } => {
-                Ok(ResponseValue::chat(
-                    "chat-123",
-                    "test-model",
-                    "Mock response",
-                    TokenUsage {
-                        prompt_tokens: 10,
-                        completion_tokens: 5,
-                        total_tokens: 15,
-                    },
-                ))
-            }
-            RequestType::SystemInfo => Ok(ResponseValue::health(HealthStatus::Healthy)),
-            _ => Ok(ResponseValue::health(HealthStatus::Healthy)),
-        }
-    }
+/// Create REAL server state for integration testing.
+/// 
+/// IMPORTANT: These tests use the REAL backend (tabagent-server::AppState).
+/// If they fail, it means real issues that need fixing - NOT test issues!
+/// Better to have honest failing tests than fake passing mocks.
+async fn create_test_state(test_name: &str) -> AppState {
+    let temp_dir = std::env::temp_dir().join(format!("tabagent_api_test_{}", test_name));
+    let db_path = temp_dir.join("db");
+    let models_path = temp_dir.join("models");
+    
+    // Clean up any previous test data
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    std::fs::create_dir_all(&db_path).expect("Failed to create test DB dir");
+    std::fs::create_dir_all(&models_path).expect("Failed to create test models dir");
+    
+    let args = CliArgs {
+        mode: ServerMode::Http,
+        port: 8001,
+        config: PathBuf::from("test.toml"),
+        db_path,
+        model_cache_path: models_path,
+        log_level: "error".to_string(), // Reduce noise
+        webrtc_enabled: false,
+        webrtc_port: 8002,
+    };
+    AppState::new(&args).await.expect("Failed to create test state")
 }
 
 #[tokio::test]
 async fn test_health_endpoint() {
-    let state = Arc::new(MockState);
-    let app = build_test_router(state);
+    let state = create_test_state("health").await;
+    let app = build_test_router(Arc::new(state));
 
     let response = app
         .oneshot(
@@ -59,8 +62,8 @@ async fn test_health_endpoint() {
 
 #[tokio::test]
 async fn test_chat_completions() {
-    let state = Arc::new(MockState);
-    let app = build_test_router(state);
+    let state = create_test_state("chat").await;
+    let app = build_test_router(Arc::new(state));
 
     let request_body = json!({
         "model": "test-model",

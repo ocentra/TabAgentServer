@@ -91,9 +91,15 @@ impl NativeMessagingRoute for GetStatsRoute {
                 NativeMessagingError::Backend(e)
             })?;
 
-        let stats_json = response.to_json_value();
-        let stats: StatsResponse = serde_json::from_value(stats_json)
-            .map_err(|e| NativeMessagingError::internal(&format!("Failed to parse stats: {}", e)))?;
+        // Extract stats JSON from response
+        // Backend returns stats as a JSON string in chat response
+        let stats_text = match response.as_chat() {
+            Some((text, _, _)) => text,
+            None => return Err(NativeMessagingError::internal("Expected chat response from stats handler")),
+        };
+        
+        let stats: StatsResponse = serde_json::from_str(stats_text)
+            .map_err(|e| NativeMessagingError::internal(&format!("Failed to parse stats JSON: {}", e)))?;
 
         tracing::info!(
             request_id = %request_id,
@@ -135,6 +141,13 @@ impl NativeMessagingRoute for GetStatsRoute {
                 expected_error: None,
                 assertions: vec![],
             },
+            TestCase {
+                name: "get_stats_performance",
+                request: StatsRequest,
+                expected_response: None,
+                expected_error: None,
+                assertions: vec![],
+            },
         ]
     }
 }
@@ -157,10 +170,31 @@ mod tests {
     
     #[async_trait::async_trait]
     impl AppStateProvider for MockState {
-        async fn handle_request(&self, _req: RequestValue) 
+        async fn handle_request(&self, req: RequestValue) 
             -> anyhow::Result<ResponseValue> 
         {
-            Ok(ResponseValue::health(HealthStatus::Healthy))
+            // Return proper stats response for GetStats request
+            // Stats are currently returned as a chat response with JSON payload
+            match req.request_type() {
+                tabagent_values::RequestType::GetStats => {
+                    use tabagent_values::TokenUsage;
+                    // Mock stats data that matches StatsResponse structure
+                    let stats_json = serde_json::json!({
+                        "time_to_first_token": 0.1,
+                        "tokens_per_second": 50.0,
+                        "input_tokens": 10,
+                        "output_tokens": 20,
+                        "total_time": 0.5
+                    });
+                    Ok(ResponseValue::chat(
+                        "stats",
+                        "system",
+                        stats_json.to_string(),
+                        TokenUsage::zero(),
+                    ))
+                }
+                _ => Ok(ResponseValue::health(HealthStatus::Healthy)),
+            }
         }
     }
 

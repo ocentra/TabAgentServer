@@ -14,6 +14,7 @@ path = "src/lib.rs"
 # Workspace dependencies
 tabagent-values = { path = "../values" }
 common = { path = "../common" }
+tabagent-server = { path = "../server" }
 
 # Web framework
 axum = "0.8"
