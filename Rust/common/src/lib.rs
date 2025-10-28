@@ -2,7 +2,6 @@
 //!
 //! This crate provides foundational infrastructure used by all TabAgent components:
 //! - **Unified Backend Trait** (`AppStateProvider`): Single trait for all entry points
-//! - **Unified Routing Trait** (`RouteHandler<T>`): Single trait for all route handlers
 //! - **Database Types**: IDs, errors, serialization helpers
 //! - **Platform Types**: Models, actions, inference settings
 //!
@@ -15,14 +14,18 @@
 //!
 //! # Key Exports
 //!
-//! ## Backend Infrastructure
+//! ## Backend Infrastructure (UNIFIED)
 //! - `AppStateProvider`: Unified trait for backend request handling
 //! - `AppStateWrapper`: Axum-compatible wrapper for trait objects
 //!
-//! ## Routing Infrastructure
-//! - `RouteHandler<M>`: Unified trait for route handlers (HTTP, Native Messaging, WebRTC)
-//! - `HttpMetadata`, `NativeMessagingMetadata`, `WebRtcMetadata`: Transport-specific metadata
-//! - `TestCase`: Test case support for routes
+//! ## Routing Infrastructure (TRANSPORT-SPECIFIC)
+//! Routing traits are intentionally separate per transport:
+//! - `api::route_trait::RouteHandler`: HTTP-specific (Axum, status codes)
+//! - `native-messaging::route_trait::NativeMessagingRoute`: Chrome protocol
+//! - `webrtc::route_trait::DataChannelRoute`: WebRTC data channels
+//!
+//! This separation of concerns allows transport-specific error handling,
+//! registration, and validation while keeping the business logic unified.
 //!
 //! ## Database Types
 //! - `NodeId`, `EdgeId`, `EmbeddingId`: Type-safe IDs for knowledge graph
@@ -35,18 +38,11 @@ pub mod errors;
 pub mod inference_settings;
 pub mod hardware_constants;
 pub mod backend;
-pub mod routing;
 
 // Re-export commonly used types
 pub use inference_settings::InferenceSettings;
 pub use hardware_constants as hw_const;
 pub use backend::{AppStateProvider, AppStateWrapper};
-pub use routing::{
-    RouteHandler, RegisterableRoute, TransportMetadata, TestCase,
-    HttpTransport, NativeMessagingTransport, WebRtcTransport,
-    HttpMetadata, NativeMessagingMetadata, WebRtcMetadata,
-    MediaType,
-};
 
 // --- Core Newtype Wrappers (RAG Rule 8.1) ---
 

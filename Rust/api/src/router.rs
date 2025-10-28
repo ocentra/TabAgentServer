@@ -67,6 +67,7 @@ pub fn configure_routes(
     router = routes::management::GetRegisteredModelsRoute::register(router);
     router = routes::generation::GetHaltStatusRoute::register(router);
     router = routes::resources::CompatibilityRoute::register(router);
+    router = routes::discovery::DiscoveryRoute::register(router);
     
     // WebRTC signaling routes (3 trait-based + 1 manual)
     router = routes::webrtc::CreateOfferRoute::register(router);

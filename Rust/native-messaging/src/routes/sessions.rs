@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
-use tabagent_values::{RequestValue, ResponseValue, Message};
+use tabagent_values::{RequestValue, Message};
 use crate::{
     error::{NativeMessagingResult, NativeMessagingError},
     route_trait::{NativeMessagingRoute, RouteMetadata, TestCase},

@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
-use tabagent_values::{RequestValue, ResponseValue};
+use tabagent_values::RequestValue;
 use crate::{
     error::{NativeMessagingResult, NativeMessagingError},
     route_trait::{NativeMessagingRoute, RouteMetadata, TestCase},
@@ -55,9 +55,14 @@ pub struct LoadedModelInfo {
 pub struct PullModelRoute;
 pub struct DeleteModelRoute;
 pub struct GetLoadedModelsRoute;
+// TODO: TIER 2 - Implement these routes
+#[allow(dead_code)]
 pub struct SelectModelRoute;
+#[allow(dead_code)]
 pub struct GetEmbeddingModelsRoute;
+#[allow(dead_code)]
 pub struct GetRecipesRoute;
+#[allow(dead_code)]
 pub struct GetRegisteredModelsRoute;
 
 #[async_trait]

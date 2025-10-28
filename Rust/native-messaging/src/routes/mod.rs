@@ -45,7 +45,7 @@ pub mod generation;
 pub mod models;
 pub mod sessions;
 pub mod rag;
-pub mod rag_extended;
+// rag_extended module removed - stub routes for TIER 2 features
 pub mod rerank;
 pub mod system;
 pub mod params;
@@ -66,8 +66,20 @@ pub use crate::route_trait::NativeMessagingRoute;
 //     // ... add your route here
 // ]);
 
-/// Get all available route metadata for documentation and discovery.
-pub fn get_all_routes() -> Vec<crate::route_trait::RouteMetadata> {
+/// Get all available route metadata for service discovery.
+///
+/// This allows Chrome extension to query available routes dynamically:
+/// - Route validation before sending messages
+/// - Auto-generating UI for available commands
+/// - Capability detection
+/// - Error handling (know which routes exist)
+///
+/// Note: This is for Native Messaging routes only. Not all routes exist
+/// in all transports (HTTP API, Native Messaging, WebRTC).
+/// 
+/// TODO: Expose via a "list_routes" native messaging command so Chrome extension can query it.
+#[allow(dead_code)] // TODO: Wire up discovery route
+pub fn list_available_routes() -> Vec<crate::route_trait::RouteMetadata> {
     vec![
         health::HealthRoute::metadata(),
         system::SystemRoute::metadata(),
@@ -97,9 +109,14 @@ pub fn get_all_routes() -> Vec<crate::route_trait::RouteMetadata> {
     ]
 }
 
-/// Get route count for validation.
+/// Get route count for Native Messaging routes.
+///
+/// Note: Different transports may have different route counts.
+/// For example, HTTP API has WebRTC signaling routes that
+/// Native Messaging doesn't need.
+#[allow(dead_code)] // TODO: Add discovery route for Chrome extension
 pub fn get_route_count() -> usize {
-    get_all_routes().len()
+    list_available_routes().len()
 }
 
 #[cfg(test)]
@@ -108,7 +125,7 @@ mod tests {
     
     #[test]
     fn test_route_registry_completeness() {
-        let routes = get_all_routes();
+        let routes = list_available_routes();
         
         // Ensure we have at least the implemented routes
         assert!(routes.len() >= 5, "Expected at least 5 routes, got {}", routes.len());
@@ -123,7 +140,7 @@ mod tests {
     
     #[test]
     fn test_route_id_uniqueness() {
-        let routes = get_all_routes();
+        let routes = list_available_routes();
         let mut route_ids = std::collections::HashSet::new();
         
         for route in routes {

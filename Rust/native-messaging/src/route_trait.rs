@@ -429,8 +429,10 @@ impl<Req, Resp> TestCase<Req, Resp> {
 macro_rules! enforce_native_messaging_route {
     ($route_type:ty) => {
         const _: () = {
+            #[allow(dead_code)] // Compile-time check
             fn assert_route<T: $crate::route_trait::NativeMessagingRoute>() {}
             
+            #[allow(dead_code)] // Compile-time check
             fn check() {
                 assert_route::<$route_type>();
                 

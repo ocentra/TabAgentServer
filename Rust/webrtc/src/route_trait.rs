@@ -558,6 +558,7 @@ impl<Req, Resp> TestCase<Req, Resp> {
 #[macro_export]
 macro_rules! enforce_data_channel_route {
     ($route_type:ty) => {
+        #[allow(dead_code)] // Compile-time enforcement functions
         const _: () = {
             fn assert_route<T: $crate::route_trait::DataChannelRoute>() {}
             

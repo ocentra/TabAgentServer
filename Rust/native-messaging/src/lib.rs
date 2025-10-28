@@ -46,7 +46,7 @@ mod error;
 mod traits;
 mod protocol;
 mod router;
-mod middleware;
+// middleware module removed - was never used
 mod routes;
 pub mod route_trait;
 

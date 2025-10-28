@@ -209,9 +209,8 @@ mod tests {
         // Assert on performance stats values
         assert!(response.time_to_first_token >= 0.0);
         assert!(response.tokens_per_second >= 0.0);
-        assert!(response.input_tokens >= 0);
-        assert!(response.output_tokens >= 0);
         assert!(response.total_time >= 0.0);
+        // Token counts are u32, always valid
     }
 
     #[test]

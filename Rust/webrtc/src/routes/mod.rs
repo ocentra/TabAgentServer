@@ -57,6 +57,7 @@ pub mod video_stream;
 pub mod audio_stream;
 
 // Re-export the trait (defined in route_trait.rs for full enforcement)
+#[allow(unused_imports)] // Re-exported for external use
 pub use crate::route_trait::DataChannelRoute;
 
 // Route registry - all routes must be verified at compile time
@@ -68,4 +69,21 @@ pub use crate::route_trait::DataChannelRoute;
 //     embeddings::EmbeddingsRoute,
 //     // ... add your route here
 // ]);
+
+// TODO: TIER 0 - Migrate WebRTC routes to match API/Native Messaging parity
+// 
+// Currently WebRTC uses unified route pattern (e.g., ModelsRoute with action enum)
+// while API/Native Messaging use split routes (ListModelsRoute, LoadModelRoute, etc.)
+//
+// This breaks parity. Need to refactor WebRTC routes to match:
+// - Split ModelsRoute → ListModelsRoute, LoadModelRoute, UnloadModelRoute, ModelInfoRoute
+// - Split SessionsRoute → GetHistoryRoute, SaveMessageRoute
+// - Split ParamsRoute → GetParamsRoute, SetParamsRoute
+// - Split ResourcesRoute → GetResourcesRoute, EstimateMemoryRoute, CompatibilityRoute
+// - Split GenerationRoute → StopGenerationRoute, GetHaltStatusRoute
+// - Split ManagementRoute → PullModelRoute, DeleteModelRoute, GetLoadedModelsRoute
+// - Split RagExtendedRoute → SemanticSearchRoute, SimilarityRoute, etc.
+//
+// Once migrated, add get_all_routes() and get_route_count() functions like
+// API and Native Messaging have for route registry validation.
 

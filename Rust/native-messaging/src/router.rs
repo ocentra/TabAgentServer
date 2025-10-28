@@ -346,14 +346,15 @@ mod tests {
         
         router.register_all_routes();
         
-        // Should have at least the implemented routes
-        assert!(router.route_count() >= 5); // At least 5 routes expected
+        // Verify key routes are registered (not all routes need to be in all transports)
+        assert!(router.has_route("health"), "Missing health route");
+        assert!(router.has_route("system"), "Missing system route");
+        assert!(router.has_route("stats"), "Missing stats route");
+        assert!(router.has_route("chat"), "Missing chat route");
+        assert!(router.has_route("responses"), "Missing responses route");
         
-        // Check implemented routes
-        assert!(router.has_route("health"));
-        assert!(router.has_route("system"));
-        assert!(router.has_route("stats"));
-        assert!(router.has_route("chat"));
-        assert!(router.has_route("responses"));
+        // Verify we have a reasonable number of routes
+        let route_count = router.route_count();
+        assert!(route_count >= 20, "Expected at least 20 routes, got {}", route_count);
     }
 }
