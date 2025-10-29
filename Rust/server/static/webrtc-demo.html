@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabAgent WebRTC Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .status-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .status-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .status-item h3 {
+            color: #667eea;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .status-item p {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+
+        .status-disconnected { background: #fee; color: #c33; }
+        .status-connecting { background: #ffeaa7; color: #d63031; }
+        .status-connected { background: #55efc4; color: #00b894; }
+
+        .action-section {
+            margin-bottom: 20px;
+        }
+
+        .action-section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .test-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .test-button {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .test-button:hover:not(:disabled) {
+            background: #667eea;
+            color: white;
+        }
+
+        .log-section {
+            background: #2d3436;
+            color: #dfe6e9;
+            border-radius: 12px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .log-entry {
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            display: flex;
+            align-items: start;
+            gap: 10px;
+        }
+
+        .log-info { background: #34495e; }
+        .log-success { background: #27ae60; }
+        .log-error { background: #c0392b; }
+        .log-warning { background: #f39c12; }
+
+        .log-time {
+            opacity: 0.7;
+            font-size: 0.85em;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .connecting-animation {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 TabAgent WebRTC Demo</h1>
+            <p>Real-time peer-to-peer communication with TabAgent Server</p>
+        </div>
+
+        <div class="content">
+            <!-- Status Section -->
+            <div class="status-section">
+                <h2>Connection Status</h2>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <h3>State</h3>
+                        <p><span id="connectionState" class="status-badge status-disconnected">Disconnected</span></p>
+                    </div>
+                    <div class="status-item">
+                        <h3>Session ID</h3>
+                        <p id="sessionId">—</p>
+                    </div>
+                    <div class="status-item">
+                        <h3>Messages Sent</h3>
+                        <p id="messagesSent">0</p>
+                    </div>
+                    <div class="status-item">
+                        <h3>Messages Received</h3>
+                        <p id="messagesReceived">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connection Section -->
+            <div class="action-section">
+                <h2>1. Establish Connection</h2>
+                <div class="button-group">
+                    <button id="connectBtn" onclick="connect()">Connect to Server</button>
+                    <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+                </div>
+            </div>
+
+            <!-- Test Messages Section -->
+            <div class="action-section">
+                <h2>2. Test API Endpoints</h2>
+                <div class="test-section">
+                    <p style="margin-bottom: 15px;">Send test messages to verify WebRTC data channel is working:</p>
+                    <div class="test-buttons">
+                        <button class="test-button" onclick="sendTest('system_info')" id="testSystem" disabled>System Info</button>
+                        <button class="test-button" onclick="sendTest('health')" id="testHealth" disabled>Health Check</button>
+                        <button class="test-button" onclick="sendTest('models')" id="testModels" disabled>List Models</button>
+                        <button class="test-button" onclick="sendTest('stats')" id="testStats" disabled>Get Stats</button>
+                        <button class="test-button" onclick="sendTest('resources')" id="testResources" disabled>Resources</button>
+                        <button class="test-button" onclick="sendTest('recipes')" id="testRecipes" disabled>Recipes</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Log Section -->
+            <div class="action-section">
+                <h2>3. Activity Log</h2>
+                <div class="log-section" id="logSection">
+                    <div class="log-entry log-info">
+                        <span class="log-time">[Ready]</span>
+                        <span>Click "Connect to Server" to begin WebRTC handshake...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>TabAgent WebRTC Demo • Real peer-to-peer communication • No Native Messaging required</p>
+        </div>
+    </div>
+
+    <script>
+        const SERVER_URL = 'http://localhost:9000';
+        let peerConnection = null;
+        let dataChannel = null;
+        let sessionId = null;
+        let messagesSent = 0;
+        let messagesReceived = 0;
+
+        function log(message, type = 'info') {
+            const logSection = document.getElementById('logSection');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.innerHTML = `<span class="log-time">[${time}]</span><span>${message}</span>`;
+            logSection.appendChild(entry);
+            logSection.scrollTop = logSection.scrollHeight;
+        }
+
+        function updateStatus(state) {
+            const badge = document.getElementById('connectionState');
+            badge.className = `status-badge status-${state}`;
+            badge.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+            
+            if (state === 'connecting') {
+                badge.classList.add('connecting-animation');
+            } else {
+                badge.classList.remove('connecting-animation');
+            }
+        }
+
+        function updateUI(connected) {
+            document.getElementById('connectBtn').disabled = connected;
+            document.getElementById('disconnectBtn').disabled = !connected;
+            
+            const testButtons = document.querySelectorAll('.test-button');
+            testButtons.forEach(btn => btn.disabled = !connected);
+        }
+
+        async function connect() {
+            try {
+                log('🚀 Starting WebRTC connection...', 'info');
+                updateStatus('connecting');
+                updateUI(false);
+
+                // Step 1: Create RTCPeerConnection
+                peerConnection = new RTCPeerConnection({
+                    iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
+                });
+
+                log('✓ Created RTCPeerConnection', 'success');
+
+                // Step 2: Request offer from server
+                log('📡 Requesting SDP offer from server...', 'info');
+                const offerResponse = await fetch(`${SERVER_URL}/v1/webrtc/offer`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        peer_id: 'demo-client-' + Date.now(),
+                        sdp: 'placeholder'
+                    })
+                });
+
+                if (!offerResponse.ok) {
+                    throw new Error(`Server returned ${offerResponse.status}`);
+                }
+
+                const offerData = await offerResponse.json();
+                sessionId = offerData.session_id;
+                document.getElementById('sessionId').textContent = sessionId.substring(0, 8) + '...';
+                log(`✓ Received offer (Session: ${sessionId.substring(0, 8)}...)`, 'success');
+
+                // Step 3: Handle incoming data channel
+                peerConnection.ondatachannel = (event) => {
+                    dataChannel = event.channel;
+                    log('✓ Data channel opened!', 'success');
+                    
+                    dataChannel.onopen = () => {
+                        log('🎉 WebRTC connection established! Ready to send messages.', 'success');
+                        updateStatus('connected');
+                        updateUI(true);
+                    };
+                    
+                    dataChannel.onmessage = (event) => {
+                        messagesReceived++;
+                        document.getElementById('messagesReceived').textContent = messagesReceived;
+                        
+                        try {
+                            const response = JSON.parse(event.data);
+                            log(`📨 Received: ${JSON.stringify(response).substring(0, 100)}...`, 'success');
+                        } catch (e) {
+                            log(`📨 Received: ${event.data}`, 'success');
+                        }
+                    };
+                    
+                    dataChannel.onclose = () => {
+                        log('⚠️ Data channel closed', 'warning');
+                        updateStatus('disconnected');
+                        updateUI(false);
+                    };
+
+                    dataChannel.onerror = (error) => {
+                        log(`❌ Data channel error: ${error}`, 'error');
+                    };
+                };
+
+                // Step 4: Set remote description (server's offer)
+                // Note: We need to get the actual SDP from the session
+                const sessionResponse = await fetch(`${SERVER_URL}/v1/webrtc/session/${sessionId}`);
+                const sessionData = await sessionResponse.json();
+                
+                // For now, create a minimal answer since we're the client
+                await peerConnection.setRemoteDescription({
+                    type: 'offer',
+                    sdp: `v=0
+o=- ${sessionId} 0 IN IP4 127.0.0.1
+s=TabAgent WebRTC
+t=0 0
+a=group:BUNDLE 0
+m=application 9 UDP/DTLS/SCTP webrtc-datachannel
+c=IN IP4 0.0.0.0
+a=ice-ufrag:server
+a=ice-pwd:server123
+a=fingerprint:sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00
+a=setup:actpass
+a=mid:0
+a=sctp-port:5000
+a=max-message-size:262144`
+                });
+                
+                log('✓ Set remote description', 'success');
+
+                // Step 5: Create answer
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                log('✓ Created answer', 'success');
+
+                // Step 6: Send answer to server
+                await fetch(`${SERVER_URL}/v1/webrtc/answer`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        sdp: answer.sdp
+                    })
+                });
+                log('✓ Sent answer to server', 'success');
+
+                // Step 7: Handle ICE candidates
+                peerConnection.onicecandidate = async (event) => {
+                    if (event.candidate) {
+                        log(`🧊 Sending ICE candidate...`, 'info');
+                        await fetch(`${SERVER_URL}/v1/webrtc/ice`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                session_id: sessionId,
+                                candidate: event.candidate.candidate
+                            })
+                        });
+                    }
+                };
+
+                log('⏳ Waiting for ICE negotiation...', 'info');
+
+            } catch (error) {
+                log(`❌ Connection failed: ${error.message}`, 'error');
+                updateStatus('disconnected');
+                updateUI(false);
+            }
+        }
+
+        function disconnect() {
+            if (dataChannel) {
+                dataChannel.close();
+                dataChannel = null;
+            }
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            sessionId = null;
+            document.getElementById('sessionId').textContent = '—';
+            log('🔌 Disconnected', 'warning');
+            updateStatus('disconnected');
+            updateUI(false);
+        }
+
+        function sendTest(testType) {
+            if (!dataChannel || dataChannel.readyState !== 'open') {
+                log('❌ Data channel not open', 'error');
+                return;
+            }
+
+            let message;
+            switch (testType) {
+                case 'system_info':
+                    message = {action: 'system_info'};
+                    break;
+                case 'health':
+                    message = {action: 'health'};
+                    break;
+                case 'models':
+                    message = {action: 'list_models'};
+                    break;
+                case 'stats':
+                    message = {action: 'get_stats'};
+                    break;
+                case 'resources':
+                    message = {action: 'get_resources'};
+                    break;
+                case 'recipes':
+                    message = {action: 'get_recipes'};
+                    break;
+            }
+
+            try {
+                dataChannel.send(JSON.stringify(message));
+                messagesSent++;
+                document.getElementById('messagesSent').textContent = messagesSent;
+                log(`📤 Sent: ${testType}`, 'info');
+            } catch (error) {
+                log(`❌ Send failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize
+        log('✅ Demo loaded. Server should be running on ' + SERVER_URL, 'info');
+    </script>
+</body>
+</html>
+

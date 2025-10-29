@@ -15,13 +15,8 @@ path = "src/main.rs"
 
 [dependencies]
 # Workspace crates (already exist)
+appstate = { path = "../appstate" }
 common = { path = "../common" }
-storage = { path = "../storage" }
-tabagent-model-cache = { path = "../model-cache" }
-tabagent-onnx-loader = { path = "../onnx-loader" }
-gguf-loader = { path = "../gguf-loader" }
-tabagent-hardware = { path = "../hardware" }
-tabagent-native-handler = { path = "../native-handler" }
 tabagent-values = { path = "../values" }
 
 # Transport layer crates (API, Native Messaging, WebRTC)
@@ -81,6 +76,7 @@ dashmap = "6.1.0"  # Thread-safe HashMap for loaded models
 parking_lot = "0.12"  # Better Mutex/RwLock
 dirs = "5.0"  # Cross-platform config directories
 keyring = { version = "3.2", optional = true }  # OS credential storage
+futures = "0.3"  # For BoxFuture type
 
 [features]
 default = ["keyring"]

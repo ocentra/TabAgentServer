@@ -44,6 +44,7 @@ mod manager;
 mod session;
 mod types;
 mod data_channel;
+mod peer_connection;  // Real WebRTC peer connection implementation
 pub mod routes;       // Public module for route handlers
 pub mod traits;       // Public module for trait definitions
 pub mod route_trait;  // Public module for compile-time enforcement system
@@ -55,6 +56,7 @@ pub use manager::WebRtcManager;
 pub use session::{WebRtcSession, SessionState};
 pub use types::{IceCandidate, SessionInfo, WebRtcStats};
 pub use data_channel::DataChannelHandler;
+pub use peer_connection::PeerConnectionHandler;
 pub use routes::DataChannelRoute;
 pub use route_trait::{
     RouteMetadata, MediaType, ValidationRule, TestCase, RouteCollection,

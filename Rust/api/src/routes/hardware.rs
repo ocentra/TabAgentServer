@@ -2,9 +2,8 @@
 //!
 //! Routes for querying hardware capabilities and recommendations.
 
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{Json, extract::State};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use crate::error::{ApiError, ApiResult};
 use common::backend::AppStateProvider;
@@ -12,6 +11,7 @@ use common::backend::AppStateProvider;
 // ========== GET HARDWARE INFO ==========
 
 #[derive(Debug, Serialize, ToSchema)]
+#[allow(dead_code)]
 pub struct GetHardwareInfoResponse {
     pub cpu: serde_json::Value,
     pub memory: serde_json::Value,
@@ -30,7 +30,7 @@ pub struct GetHardwareInfoResponse {
     tag = "Hardware"
 )]
 pub async fn get_hardware_info<S>(
-    State(state): State<Arc<S>>,
+    State(state): State<S>,
 ) -> ApiResult<Json<serde_json::Value>>
 where
     S: AppStateProvider + Send + Sync + 'static,
@@ -55,6 +55,7 @@ pub struct CheckModelFeasibilityRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[allow(dead_code)]
 pub struct CheckModelFeasibilityResponse {
     pub can_load: bool,
     pub model_size_mb: u64,
@@ -74,7 +75,7 @@ pub struct CheckModelFeasibilityResponse {
     tag = "Hardware"
 )]
 pub async fn check_model_feasibility<S>(
-    State(state): State<Arc<S>>,
+    State(state): State<S>,
     Json(payload): Json<CheckModelFeasibilityRequest>,
 ) -> ApiResult<Json<serde_json::Value>>
 where
@@ -97,6 +98,7 @@ where
 // ========== GET RECOMMENDED MODELS ==========
 
 #[derive(Debug, Serialize, ToSchema)]
+#[allow(dead_code)]
 pub struct GetRecommendedModelsResponse {
     pub available_ram_mb: u64,
     pub available_vram_mb: u64,
@@ -116,7 +118,7 @@ pub struct GetRecommendedModelsResponse {
     tag = "Hardware"
 )]
 pub async fn get_recommended_models<S>(
-    State(state): State<Arc<S>>,
+    State(state): State<S>,
 ) -> ApiResult<Json<serde_json::Value>>
 where
     S: AppStateProvider + Send + Sync + 'static,

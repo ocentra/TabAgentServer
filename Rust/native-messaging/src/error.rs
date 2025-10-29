@@ -239,6 +239,15 @@ impl From<anyhow::Error> for NativeMessagingError {
     }
 }
 
+impl From<tabagent_values::ValueError> for NativeMessagingError {
+    fn from(error: tabagent_values::ValueError) -> Self {
+        Self::ValidationError {
+            field: "request".to_string(),
+            message: error.to_string(),
+        }
+    }
+}
+
 impl fmt::Display for ErrorResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.code, self.message)

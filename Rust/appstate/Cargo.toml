@@ -1,0 +1,45 @@
+[package]
+name = "appstate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Core types and traits
+common = { path = "../common" }
+tabagent-values = { path = "../values" }
+
+# Backend infrastructure
+storage = { path = "../storage" }
+tabagent-model-cache = { path = "../model-cache" }
+tabagent-hardware = { path = "../hardware" }
+tabagent-onnx-loader = { path = "../onnx-loader" }
+gguf-loader = { path = "../gguf-loader" }
+
+# Async runtime
+tokio = { workspace = true, features = ["sync", "macros"] }
+tokio-util = { workspace = true }
+async-trait = { workspace = true }
+
+# Concurrency
+dashmap = "6.1"
+parking_lot = "0.12"
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+uuid = { version = "1.6", features = ["v4"] }
+dirs = "5.0"
+keyring = "3.6"
+
+[dev-dependencies]
+tempfile = "3.8"
+

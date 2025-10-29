@@ -690,6 +690,43 @@ impl ResponseValue {
         serde_json::to_value(self.response_type())
             .unwrap_or_else(|_| serde_json::json!({"error": "Failed to serialize response"}))
     }
+    
+    /// Create a simple success response with a message.
+    pub fn success(message: impl Into<String>) -> Self {
+        // Use chat response format for success messages
+        ResponseValue::chat(
+            "success",
+            "system",
+            message.into(),
+            TokenUsage::zero(),
+        )
+    }
+    
+    /// Create a generic response with JSON data.
+    pub fn generic(data: serde_json::Value) -> Self {
+        // Return as a chat response with JSON stringified
+        ResponseValue::chat(
+            "generic",
+            "system",
+            data.to_string(),
+            TokenUsage::zero(),
+        )
+    }
+    
+    /// Create a model list response.
+    pub fn model_list(models: Vec<ModelInfo>) -> Self {
+        Value {
+            inner: ValueInner {
+                data: ValueData::Response(Box::new(ResponseType::ModelListResponse {
+                    models: models.clone(),
+                })),
+                dtype: ValueType::ModelListResponse {
+                    count: models.len(),
+                },
+            },
+            _marker: std::marker::PhantomData,
+        }
+    }
 }
 
 impl DowncastableTarget for ResponseValueMarker {

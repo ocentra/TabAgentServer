@@ -17,7 +17,7 @@ path = "src/lib.rs"
 [dependencies]
 # Workspace dependencies - CRITICAL: Use exact same values crate as API/WebRTC
 tabagent-values = { path = "../values" }
-tabagent-server = { path = "../server" }
+appstate = { path = "../appstate" }
 common = { path = "../common" }
 
 # Async runtime

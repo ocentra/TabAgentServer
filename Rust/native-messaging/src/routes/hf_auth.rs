@@ -45,8 +45,9 @@ impl NativeMessagingRoute for SetHfTokenRoute {
 
     async fn validate_request(req: &Self::Request) -> NativeMessagingResult<()> {
         if !req.token.starts_with("hf_") {
-            return Err(NativeMessagingError::Validation(
-                "Token must start with 'hf_'".to_string()
+            return Err(NativeMessagingError::validation(
+                "token",
+                "Token must start with 'hf_'"
             ));
         }
         Ok(())
@@ -65,7 +66,7 @@ impl NativeMessagingRoute for SetHfTokenRoute {
         }))?)?;
 
         state.handle_request(request_value).await
-            .map_err(|e| NativeMessagingError::Backend(e.to_string()))?;
+            .map_err(|e| NativeMessagingError::Backend(e))?;
 
         Ok(SetHfTokenResponse {
             message: "HuggingFace token stored securely".to_string(),
@@ -136,7 +137,7 @@ impl NativeMessagingRoute for GetHfTokenStatusRoute {
         let request_value = tabagent_values::RequestValue::from_json(r#"{"action":"get_hf_token_status"}"#)?;
 
         let response = state.handle_request(request_value).await
-            .map_err(|e| NativeMessagingError::Backend(e.to_string()))?;
+            .map_err(|e| NativeMessagingError::Backend(e))?;
 
         let json_str = response.to_json()?;
         let data: serde_json::Value = serde_json::from_str(&json_str)?;
@@ -208,7 +209,7 @@ impl NativeMessagingRoute for ClearHfTokenRoute {
         let request_value = tabagent_values::RequestValue::from_json(r#"{"action":"clear_hf_token"}"#)?;
 
         state.handle_request(request_value).await
-            .map_err(|e| NativeMessagingError::Backend(e.to_string()))?;
+            .map_err(|e| NativeMessagingError::Backend(e))?;
 
         Ok(ClearHfTokenResponse {
             message: "HuggingFace token removed".to_string(),

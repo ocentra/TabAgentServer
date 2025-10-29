@@ -87,6 +87,12 @@ pub enum ValueType {
     /// Health check request.
     Health,
 
+    /// Audio stream configuration.
+    AudioStream,
+
+    /// Video stream configuration.
+    VideoStream,
+
     // ============ Response Types ============
     
     /// Chat completion response.

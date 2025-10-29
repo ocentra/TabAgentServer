@@ -3,9 +3,11 @@
 use crate::{
     config::WebRtcConfig,
     error::{WebRtcError, WebRtcResult},
+    peer_connection::PeerConnectionHandler,
     session::{SessionHandle, SessionState, WebRtcSession},
     types::{IceCandidate, SessionInfo, WebRtcStats},
 };
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -27,22 +29,38 @@ pub struct WebRtcManager {
     
     /// Statistics
     stats: Arc<RwLock<WebRtcStats>>,
+    
+    /// AppState handler for processing requests
+    app_state_handler: Arc<dyn Fn(tabagent_values::RequestValue) -> futures::future::BoxFuture<'static, Result<tabagent_values::ResponseValue>> + Send + Sync>,
 }
 
 impl WebRtcManager {
     /// Create a new WebRTC manager
-    pub fn new(config: WebRtcConfig) -> Self {
+    pub fn new(
+        config: WebRtcConfig,
+        app_state_handler: Arc<dyn Fn(tabagent_values::RequestValue) -> futures::future::BoxFuture<'static, Result<tabagent_values::ResponseValue>> + Send + Sync>,
+    ) -> Self {
         let manager = Self {
             config,
             sessions: Arc::new(RwLock::new(HashMap::new())),
             sessions_by_client: Arc::new(RwLock::new(HashMap::new())),
             stats: Arc::new(RwLock::new(WebRtcStats::default())),
+            app_state_handler,
         };
         
         // Start cleanup task
         manager.start_cleanup_task();
         
         manager
+    }
+    
+    /// Create a new WebRTC manager with default config (for testing)
+    #[cfg(test)]
+    pub fn new_test() -> Self {
+        use tabagent_values::{RequestValue, ResponseValue, HealthStatus};
+        let handler: Arc<dyn Fn(RequestValue) -> futures::future::BoxFuture<'static, Result<ResponseValue>> + Send + Sync> = 
+            Arc::new(|_req| Box::pin(async { Ok(ResponseValue::health(HealthStatus::Healthy)) }));
+        Self::new(WebRtcConfig::default(), handler)
     }
     
     /// Create a new WebRTC offer and session
@@ -75,12 +93,23 @@ impl WebRtcManager {
         // Generate session ID
         let session_id = Uuid::new_v4().to_string();
         
-        // Generate SDP offer (simplified for now - will use webrtc crate later)
-        let offer_sdp = self.generate_offer_sdp(&session_id).await?;
+        // Create REAL peer connection
+        let peer_connection = PeerConnectionHandler::new(&self.config, self.app_state_handler.clone())
+            .await
+            .map_err(|e| WebRtcError::InternalError(format!("Failed to create peer connection: {}", e)))?;
         
-        // Create session
-        let session = WebRtcSession::new(session_id.clone(), client_id.clone(), offer_sdp);
-        let session_clone = session.clone();
+        let peer_connection = Arc::new(peer_connection);
+        
+        // Generate REAL SDP offer
+        let offer_sdp = peer_connection.create_offer().await?;
+        
+        // Create session with real peer connection
+        let session = WebRtcSession::with_peer_connection(
+            session_id.clone(),
+            client_id.clone(),
+            offer_sdp.clone(),
+            peer_connection,
+        );
         let session_handle = Arc::new(RwLock::new(session));
         
         // Store session
@@ -90,9 +119,9 @@ impl WebRtcManager {
         // Track by client
         let mut sessions_by_client = self.sessions_by_client.write().await;
         sessions_by_client
-            .entry(client_id)
+            .entry(client_id.clone())
             .or_insert_with(Vec::new)
-            .push(session_id);
+            .push(session_id.clone());
         
         // Update stats
         let mut stats = self.stats.write().await;
@@ -100,9 +129,15 @@ impl WebRtcManager {
         stats.active_sessions += 1;
         stats.waiting_sessions += 1;
         
-        tracing::info!("Created WebRTC offer for session {}", session_clone.id);
+        // Save IDs for return (we need to clone before moving)
+        let return_session_id = session_id.clone();
+        let return_client_id = client_id.clone();
+        let return_offer_sdp = offer_sdp.clone();
         
-        Ok(session_clone)
+        tracing::info!("Created WebRTC offer for session {}", session_id);
+        
+        // Return a simplified session info for the response
+        Ok(WebRtcSession::new(return_session_id, return_client_id, return_offer_sdp))
     }
     
     /// Submit answer from client
@@ -128,6 +163,11 @@ impl WebRtcManager {
                 expected: "waiting_for_answer".to_string(),
                 actual: session.state.as_str().to_string(),
             });
+        }
+        
+        // Set answer on REAL peer connection
+        if let Some(peer_connection) = &session.peer_connection {
+            peer_connection.set_answer(answer_sdp.clone()).await?;
         }
         
         // Store answer and transition to ICE gathering
@@ -165,6 +205,11 @@ impl WebRtcManager {
                 expected: "has_answer".to_string(),
                 actual: "no_answer".to_string(),
             });
+        }
+        
+        // Add to REAL peer connection
+        if let Some(peer_connection) = &session.peer_connection {
+            peer_connection.add_ice_candidate(candidate.candidate.clone()).await?;
         }
         
         session.add_ice_candidate(candidate);
@@ -301,27 +346,6 @@ impl WebRtcManager {
         self.stats.read().await.clone()
     }
     
-    /// Generate SDP offer (placeholder - will use webrtc crate)
-    async fn generate_offer_sdp(&self, session_id: &str) -> WebRtcResult<String> {
-        // TODO: Use webrtc crate to generate real SDP
-        // For now, return a simple placeholder
-        Ok(format!(
-            "v=0\r\n\
-             o=- {} 0 IN IP4 127.0.0.1\r\n\
-             s=TabAgent WebRTC\r\n\
-             t=0 0\r\n\
-             a=group:BUNDLE 0\r\n\
-             m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n\
-             c=IN IP4 0.0.0.0\r\n\
-             a=ice-ufrag:placeholder\r\n\
-             a=ice-pwd:placeholder\r\n\
-             a=fingerprint:sha-256 placeholder\r\n\
-             a=setup:actpass\r\n\
-             a=mid:0\r\n\
-             a=sctp-port:5000\r\n",
-            session_id
-        ))
-    }
     
     /// Start background cleanup task
     fn start_cleanup_task(&self) {

@@ -8,6 +8,7 @@ use crate::route_trait::validators::{ValidAudioCodec, ValidBitrate};
 use crate::traits::RequestHandler;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use tabagent_values::RequestValue;
 
 /// Audio stream configuration request
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -127,7 +128,7 @@ impl DataChannelRoute for AudioStreamRoute {
         Ok(())
     }
     
-    async fn handle<H>(req: Self::Request, _handler: &H) -> WebRtcResult<Self::Response>
+    async fn handle<H>(req: Self::Request, handler: &H) -> WebRtcResult<Self::Response>
     where
         H: RequestHandler + Send + Sync,
     {
@@ -142,23 +143,28 @@ impl DataChannelRoute for AudioStreamRoute {
             "Starting audio stream configuration"
         );
         
-        let stream_id = uuid::Uuid::new_v4().to_string();
+        // Forward to appstate for real media pipeline handling
+        let request_value = RequestValue::from_json(&serde_json::to_string(&serde_json::json!({
+            "action": "audio_stream",
+            "codec": req.codec,
+            "sample_rate": req.sample_rate,
+            "bitrate": req.bitrate,
+            "channels": req.channels
+        })).map_err(|e| WebRtcError::InternalError(e.to_string()))?)
+            .map_err(|e| WebRtcError::InternalError(format!("Failed to create request: {}", e)))?;
+
+        let response = handler.handle_request(request_value).await
+            .map_err(|e| {
+                tracing::error!(request_id = %request_id, error = %e, "Audio stream request failed");
+                WebRtcError::from(e)
+            })?;
+
+        let json_str = response.to_json()
+            .map_err(|e| WebRtcError::InternalError(format!("Failed to serialize response: {}", e)))?;
+        let data: serde_json::Value = serde_json::from_str(&json_str)
+            .map_err(|e| WebRtcError::InternalError(e.to_string()))?;
         
-        let response = AudioStreamResponse {
-            stream_id: stream_id.clone(),
-            codec: req.codec.clone(),
-            sample_rate: req.sample_rate,
-            bitrate: req.bitrate,
-            channels: req.channels,
-            status: format!(
-                "Audio stream {} configured: {} @ {} Hz, {} bps, {} ch",
-                stream_id,
-                req.codec,
-                req.sample_rate,
-                req.bitrate,
-                req.channels
-            ),
-        };
+        let stream_id = data["stream_id"].as_str().unwrap_or("unknown").to_string();
         
         tracing::info!(
             request_id = %request_id,
@@ -166,7 +172,14 @@ impl DataChannelRoute for AudioStreamRoute {
             "Audio stream configuration successful"
         );
         
-        Ok(response)
+        Ok(AudioStreamResponse {
+            stream_id,
+            codec: req.codec,
+            sample_rate: req.sample_rate,
+            bitrate: req.bitrate,
+            channels: req.channels,
+            status: data["status"].as_str().unwrap_or("configured").to_string(),
+        })
     }
     
     fn test_cases() -> Vec<TestCase<Self::Request, Self::Response>> {

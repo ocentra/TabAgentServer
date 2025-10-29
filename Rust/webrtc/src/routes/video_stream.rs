@@ -9,6 +9,7 @@ use crate::route_trait::validators::{ValidVideoCodec, ValidResolution, ValidBitr
 use crate::traits::RequestHandler;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use tabagent_values::RequestValue;
 
 /// Video stream configuration request
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -121,7 +122,7 @@ impl DataChannelRoute for VideoStreamRoute {
         Ok(())
     }
     
-    async fn handle<H>(req: Self::Request, _handler: &H) -> WebRtcResult<Self::Response>
+    async fn handle<H>(req: Self::Request, handler: &H) -> WebRtcResult<Self::Response>
     where
         H: RequestHandler + Send + Sync,
     {
@@ -137,32 +138,29 @@ impl DataChannelRoute for VideoStreamRoute {
             "Starting video stream configuration"
         );
         
-        // For now, this is a mock implementation
-        // In production, this would:
-        // 1. Initialize video encoder with specified codec
-        // 2. Configure encoder with resolution, bitrate, framerate
-        // 3. Set up hardware acceleration if requested
-        // 4. Create stream ID and register with media pipeline
-        // 5. Return stream configuration
+        // Forward to appstate for real media pipeline handling
+        let request_value = RequestValue::from_json(&serde_json::to_string(&serde_json::json!({
+            "action": "video_stream",
+            "codec": req.codec,
+            "resolution": req.resolution,
+            "bitrate": req.bitrate,
+            "framerate": req.framerate,
+            "hardware_acceleration": req.hardware_acceleration
+        })).map_err(|e| WebRtcError::InternalError(e.to_string()))?)
+            .map_err(|e| WebRtcError::InternalError(format!("Failed to create request: {}", e)))?;
+
+        let response = handler.handle_request(request_value).await
+            .map_err(|e| {
+                tracing::error!(request_id = %request_id, error = %e, "Video stream request failed");
+                WebRtcError::from(e)
+            })?;
+
+        let json_str = response.to_json()
+            .map_err(|e| WebRtcError::InternalError(format!("Failed to serialize response: {}", e)))?;
+        let data: serde_json::Value = serde_json::from_str(&json_str)
+            .map_err(|e| WebRtcError::InternalError(e.to_string()))?;
         
-        let stream_id = uuid::Uuid::new_v4().to_string();
-        
-        let response = VideoStreamResponse {
-            stream_id: stream_id.clone(),
-            codec: req.codec.clone(),
-            resolution: req.resolution,
-            bitrate: req.bitrate,
-            framerate: req.framerate,
-            status: format!(
-                "Video stream {} configured: {} @ {}x{}, {} bps, {} fps",
-                stream_id,
-                req.codec,
-                req.resolution.0,
-                req.resolution.1,
-                req.bitrate,
-                req.framerate
-            ),
-        };
+        let stream_id = data["stream_id"].as_str().unwrap_or("unknown").to_string();
         
         tracing::info!(
             request_id = %request_id,
@@ -170,7 +168,14 @@ impl DataChannelRoute for VideoStreamRoute {
             "Video stream configuration successful"
         );
         
-        Ok(response)
+        Ok(VideoStreamResponse {
+            stream_id,
+            codec: req.codec,
+            resolution: req.resolution,
+            bitrate: req.bitrate,
+            framerate: req.framerate,
+            status: data["status"].as_str().unwrap_or("configured").to_string(),
+        })
     }
     
     fn test_cases() -> Vec<TestCase<Self::Request, Self::Response>> {

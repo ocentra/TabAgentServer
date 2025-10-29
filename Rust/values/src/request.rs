@@ -240,6 +240,24 @@ pub enum RequestType {
     GetWebRtcSession {
         session_id: String,
     },
+
+    // === MEDIA STREAMING ===
+    /// Configure audio stream.
+    AudioStream {
+        codec: String,
+        sample_rate: u32,
+        bitrate: u32,
+        channels: u8,
+    },
+
+    /// Configure video stream.
+    VideoStream {
+        codec: String,
+        resolution: (u32, u32),
+        bitrate: u32,
+        framerate: u8,
+        hardware_acceleration: bool,
+    },
 }
 
 /// Chat message (RAG: Use enums for role, not strings).
@@ -819,6 +837,14 @@ impl RequestValue {
             RequestType::SubmitWebRtcAnswer { .. } => ValueType::SystemInfo,
             RequestType::AddIceCandidate { .. } => ValueType::SystemInfo,
             RequestType::GetWebRtcSession { .. } => ValueType::SystemInfo,
+            RequestType::AudioStream { .. } => ValueType::AudioStream,
+            RequestType::VideoStream { .. } => ValueType::VideoStream,
+            RequestType::SetHfToken { .. } => ValueType::SystemInfo,
+            RequestType::GetHfTokenStatus => ValueType::SystemInfo,
+            RequestType::ClearHfToken => ValueType::SystemInfo,
+            RequestType::GetHardwareInfo => ValueType::SystemInfo,
+            RequestType::CheckModelFeasibility { .. } => ValueType::SystemInfo,
+            RequestType::GetRecommendedModels => ValueType::SystemInfo,
         };
 
         Ok(Value {

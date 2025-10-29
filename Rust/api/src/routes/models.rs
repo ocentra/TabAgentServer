@@ -471,7 +471,7 @@ impl RouteHandler for ModelInfoRoute {
 
     fn metadata() -> RouteMetadata {
         RouteMetadata {
-            path: "/v1/models/:model_id",
+            path: "/v1/models/{model_id}",
             method: Method::GET,
             tags: &["Models"],
             description: "Get detailed information about a specific model",

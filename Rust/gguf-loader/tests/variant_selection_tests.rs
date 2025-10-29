@@ -3,7 +3,7 @@
 /// These tests verify that the correct library variant is selected for different
 /// hardware configurations WITHOUT requiring actual hardware or libraries.
 
-use gguf_loader::{Variant, BitNetCpuVariant, BitNetGpuVariant, StandardCpuVariant, StandardGpuVariant};
+use gguf_loader::{Variant, BitNetCpuVariant, BitNetGpuVariant, StandardCpuVariant, StandardGpuVariant, LibraryVariant};
 use tabagent_hardware::{SystemInfo, CpuInfo, GpuInfo, CpuArchitecture, GpuVendor, CpuVendor, MemoryInfo, OsInfo};
 
 /// Helper to create mock system info

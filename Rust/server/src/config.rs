@@ -22,12 +22,12 @@ use anyhow::{Context, Result};
 #[command(about = "TabAgent Server - Rust-native server with HTTP, WebRTC, and native messaging")]
 #[command(version)]
 pub struct CliArgs {
-    /// Server mode: Native messaging, HTTP API, WebRTC, Both, or All
-    #[arg(long, short = 'm', default_value = "http", env = "TABAGENT_MODE")]
+    /// Server mode: Native messaging, HTTP API, WebRTC, Web, Both, or All
+    #[arg(long, short = 'm', default_value = "all", env = "TABAGENT_MODE")]
     pub mode: ServerMode,
 
     /// HTTP port for API server
-    #[arg(long, short = 'p', default_value = "8001", env = "TABAGENT_PORT")]
+    #[arg(long, short = 'p', default_value = "3000", env = "TABAGENT_PORT")]
     pub port: u16,
 
     /// Configuration file path
@@ -65,6 +65,8 @@ pub enum ServerMode {
     Http,
     /// WebRTC signaling and data channels only
     WebRtc,
+    /// HTTP + WebRTC (no Native Messaging) - best for terminal use
+    Web,
     /// Both native messaging and HTTP simultaneously
     Both,
     /// All three transports: HTTP, WebRTC, and Native Messaging
@@ -73,6 +75,7 @@ pub enum ServerMode {
 
 /// Full server configuration (merged from all sources).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Prepared for future configuration file support
 pub struct ServerConfig {
     /// Server mode
     pub mode: ServerMode,
@@ -94,6 +97,7 @@ pub struct ServerConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Prepared for future use
 pub struct HttpConfig {
     pub port: u16,
     pub host: String,
@@ -103,6 +107,7 @@ pub struct HttpConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Prepared for WebRTC integration
 pub struct WebRtcConfig {
     pub enabled: bool,
     pub signaling_port: u16,
@@ -110,6 +115,7 @@ pub struct WebRtcConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Prepared for WebRTC integration
 pub struct IceServer {
     pub urls: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -119,6 +125,7 @@ pub struct IceServer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Prepared for future use
 pub struct DatabaseConfig {
     pub path: PathBuf,
     pub cache_size_mb: usize,
@@ -126,6 +133,7 @@ pub struct DatabaseConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Prepared for future use
 pub struct ModelCacheConfig {
     pub path: PathBuf,
     pub max_size_gb: usize,
@@ -133,6 +141,7 @@ pub struct ModelCacheConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Legacy, to be removed after Python migration
 pub struct PythonConfig {
     pub enabled: bool,
     pub max_workers: usize,
@@ -147,6 +156,7 @@ impl ServerConfig {
     /// # RAG Compliance
     /// - Proper error handling with context
     /// - No unwrap() calls
+    #[allow(dead_code)] // Prepared for future configuration file support
     pub fn load(args: &CliArgs) -> Result<Self> {
         // Start with defaults
         let mut config = Self::default();
@@ -170,6 +180,7 @@ impl ServerConfig {
     }
 
     /// Load configuration from a TOML file.
+    #[allow(dead_code)] // Prepared for future configuration file support
     fn from_file(path: &PathBuf) -> Result<Self> {
         let contents = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read config file: {:?}", path))?;
@@ -181,6 +192,7 @@ impl ServerConfig {
     }
 
     /// Merge this config with another, giving priority to the other.
+    #[allow(dead_code)] // Prepared for future configuration file support
     fn merge(self, other: Self) -> Self {
         // In a real implementation, we'd merge field by field
         // For now, just return other (it takes priority)

@@ -56,7 +56,7 @@ pub mod system;
 pub mod video_stream;
 pub mod audio_stream;
 
-// HuggingFace Auth and Hardware routes (TIER1)
+// HuggingFace Auth and Hardware routes (forwarding to appstate)
 pub mod hf_auth;
 pub mod hardware;
 
@@ -141,12 +141,12 @@ pub fn list_available_routes() -> Vec<crate::route_trait::RouteMetadata> {
         video_stream::VideoStreamRoute::metadata(),
         audio_stream::AudioStreamRoute::metadata(),
         
-        // HuggingFace Auth routes (TIER1)
+        // HuggingFace Auth routes (forward to appstate)
         hf_auth::SetHfTokenRoute::metadata(),
         hf_auth::GetHfTokenStatusRoute::metadata(),
         hf_auth::ClearHfTokenRoute::metadata(),
         
-        // Hardware routes (TIER1)
+        // Hardware routes (forward to appstate)
         hardware::GetHardwareInfoRoute::metadata(),
         hardware::CheckModelFeasibilityRoute::metadata(),
         hardware::GetRecommendedModelsRoute::metadata(),
@@ -168,8 +168,8 @@ mod tests {
     fn test_route_registry_completeness() {
         let routes = list_available_routes();
         
-        // WebRTC has 35+ routes after split pattern migration
-        assert!(routes.len() >= 35, "Expected at least 35 routes, got {}", routes.len());
+        // WebRTC has 29 routes after split pattern migration (without HF/Hardware special routes)
+        assert!(routes.len() >= 29, "Expected at least 29 routes, got {}", routes.len());
         
         // Ensure all routes have valid metadata
         for route in &routes {

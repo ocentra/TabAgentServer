@@ -1,6 +1,9 @@
 //! WebRTC session state management
 
-use crate::types::IceCandidate;
+use crate::{
+    peer_connection::PeerConnectionHandler,
+    types::IceCandidate,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -35,7 +38,6 @@ impl SessionState {
 }
 
 /// A WebRTC session representing a connection to a Chrome extension
-#[derive(Debug, Clone)]
 pub struct WebRtcSession {
     /// Unique session ID
     pub id: String,
@@ -63,6 +65,9 @@ pub struct WebRtcSession {
     
     /// Whether data channel is connected
     pub data_channel_connected: bool,
+    
+    /// Real WebRTC peer connection handler
+    pub peer_connection: Option<Arc<PeerConnectionHandler>>,
 }
 
 impl WebRtcSession {
@@ -79,6 +84,29 @@ impl WebRtcSession {
             answer_sdp: None,
             ice_candidates: Vec::new(),
             data_channel_connected: false,
+            peer_connection: None,
+        }
+    }
+    
+    /// Create a new session with a real peer connection
+    pub fn with_peer_connection(
+        id: String,
+        client_id: String,
+        offer_sdp: String,
+        peer_connection: Arc<PeerConnectionHandler>,
+    ) -> Self {
+        let now = Utc::now();
+        Self {
+            id,
+            client_id,
+            state: SessionState::WaitingForAnswer,
+            created_at: now,
+            last_activity: now,
+            offer_sdp,
+            answer_sdp: None,
+            ice_candidates: Vec::new(),
+            data_channel_connected: false,
+            peer_connection: Some(peer_connection),
         }
     }
     

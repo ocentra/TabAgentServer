@@ -7,7 +7,7 @@ use clap::Parser;
 use std::sync::Arc;
 use std::path::PathBuf;
 use tabagent_native_messaging::{run_host_with_state, NativeMessagingConfig};
-use tabagent_server::{AppState, CliArgs as ServerCliArgs, ServerMode};
+use appstate::{AppState, AppStateConfig};
 use tracing_subscriber;
 
 /// Command line arguments for the native messaging host
@@ -69,18 +69,12 @@ async fn main() -> anyhow::Result<()> {
     
     // Create real TabAgent server state (uses actual backend)
     tracing::info!("Initializing TabAgent server state...");
-    let server_args = ServerCliArgs {
-        mode: ServerMode::Native,
-        port: 8001, // Not used in native mode
-        config: PathBuf::from("server.toml"),
+    let state_config = AppStateConfig {
         db_path: PathBuf::from(&args.db_path),
         model_cache_path: PathBuf::from(&args.model_cache_path),
-        log_level: args.log_level.clone(),
-        webrtc_enabled: false,
-        webrtc_port: 8002,
     };
     
-    let state = AppState::new(&server_args).await?;
+    let state = AppState::new(state_config).await?;
     tracing::info!("TabAgent server state initialized successfully");
     
     // Wrap in Arc<dyn AppStateProvider> for trait object

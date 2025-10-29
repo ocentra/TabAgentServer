@@ -20,7 +20,7 @@ use crate::route_trait::{RouteHandler, RouteMetadata, TestCase};
 use crate::traits::AppStateProvider;
 
 /// Health check request (empty for GET endpoint).
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 pub struct HealthRequest;
 
 /// Health check response.
@@ -50,7 +50,7 @@ impl RouteHandler for HealthRoute {
 
     fn metadata() -> RouteMetadata {
         RouteMetadata {
-            path: "/health",
+            path: "/v1/health",
             method: Method::GET,
             tags: &["System"],
             description: "Health check endpoint for service monitoring and load balancer probes",
@@ -139,8 +139,8 @@ impl RouteHandler for HealthRoute {
 // Enforce compile-time rules
 crate::enforce_route_handler!(HealthRoute);
 
-// Implement RegisterableRoute with Axum 0.8 compatible handler
-crate::impl_registerable_route!(HealthRoute);
+// Implement RegisterableRoute for GET with no body
+crate::impl_registerable_route_get!(HealthRoute);
 
 #[cfg(test)]
 mod tests {
@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn test_metadata() {
         let meta = HealthRoute::metadata();
-        assert_eq!(meta.path, "/health");
+        assert_eq!(meta.path, "/v1/health");
         assert_eq!(meta.method, Method::GET);
         assert!(meta.idempotent);
         assert!(!meta.requires_auth);

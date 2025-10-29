@@ -36,7 +36,7 @@ impl RouteHandler for GetHistoryRoute {
 
     fn metadata() -> RouteMetadata {
         RouteMetadata {
-            path: "/v1/sessions/:session_id/history",
+            path: "/v1/sessions/{session_id}/history",
             method: Method::GET,
             tags: &["Sessions"],
             description: "Retrieve chat history for a specific session",
@@ -192,7 +192,7 @@ impl RouteHandler for SaveMessageRoute {
 
     fn metadata() -> RouteMetadata {
         RouteMetadata {
-            path: "/v1/sessions/:session_id/messages",
+            path: "/v1/sessions/{session_id}/messages",
             method: Method::POST,
             tags: &["Sessions"],
             description: "Save a message to a session's chat history",

@@ -1,20 +1,17 @@
-//! TabAgent Server Library
+//! TabAgent Server Binary
 //!
-//! This library provides the core server functionality for TabAgent,
-//! including request handling, state management, and backend coordination.
+//! This crate provides the main server binary that orchestrates all three transport layers:
+//! - HTTP API (using `tabagent-api`)
+//! - Native Messaging (using `tabagent-native-messaging`)
+//! - WebRTC (using `tabagent-webrtc`)
 //!
-//! The primary entry point is `AppState`, which implements `common::backend::AppStateProvider`
-//! and can be used by all three entry points (API, native messaging, WebRTC).
+//! The server creates an `appstate::AppState` and passes it to all transport layers.
+//! Business logic lives in `appstate`, not here!
 
 pub mod config;
 pub mod error;
-pub mod state;
-pub mod handler;
-pub mod python_bridge;
-pub mod hf_auth;
 
-// Re-export the main types for external use
-pub use state::AppState;
+// Re-export server configuration types
 pub use config::{CliArgs, ServerMode};
 pub use error::{ServerError, ServerResult};
 

@@ -59,7 +59,7 @@ impl NativeMessagingRoute for GetHardwareInfoRoute {
         let request_value = tabagent_values::RequestValue::from_json(r#"{"action":"get_hardware_info"}"#)?;
 
         let response = state.handle_request(request_value).await
-            .map_err(|e| NativeMessagingError::Backend(e.to_string()))?;
+            .map_err(|e| NativeMessagingError::Backend(e))?;
 
         let json_str = response.to_json()?;
         let data: serde_json::Value = serde_json::from_str(&json_str)?;
@@ -128,8 +128,9 @@ impl NativeMessagingRoute for CheckModelFeasibilityRoute {
 
     async fn validate_request(req: &Self::Request) -> NativeMessagingResult<()> {
         if req.model_size_mb == 0 {
-            return Err(NativeMessagingError::Validation(
-                "Model size must be greater than 0".to_string()
+            return Err(NativeMessagingError::validation(
+                "model_size_mb",
+                "Model size must be greater than 0"
             ));
         }
         Ok(())
@@ -148,7 +149,7 @@ impl NativeMessagingRoute for CheckModelFeasibilityRoute {
         }))?)?;
 
         let response = state.handle_request(request_value).await
-            .map_err(|e| NativeMessagingError::Backend(e.to_string()))?;
+            .map_err(|e| NativeMessagingError::Backend(e))?;
 
         let json_str = response.to_json()?;
         let data: serde_json::Value = serde_json::from_str(&json_str)?;
@@ -230,7 +231,7 @@ impl NativeMessagingRoute for GetRecommendedModelsRoute {
         let request_value = tabagent_values::RequestValue::from_json(r#"{"action":"get_recommended_models"}"#)?;
 
         let response = state.handle_request(request_value).await
-            .map_err(|e| NativeMessagingError::Backend(e.to_string()))?;
+            .map_err(|e| NativeMessagingError::Backend(e))?;
 
         let json_str = response.to_json()?;
         let data: serde_json::Value = serde_json::from_str(&json_str)?;

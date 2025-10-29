@@ -226,6 +226,48 @@ macro_rules! impl_registerable_route {
     };
 }
 
+/// Macro to generate RegisterableRoute implementation for GET routes WITHOUT a request body.
+///
+/// This is specifically for GET endpoints that don't require any input parameters
+/// (e.g., health checks, discovery endpoints).
+///
+/// Usage:
+/// ```ignore
+/// impl_registerable_route_get!(HealthRoute);
+/// ```
+#[macro_export]
+macro_rules! impl_registerable_route_get {
+    ($route_type:ty) => {
+        impl $crate::route_trait::RegisterableRoute for $route_type {
+            fn register(
+                router: axum::Router<$crate::traits::AppStateWrapper>
+            ) -> axum::Router<$crate::traits::AppStateWrapper> {
+                use $crate::route_trait::RouteHandler;
+                
+                let metadata = <$route_type>::metadata();
+                
+                // Verify this is actually a GET request
+                use axum::http::Method;
+                assert_eq!(metadata.method, Method::GET, 
+                    "impl_registerable_route_get! can only be used with GET routes");
+                
+                // Create concrete handler function for GET with no body
+                async fn handler(
+                    axum::extract::State(state): axum::extract::State<$crate::traits::AppStateWrapper>,
+                ) -> Result<axum::Json<<$route_type as RouteHandler>::Response>, $crate::error::ApiError> {
+                    // Create empty request (GET routes typically use empty structs)
+                    let req = <$route_type as RouteHandler>::Request::default();
+                    <$route_type>::validate_request(&req).await?;
+                    let response = <$route_type>::handle(req, &state).await?;
+                    Ok(axum::Json(response))
+                }
+                
+                router.route(metadata.path, axum::routing::get(handler))
+            }
+        }
+    };
+}
+
 /// Macro to enforce route handler implementation AND verify rules.
 ///
 /// This macro generates compile-time checks to ensure:

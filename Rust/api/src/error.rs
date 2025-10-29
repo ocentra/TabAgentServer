@@ -49,6 +49,18 @@ pub enum ApiError {
     RateLimitExceeded(String),
 }
 
+impl From<tabagent_values::ValueError> for ApiError {
+    fn from(err: tabagent_values::ValueError) -> Self {
+        ApiError::BadRequest(err.to_string())
+    }
+}
+
+impl From<serde_json::Error> for ApiError {
+    fn from(err: serde_json::Error) -> Self {
+        ApiError::InternalError(format!("JSON serialization error: {}", err))
+    }
+}
+
 impl fmt::Display for ApiError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

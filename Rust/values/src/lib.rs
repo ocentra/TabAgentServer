@@ -47,7 +47,7 @@ pub mod markers;
 pub use error::{ValueError, ValueResult, BackendError, BackendResult};
 pub use types::{ValueType, TensorDataType};
 pub use request::{RequestValue, RequestType, Message, MessageRole, EmbeddingInput};
-pub use response::{ResponseValue, ResponseType, TokenUsage, FinishReason, HealthStatus};
+pub use response::{ResponseValue, ResponseType, TokenUsage, FinishReason, HealthStatus, ModelInfo};
 pub use model_data::{ModelValue, ModelDataType, TensorData};
 pub use markers::{ValueTypeMarker, DynValueTypeMarker};
 

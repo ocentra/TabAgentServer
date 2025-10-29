@@ -2,9 +2,8 @@
 //!
 //! Routes for managing HuggingFace API tokens (set, get status, clear).
 
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{Json, extract::State};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use crate::error::{ApiError, ApiResult};
 use common::backend::AppStateProvider;
@@ -34,7 +33,7 @@ pub struct SetHfTokenResponse {
     tag = "HuggingFace Auth"
 )]
 pub async fn set_hf_token<S>(
-    State(state): State<Arc<S>>,
+    State(state): State<S>,
     Json(payload): Json<SetHfTokenRequest>,
 ) -> ApiResult<Json<SetHfTokenResponse>>
 where
@@ -71,7 +70,7 @@ pub struct GetHfTokenStatusResponse {
     tag = "HuggingFace Auth"
 )]
 pub async fn get_hf_token_status<S>(
-    State(state): State<Arc<S>>,
+    State(state): State<S>,
 ) -> ApiResult<Json<GetHfTokenStatusResponse>>
 where
     S: AppStateProvider + Send + Sync + 'static,
@@ -107,7 +106,7 @@ pub struct ClearHfTokenResponse {
     tag = "HuggingFace Auth"
 )]
 pub async fn clear_hf_token<S>(
-    State(state): State<Arc<S>>,
+    State(state): State<S>,
 ) -> ApiResult<Json<ClearHfTokenResponse>>
 where
     S: AppStateProvider + Send + Sync + 'static,

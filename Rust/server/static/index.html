@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabAgent Server Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 1.3em;
+            opacity: 0.9;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.8em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .icon {
+            font-size: 1.5em;
+        }
+
+        .links {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .link-btn {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .link-btn:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .link-btn .arrow {
+            font-size: 1.2em;
+        }
+
+        .status-card {
+            grid-column: 1 / -1;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .status-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .status-item h3 {
+            color: #667eea;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .status-item .value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .badge-success {
+            background: #55efc4;
+            color: #00b894;
+        }
+
+        .badge-info {
+            background: #74b9ff;
+            color: #0984e3;
+        }
+
+        .badge-warning {
+            background: #ffeaa7;
+            color: #fdcb6e;
+        }
+
+        .feature-list {
+            list-style: none;
+            margin-top: 15px;
+        }
+
+        .feature-list li {
+            padding: 8px 0;
+            padding-left: 30px;
+            position: relative;
+            color: #555;
+        }
+
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #55efc4;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            padding: 20px;
+            opacity: 0.9;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .checking {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 TabAgent Server Dashboard</h1>
+            <p>Multi-Protocol AI Server • HTTP • WebRTC • Native Messaging</p>
+        </div>
+
+        <!-- Server Status -->
+        <div class="grid">
+            <div class="card status-card">
+                <h2><span class="icon">📊</span> Server Status</h2>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <h3>Server Mode</h3>
+                        <div class="value" id="serverMode">
+                            <span class="badge badge-info checking">Detecting...</span>
+                        </div>
+                    </div>
+                    <div class="status-item">
+                        <h3>HTTP API</h3>
+                        <div class="value" id="httpStatus">
+                            <span class="badge badge-info checking">Checking...</span>
+                        </div>
+                    </div>
+                    <div class="status-item">
+                        <h3>WebRTC</h3>
+                        <div class="value" id="webrtcStatus">
+                            <span class="badge badge-info checking">Checking...</span>
+                        </div>
+                    </div>
+                    <div class="status-item">
+                        <h3>Detected Port</h3>
+                        <div class="value" id="detectedPort">—</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Features -->
+        <div class="grid">
+            <!-- API Documentation -->
+            <div class="card">
+                <h2><span class="icon">📘</span> API Documentation</h2>
+                <p>Interactive API documentation and testing interfaces</p>
+                <div class="links">
+                    <a href="/swagger-ui/" class="link-btn" target="_blank">
+                        <span>Swagger UI</span>
+                        <span class="arrow">→</span>
+                    </a>
+                    <a href="/rapidoc/" class="link-btn" target="_blank">
+                        <span>RapiDoc</span>
+                        <span class="arrow">→</span>
+                    </a>
+                    <a href="/redoc/" class="link-btn" target="_blank">
+                        <span>ReDoc</span>
+                        <span class="arrow">→</span>
+                    </a>
+                    <a href="/api-doc/openapi.json" class="link-btn" target="_blank">
+                        <span>OpenAPI Spec (JSON)</span>
+                        <span class="arrow">→</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- WebRTC Demo -->
+            <div class="card">
+                <h2><span class="icon">🎮</span> WebRTC Demo</h2>
+                <p>Test real-time peer-to-peer communication over WebRTC data channels</p>
+                <ul class="feature-list">
+                    <li>Real WebRTC peer connections</li>
+                    <li>Data channel messaging</li>
+                    <li>Live API testing</li>
+                    <li>No Native Messaging required</li>
+                </ul>
+                <div class="links">
+                    <a href="/demo/webrtc-demo.html" class="link-btn">
+                        <span>Launch WebRTC Demo</span>
+                        <span class="arrow">→</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Chat Demo -->
+            <div class="card">
+                <h2><span class="icon">💬</span> AI Chat Demo</h2>
+                <p>Real-time chat with AI models using WebRTC data channels</p>
+                <ul class="feature-list">
+                    <li>WebRTC-powered live chat</li>
+                    <li>No HTTP polling required</li>
+                    <li>Ultra-low latency responses</li>
+                    <li>Beautiful chat interface</li>
+                </ul>
+                <div class="links">
+                    <a href="/demo/chat-demo.html" class="link-btn">
+                        <span>Launch Chat Demo</span>
+                        <span class="arrow">→</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Quick API Tests -->
+            <div class="card">
+                <h2><span class="icon">⚡</span> Quick API Tests</h2>
+                <p>Test common endpoints directly from your browser</p>
+                <div class="links">
+                    <a href="/v1/health" class="link-btn" target="_blank">
+                        <span>Health Check</span>
+                        <span class="arrow">→</span>
+                    </a>
+                    <a href="/v1/system" class="link-btn" target="_blank">
+                        <span>System Info</span>
+                        <span class="arrow">→</span>
+                    </a>
+                    <a href="/v1/models" class="link-btn" target="_blank">
+                        <span>List Models</span>
+                        <span class="arrow">→</span>
+                    </a>
+                    <a href="/v1/stats" class="link-btn" target="_blank">
+                        <span>Server Stats</span>
+                        <span class="arrow">→</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Communication Methods -->
+        <div class="grid">
+            <div class="card">
+                <h2><span class="icon">🌐</span> HTTP/REST API</h2>
+                <p><strong>Port:</strong> <span id="httpPort">3000</span> (default)</p>
+                <ul class="feature-list">
+                    <li>Traditional REST endpoints</li>
+                    <li>JSON request/response</li>
+                    <li>Perfect for web apps</li>
+                    <li>OpenAPI 3.0 compliant</li>
+                </ul>
+                <p style="margin-top: 15px; font-size: 0.9em; color: #888;">
+                    <strong>Usage:</strong> <code>--mode http --port 3000</code>
+                </p>
+            </div>
+
+            <div class="card">
+                <h2><span class="icon">📡</span> WebRTC P2P</h2>
+                <p><strong>Port:</strong> <span id="webrtcPortDisplay">9000</span> (signaling)</p>
+                <ul class="feature-list">
+                    <li>Peer-to-peer data channels</li>
+                    <li>Low latency communication</li>
+                    <li>Browser-native support</li>
+                    <li>No extension required</li>
+                </ul>
+                <p style="margin-top: 15px; font-size: 0.9em; color: #888;">
+                    <strong>Usage:</strong> <code>--mode webrtc --webrtc-port 9000</code>
+                </p>
+            </div>
+
+            <div class="card">
+                <h2><span class="icon">🔌</span> Native Messaging</h2>
+                <p><strong>Protocol:</strong> stdin/stdout</p>
+                <ul class="feature-list">
+                    <li>Chrome extension communication</li>
+                    <li>Binary-safe messaging</li>
+                    <li>Length-prefixed JSON</li>
+                    <li>Direct process communication</li>
+                </ul>
+                <p style="margin-top: 15px; font-size: 0.9em; color: #888;">
+                    <strong>Usage:</strong> <code>--mode native</code>
+                </p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>TabAgent Server</strong> • Rust-native AI server with multiple communication protocols</p>
+            <p style="margin-top: 10px; font-size: 0.9em;">
+                Run with <code>--mode all</code> (default) to enable all protocols simultaneously
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const currentPort = window.location.port || '80';
+        
+        // Update detected port
+        document.getElementById('detectedPort').textContent = currentPort;
+
+        // Check server endpoints
+        async function checkEndpoint(url, statusId, label) {
+            try {
+                const response = await fetch(url);
+                if (response.ok) {
+                    document.getElementById(statusId).innerHTML = 
+                        `<span class="badge badge-success">✓ Online</span>`;
+                    return true;
+                }
+            } catch (e) {
+                document.getElementById(statusId).innerHTML = 
+                    `<span class="badge badge-warning">✗ Offline</span>`;
+            }
+            return false;
+        }
+
+        // Detect server mode
+        async function detectMode() {
+            const httpOnline = await checkEndpoint('/v1/health', 'httpStatus', 'HTTP');
+            
+            // Try WebRTC endpoint
+            let webrtcOnline = false;
+            try {
+                const response = await fetch('/v1/webrtc/session/test');
+                // Even 404 means WebRTC routes are registered
+                webrtcOnline = response.status === 404 || response.status === 200;
+            } catch (e) {
+                webrtcOnline = false;
+            }
+            
+            document.getElementById('webrtcStatus').innerHTML = webrtcOnline
+                ? `<span class="badge badge-success">✓ Online</span>`
+                : `<span class="badge badge-warning">✗ Offline</span>`;
+
+            // Determine mode
+            let mode = 'Unknown';
+            if (httpOnline && webrtcOnline) {
+                mode = 'ALL';
+            } else if (httpOnline) {
+                mode = currentPort === '9000' ? 'WebRTC' : 'HTTP';
+            } else if (webrtcOnline) {
+                mode = 'WebRTC';
+            }
+
+            document.getElementById('serverMode').innerHTML = 
+                `<span class="badge badge-success">${mode}</span>`;
+
+            // Update port displays
+            if (currentPort === '9000') {
+                document.getElementById('httpPort').textContent = '9000';
+                document.getElementById('webrtcPortDisplay').textContent = '9000';
+            }
+        }
+
+        // Run detection on load
+        detectMode();
+    </script>
+</body>
+</html>
+

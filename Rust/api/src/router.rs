@@ -11,7 +11,7 @@ use tower_http::{
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 use utoipa_rapidoc::RapiDoc;
-use utoipa_redoc::Redoc;
+// Redoc served manually via HTML route
 
 use crate::{
     config::ApiConfig,
@@ -25,6 +25,7 @@ use crate::{
 /// Returns a MakeService ready to be passed to axum::serve().
 pub fn configure_routes(
     state: crate::traits::AppStateWrapper,
+    webrtc_manager: Option<std::sync::Arc<tabagent_webrtc::WebRtcManager>>,
     config: &ApiConfig,
 ) -> axum::routing::IntoMakeService<Router> {
     use crate::route_trait::RegisterableRoute;
@@ -71,49 +72,154 @@ pub fn configure_routes(
     
     // HuggingFace Auth routes
     router = router
-        .route("/v1/hf/token", post(routes::hf_auth::set_hf_token::<crate::traits::AppState>))
-        .route("/v1/hf/token/status", get(routes::hf_auth::get_hf_token_status::<crate::traits::AppState>))
-        .route("/v1/hf/token", axum::routing::delete(routes::hf_auth::clear_hf_token::<crate::traits::AppState>));
+        .route("/v1/hf/token", post(routes::hf_auth::set_hf_token::<crate::traits::AppStateWrapper>))
+        .route("/v1/hf/token/status", get(routes::hf_auth::get_hf_token_status::<crate::traits::AppStateWrapper>))
+        .route("/v1/hf/token", axum::routing::delete(routes::hf_auth::clear_hf_token::<crate::traits::AppStateWrapper>));
     
     // Hardware routes
     router = router
-        .route("/v1/hardware/info", get(routes::hardware::get_hardware_info::<crate::traits::AppState>))
-        .route("/v1/hardware/feasibility", post(routes::hardware::check_model_feasibility::<crate::traits::AppState>))
-        .route("/v1/hardware/recommendations", get(routes::hardware::get_recommended_models::<crate::traits::AppState>));
+        .route("/v1/hardware/info", get(routes::hardware::get_hardware_info::<crate::traits::AppStateWrapper>))
+        .route("/v1/hardware/feasibility", post(routes::hardware::check_model_feasibility::<crate::traits::AppStateWrapper>))
+        .route("/v1/hardware/recommendations", get(routes::hardware::get_recommended_models::<crate::traits::AppStateWrapper>));
     
-    // WebRTC signaling routes (3 trait-based + 1 manual)
-    router = routes::webrtc::CreateOfferRoute::register(router);
-    router = routes::webrtc::SubmitAnswerRoute::register(router);
-    router = routes::webrtc::AddIceCandidateRoute::register(router);
-    
-    // WebRTC GET session route (manual - needs Path parameter)
-    router = router
-        .route("/v1/webrtc/session/:session_id", get(|
-            axum::extract::State(_state): axum::extract::State<crate::traits::AppStateWrapper>,
-            axum::extract::Path(session_id): axum::extract::Path<String>| async move {
-            let request_id = uuid::Uuid::new_v4();
-            tracing::info!(request_id = %request_id, session_id = %session_id, "Get WebRTC session");
+    // WebRTC signaling routes (manual - use WebRtcManager directly)
+    if let Some(manager) = webrtc_manager {
+        let manager_clone = manager.clone();
+        router = router
+            // POST /v1/webrtc/offer
+            .route("/v1/webrtc/offer", post(move |
+                axum::Json(req): axum::Json<routes::webrtc::CreateOfferRequest>| {
+                let manager = manager_clone.clone();
+                async move {
+                    let request_id = uuid::Uuid::new_v4();
+                    tracing::info!(request_id = %request_id, peer_id = ?req.peer_id, "WebRTC offer received");
+                    
+                    // Validate
+                    if req.sdp.trim().is_empty() {
+                        return Err(crate::error::ApiError::BadRequest("SDP offer cannot be empty".into()));
+                    }
+                    
+                    // Create offer via WebRtcManager (NOT AppState!)
+                    let client_id = req.peer_id.unwrap_or_else(|| format!("client-{}", request_id));
+                    let session = manager.create_offer(client_id).await
+                        .map_err(|e| crate::error::ApiError::InternalError(e.to_string()))?;
+                    
+                    let response = routes::webrtc::CreateOfferResponse {
+                        session_id: session.id.clone(),
+                        created_at: session.created_at.to_rfc3339(),
+                    };
+                    
+                    tracing::info!(request_id = %request_id, session_id = %session.id, "WebRTC offer created");
+                    Ok::<_, crate::error::ApiError>(axum::Json(response))
+                }
+            }));
+        
+        let manager_clone = manager.clone();
+        router = router
+            // POST /v1/webrtc/answer
+            .route("/v1/webrtc/answer", post(move |
+                axum::Json(req): axum::Json<routes::webrtc::SubmitAnswerRequest>| {
+                let manager = manager_clone.clone();
+                async move {
+                    let request_id = uuid::Uuid::new_v4();
+                    tracing::info!(request_id = %request_id, session_id = %req.session_id, "WebRTC answer received");
+                    
+                    // Validate
+                    if req.session_id.trim().is_empty() {
+                        return Err(crate::error::ApiError::BadRequest("Session ID cannot be empty".into()));
+                    }
+                    if req.sdp.trim().is_empty() {
+                        return Err(crate::error::ApiError::BadRequest("SDP answer cannot be empty".into()));
+                    }
+                    
+                    // Submit answer via WebRtcManager (NOT AppState!)
+                    manager.submit_answer(&req.session_id, req.sdp.clone()).await
+                        .map_err(|e| crate::error::ApiError::InternalError(e.to_string()))?;
+                    
+                    let response = routes::webrtc::SubmitAnswerResponse {
+                        success: true,
+                        session_id: req.session_id.clone(),
+                    };
+                    
+                    tracing::info!(request_id = %request_id, session_id = %req.session_id, "WebRTC answer accepted");
+                    Ok::<_, crate::error::ApiError>(axum::Json(response))
+                }
+            }));
+        
+        let manager_clone = manager.clone();
+        router = router
+            // POST /v1/webrtc/ice
+            .route("/v1/webrtc/ice", post(move |
+                axum::Json(req): axum::Json<routes::webrtc::AddIceCandidateRequest>| {
+                let manager = manager_clone.clone();
+                async move {
+                    let request_id = uuid::Uuid::new_v4();
+                    tracing::info!(request_id = %request_id, session_id = %req.session_id, "ICE candidate received");
+                    
+                    // Validate
+                    if req.session_id.trim().is_empty() {
+                        return Err(crate::error::ApiError::BadRequest("Session ID cannot be empty".into()));
+                    }
+                    
+                    // Add ICE candidate via WebRtcManager (NOT AppState!)
+                    let ice_candidate = tabagent_webrtc::IceCandidate {
+                        candidate: req.candidate.clone(),
+                        sdp_mid: None,
+                        sdp_mline_index: None,
+                        added_at: chrono::Utc::now(),
+                    };
+                    manager.add_ice_candidate(&req.session_id, ice_candidate).await
+                        .map_err(|e| crate::error::ApiError::InternalError(e.to_string()))?;
+                    
+                    let response = routes::webrtc::AddIceCandidateResponse {
+                        success: true,
+                        session_id: req.session_id.clone(),
+                    };
+                    
+                    tracing::info!(request_id = %request_id, session_id = %req.session_id, "ICE candidate added");
+                    Ok::<_, crate::error::ApiError>(axum::Json(response))
+                }
+            }));
             
-            // Validate
-            if session_id.trim().is_empty() {
-                return Err(crate::error::ApiError::BadRequest("Session ID cannot be empty".into()));
-            }
-            
-            let _request = tabagent_values::RequestValue::get_webrtc_session(&session_id);
-            
-            // TODO: Call backend once handler is implemented
-            // For now, return a placeholder response
-            let response = routes::webrtc::WebRtcSessionResponse {
-                session_id: session_id.clone(),
-                state: "new".to_string(),
-                offer: None,
-                answer: None,
-                ice_candidates: vec![],
-            };
-            
-            tracing::info!(request_id = %request_id, session_id = %session_id, "WebRTC session retrieved");
-            Ok::<_, crate::error::ApiError>(axum::Json(response))
-        }));
+        let manager_clone = manager.clone();
+        router = router
+            // GET /v1/webrtc/session/{session_id}
+            .route("/v1/webrtc/session/{session_id}", get(move |
+                axum::extract::Path(session_id): axum::extract::Path<String>| {
+                let manager = manager_clone.clone();
+                async move {
+                    let request_id = uuid::Uuid::new_v4();
+                    tracing::info!(request_id = %request_id, session_id = %session_id, "Get WebRTC session");
+                    
+                    // Validate
+                    if session_id.trim().is_empty() {
+                        return Err(crate::error::ApiError::BadRequest("Session ID cannot be empty".into()));
+                    }
+                    
+                    // Get session via WebRtcManager (NOT AppState!)
+                    let session = manager.get_session(&session_id).await
+                        .map_err(|e| {
+                            // SessionNotFound error -> 404
+                            if e.to_string().contains("not found") {
+                                crate::error::ApiError::NotFound(format!("Session {} not found", session_id))
+                            } else {
+                                crate::error::ApiError::InternalError(e.to_string())
+                            }
+                        })?;
+                    
+                    let response = routes::webrtc::WebRtcSessionResponse {
+                        session_id: session.id.clone(),
+                        state: session.state.clone(),
+                        offer: if session.has_offer { Some("SDP Offer (present)".to_string()) } else { None },
+                        answer: if session.has_answer { Some("SDP Answer (present)".to_string()) } else { None },
+                        ice_candidates: vec![], // SessionInfo doesn't include full candidate list
+                    };
+                    
+                    tracing::info!(request_id = %request_id, session_id = %session_id, "WebRTC session retrieved");
+                    Ok::<_, crate::error::ApiError>(axum::Json(response))
+                }
+            }));
+    }
     
     // Manual route aliases (trait system only registers one path per route)
     
@@ -175,14 +281,50 @@ pub fn configure_routes(
             .merge(RapiDoc::new("/api-doc/openapi.json")
                 .path("/rapidoc"))
             
-            // Redoc - Beautiful three-panel documentation (uses /redoc by default)
-            .merge(Redoc::new(openapi.clone()))
-            
-            // OpenAPI JSON spec endpoint
-            .route("/api-doc/openapi.json", get(|| async move { 
-                axum::Json(openapi)
+            // Redoc - Serve manually via route (SwaggerUi already registers /api-doc/openapi.json)
+            .route("/redoc", get(|| async {
+                axum::response::Html(r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>TabAgent API - ReDoc</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
+    <style>body { margin: 0; padding: 0; }</style>
+</head>
+<body>
+    <redoc spec-url='/api-doc/openapi.json'></redoc>
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+</body>
+</html>"#)
             }))
     } else {
+        router
+    };
+    
+    // Add static file serving for dashboard and demos
+    use tower_http::services::{ServeDir, ServeFile};
+    
+    let static_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("server/static");
+    
+    router = if static_dir.exists() {
+        tracing::info!("📁 Serving static files from {:?}", static_dir);
+        
+        // Serve index.html at root
+        let index_file = static_dir.join("index.html");
+        let router = if index_file.exists() {
+            router.route_service("/", ServeFile::new(index_file))
+        } else {
+            router
+        };
+        
+        // Serve all static files under /demo/
+        router.nest_service("/demo", ServeDir::new(static_dir.clone()))
+    } else {
+        tracing::warn!("⚠️ Static directory not found: {:?}", static_dir);
         router
     };
 

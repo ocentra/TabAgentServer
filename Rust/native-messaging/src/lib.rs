@@ -14,18 +14,18 @@
 //! # Usage
 //!
 //! ```rust,no_run
-//! use tabagent_native_messaging::{NativeMessagingHost, NativeMessagingConfig};
-//! use tabagent_values::{RequestValue, ResponseValue};
+//! use tabagent_native_messaging::{NativeMessagingHost, NativeMessagingConfig, AppStateProvider};
+//! use tabagent_values::{RequestValue, ResponseValue, HealthStatus};
 //! use std::sync::Arc;
 //!
 //! struct MyState;
 //!
 //! #[async_trait::async_trait]
 //! impl AppStateProvider for MyState {
-//!     async fn handle_request(&self, req: RequestValue) 
+//!     async fn handle_request(&self, _req: RequestValue) 
 //!         -> anyhow::Result<ResponseValue> 
 //!     {
-//!         Ok(ResponseValue::health("ok"))
+//!         Ok(ResponseValue::health(HealthStatus::Healthy))
 //!     }
 //! }
 //!
@@ -167,12 +167,12 @@ impl NativeMessagingHost {
 /// ```rust,no_run
 /// # use std::sync::Arc;
 /// # use tabagent_native_messaging::{run_host, AppStateProvider, NativeMessagingConfig};
-/// # use tabagent_values::{RequestValue, ResponseValue};
+/// # use tabagent_values::{RequestValue, ResponseValue, HealthStatus};
 /// # struct MyState;
 /// # #[async_trait::async_trait]
 /// # impl AppStateProvider for MyState {
 /// #     async fn handle_request(&self, _req: RequestValue) -> anyhow::Result<ResponseValue> {
-/// #         Ok(ResponseValue::health("ok"))
+/// #         Ok(ResponseValue::health(HealthStatus::Healthy))
 /// #     }
 /// # }
 /// # #[tokio::main]

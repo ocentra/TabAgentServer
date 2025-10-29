@@ -14,10 +14,12 @@ use axum::{
 use serde_json::json;
 
 /// Result type for server operations.
+#[allow(dead_code)] // Defined for future use
 pub type ServerResult<T> = Result<T, ServerError>;
 
 /// Server error types (RAG: Use enums for type safety).
 #[derive(Error, Debug)]
+#[allow(dead_code)] // Error variants defined for future use
 pub enum ServerError {
     /// Database error
     #[error("Database error: {0}")]
