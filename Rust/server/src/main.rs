@@ -117,9 +117,21 @@ async fn main() -> Result<()> {
     }
 
     // Initialize shared application state (wrapped in Arc for sharing across tasks)
+    // Use platform-specific AppData paths if not explicitly provided
+    let db_path = args.db_path.clone().unwrap_or_else(|| {
+        common::platform::get_default_db_path().join("tabagent_db")
+    });
+    
+    let model_cache_path = args.model_cache_path.clone().unwrap_or_else(|| {
+        common::platform::get_default_db_path().join("models")
+    });
+    
+    info!("Database location: {}", db_path.display());
+    info!("Model cache location: {}", model_cache_path.display());
+    
     let config = AppStateConfig {
-        db_path: args.db_path.clone(),
-        model_cache_path: args.model_cache_path.clone(),
+        db_path,
+        model_cache_path,
     };
     let state = Arc::new(AppState::new(config).await?) as Arc<dyn AppStateProvider>;
     

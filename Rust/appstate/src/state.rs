@@ -31,11 +31,16 @@ pub struct AppStateConfig {
 }
 
 impl AppStateConfig {
-    /// Create a default configuration.
+    /// Create a default configuration using platform-specific AppData paths.
+    ///
+    /// - **Windows**: `%APPDATA%\TabAgent\db\`
+    /// - **macOS**: `~/Library/Application Support/TabAgent/db/`
+    /// - **Linux**: `~/.local/share/TabAgent/db/`
     pub fn default() -> Self {
+        let base_path = common::platform::get_default_db_path();
         Self {
-            db_path: PathBuf::from("./tabagent_data"),
-            model_cache_path: PathBuf::from("./models"),
+            db_path: base_path.join("tabagent_db"),
+            model_cache_path: base_path.join("models"),
         }
     }
 }

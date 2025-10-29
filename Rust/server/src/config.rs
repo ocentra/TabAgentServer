@@ -34,13 +34,13 @@ pub struct CliArgs {
     #[arg(long, short = 'c', default_value = "server.toml", env = "TABAGENT_CONFIG")]
     pub config: PathBuf,
 
-    /// Database path
-    #[arg(long, default_value = "./tabagent_db", env = "TABAGENT_DB_PATH")]
-    pub db_path: PathBuf,
+    /// Database path (defaults to platform-specific AppData location if not specified)
+    #[arg(long, env = "TABAGENT_DB_PATH")]
+    pub db_path: Option<PathBuf>,
 
-    /// Model cache directory
-    #[arg(long, default_value = "./models", env = "TABAGENT_MODEL_CACHE")]
-    pub model_cache_path: PathBuf,
+    /// Model cache directory (defaults to platform-specific AppData location if not specified)
+    #[arg(long, env = "TABAGENT_MODEL_CACHE")]
+    pub model_cache_path: Option<PathBuf>,
 
     /// Log level
     #[arg(long, default_value = "info", env = "RUST_LOG")]
