@@ -7,6 +7,11 @@ Cargo.lock
 *.db/
 *.sled/
 
+# Runtime database directories (created by server)
+tabagent_db/
+models/
+server/models/
+
 # Test artifacts - sled database folders
 test_db*/
 temp_db*/
@@ -19,6 +24,3 @@ my_database/
 *.swp
 *.swo
 *~
-
-tabagent_db/
-tabagent_db/
