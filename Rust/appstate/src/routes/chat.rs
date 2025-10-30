@@ -95,9 +95,16 @@ pub async fn handle(
         }
         
         Backend::Python { engine } if engine.contains("transformers") || engine.contains("mediapipe") => {
-            // Forward to Python ML bridge
-            let response_text = state.python_ml_bridge.generate(model, &prompt, temp).await
-                .context("Python ML inference failed")?;
+            // Forward to Python ML client for text generation via gRPC
+            let texts = state.ml_client.generate_text(
+                prompt.clone(),
+                model.to_string(),
+                512, // max_length
+                temp,
+            ).await.context("Python ML inference failed")?;
+            
+            // Concatenate all text chunks
+            let response_text = texts.join("");
 
             Ok(ResponseValue::chat(
                 &request_id,

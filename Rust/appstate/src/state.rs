@@ -22,7 +22,6 @@ use tabagent_values::{RequestValue, ResponseValue};
 use common::backend::AppStateProvider;
 
 use crate::hf_auth::HfAuthManager;
-use crate::python_bridge::PythonMlBridge;
 
 /// Configuration for AppState initialization.
 pub struct AppStateConfig {
@@ -50,8 +49,16 @@ impl AppStateConfig {
 /// Holds all shared resources and provides business logic operations.
 #[derive(Clone)]
 pub struct AppState {
-    /// Database coordinator (conversations, embeddings, knowledge)
-    pub db: Arc<DatabaseCoordinator>,
+    /// Database client (gRPC-based, works with in-process or remote storage)
+    /// For backward compatibility during migration, this wraps DatabaseCoordinator
+    /// but provides location-transparent access
+    pub db_client: Arc<storage::DatabaseClient>,
+    
+    /// ML client (gRPC-based, connects to Python ML services)
+    pub ml_client: Arc<common::MlClient>,
+    
+    /// Model orchestrator (coordinates download → load → inference → unload)
+    pub orchestrator: Arc<crate::orchestrator::ModelOrchestrator>,
     
     /// Model cache (downloads, storage, metadata)
     pub cache: Arc<ModelCache>,
@@ -70,25 +77,39 @@ pub struct AppState {
     /// HuggingFace auth manager (secure token storage)
     pub hf_auth: Arc<HfAuthManager>,
     
-    /// Python ML bridge (for transformers/mediapipe inference)
-    pub python_ml_bridge: Arc<PythonMlBridge>,
-    
     /// Active generation cancellation tokens
     pub generation_tokens: Arc<DashMap<String, tokio_util::sync::CancellationToken>>,
 }
+
+
 
 impl AppState {
     /// Initialize application state.
     pub async fn new(config: AppStateConfig) -> Result<Self> {
         tracing::info!("Initializing AppState...");
 
-        // Initialize database with configured path
+        // Initialize database client (in-process mode by default)
         let db_path = config.db_path.clone();
-        
-        let db = DatabaseCoordinator::with_base_path(Some(db_path.clone()))
+        let db_coordinator = DatabaseCoordinator::with_base_path(Some(db_path.clone()))
             .context("Failed to initialize database")?;
         
-        tracing::info!("Database initialized at: {:?}", db_path);
+        let db_client = storage::DatabaseClient::InProcess(Arc::new(db_coordinator));
+        tracing::info!("Database client initialized (in-process) at: {:?}", db_path);
+
+        // Initialize ML client (attempts connection to Python ML service)
+        let ml_endpoint = std::env::var("ML_ENDPOINT")
+            .unwrap_or_else(|_| "http://localhost:50051".to_string());
+        
+        let ml_client = match common::MlClient::new(&ml_endpoint).await {
+            Ok(client) => {
+                tracing::info!("ML client connected to: {}", ml_endpoint);
+                client
+            }
+            Err(e) => {
+                tracing::warn!("ML client connection failed ({}), using disabled mode", e);
+                common::MlClient::disabled()
+            }
+        };
 
         // Initialize model cache
         let cache_path = config.model_cache_path.to_str()
@@ -116,20 +137,26 @@ impl AppState {
         
         tracing::info!("HuggingFace auth manager initialized");
 
-        // Initialize Python ML bridge (spawns Python process)
-        let python_ml_bridge = PythonMlBridge::new()
-            .context("Failed to initialize Python ML bridge")?;
+        // Wrap resources in Arc for sharing
+        let cache_arc = Arc::new(cache);
+        let ml_client_arc = Arc::new(ml_client);
         
-        tracing::info!("Python ML bridge initialized");
+        // Initialize model orchestrator
+        let orchestrator = Arc::new(crate::orchestrator::ModelOrchestrator::new(
+            cache_arc.clone(),
+            ml_client_arc.clone()
+        ));
+        tracing::info!("Model orchestrator initialized");
 
         Ok(Self {
-            db: Arc::new(db),
-            cache: Arc::new(cache),
+            db_client: Arc::new(db_client),
+            ml_client: ml_client_arc,
+            orchestrator,
+            cache: cache_arc,
             hardware: Arc::new(hardware),
             onnx_models: Arc::new(DashMap::new()),
             gguf_contexts: Arc::new(DashMap::new()),
             hf_auth: Arc::new(hf_auth),
-            python_ml_bridge: Arc::new(python_ml_bridge),
             generation_tokens: Arc::new(DashMap::new()),
         })
     }

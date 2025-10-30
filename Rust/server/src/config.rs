@@ -171,8 +171,12 @@ impl ServerConfig {
         // Override with CLI args (highest priority)
         config.mode = args.mode;
         config.http.port = args.port;
-        config.database.path = args.db_path.clone();
-        config.model_cache.path = args.model_cache_path.clone();
+        if let Some(ref db_path) = args.db_path {
+            config.database.path = db_path.clone();
+        }
+        if let Some(ref model_cache_path) = args.model_cache_path {
+            config.model_cache.path = model_cache_path.clone();
+        }
         config.webrtc.enabled = args.webrtc_enabled;
         config.webrtc.signaling_port = args.webrtc_port;
 
@@ -223,12 +227,12 @@ impl Default for ServerConfig {
                 ],
             },
             database: DatabaseConfig {
-                path: common::platform::get_default_db_path().join("tabagent_db"),
+                path: common::platform::get_default_db_path().join("tabagent_db").to_path_buf(),
                 cache_size_mb: 512,
                 flush_interval_secs: 5,
             },
             model_cache: ModelCacheConfig {
-                path: common::platform::get_default_db_path().join("models"),
+                path: common::platform::get_default_db_path().join("models").to_path_buf(),
                 max_size_gb: 50,
                 cleanup_threshold: 0.9,
             },

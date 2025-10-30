@@ -38,6 +38,13 @@ pub mod errors;
 pub mod inference_settings;
 pub mod hardware_constants;
 pub mod backend;
+pub mod grpc;
+pub mod ml_client;
+pub mod python_process_manager;
+
+// Re-export for convenience
+pub use ml_client::MlClient;
+pub use python_process_manager::PythonProcessManager;
 
 // Re-export commonly used types
 pub use inference_settings::InferenceSettings;

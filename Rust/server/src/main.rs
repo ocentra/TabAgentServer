@@ -13,8 +13,9 @@ mod config;
 mod error;
 
 use appstate::{AppState, AppStateConfig};
-use common::AppStateProvider;
+use common::{AppStateProvider, PythonProcessManager};
 use crate::config::{CliArgs, ServerMode};
+use std::path::PathBuf;
 
 /// Kill any process using the specified port (Windows-specific for now).
 #[cfg(target_os = "windows")]
@@ -116,6 +117,35 @@ async fn main() -> Result<()> {
         }
     }
 
+    // Initialize Python ML service (if PythonML directory exists)
+    let python_ml_dir = std::env::current_dir()?
+        .parent()
+        .map(|p| p.join("PythonML"))
+        .unwrap_or_else(|| PathBuf::from("../PythonML"));
+    
+    let python_ml_port = 50051;
+    let python_manager = if python_ml_dir.exists() {
+        info!("Detected PythonML directory, starting Python ML service...");
+        let manager = PythonProcessManager::new(python_ml_dir.clone(), python_ml_port);
+        
+        match manager.start().await {
+            Ok(_) => {
+                info!("Python ML service started successfully on port {}", python_ml_port);
+                Some(Arc::new(manager))
+            }
+            Err(e) => {
+                warn!("Failed to start Python ML service: {}. Continuing without ML features.", e);
+                warn!("To enable ML features, ensure PythonML directory is set up with:");
+                warn!("  1. requirements.txt installed: pip install -r requirements.txt");
+                warn!("  2. Proto files generated: cd PythonML && ./generate_protos.bat (or .sh)");
+                None
+            }
+        }
+    } else {
+        info!("PythonML directory not found at {}, skipping ML service", python_ml_dir.display());
+        None
+    };
+    
     // Initialize shared application state (wrapped in Arc for sharing across tasks)
     // Use platform-specific AppData paths if not explicitly provided
     let db_path = args.db_path.clone().unwrap_or_else(|| {
@@ -134,6 +164,16 @@ async fn main() -> Result<()> {
         model_cache_path,
     };
     let state = Arc::new(AppState::new(config).await?) as Arc<dyn AppStateProvider>;
+    
+    // Set up cleanup handler for Python ML service
+    let python_manager_for_cleanup = python_manager.clone();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.ok();
+        if let Some(manager) = python_manager_for_cleanup {
+            info!("Shutting down Python ML service...");
+            let _ = manager.stop().await;
+        }
+    });
     
     // Run based on mode
     match args.mode {

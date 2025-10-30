@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Generated
+generated/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Models cache
+models/
+.cache/
+

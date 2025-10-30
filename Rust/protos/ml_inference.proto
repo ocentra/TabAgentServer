@@ -1,0 +1,419 @@
+syntax = "proto3";
+
+package ml;
+
+// ========================================
+// Model Lifecycle Management Service
+// ========================================
+service ModelManagementService {
+    // Load a model into memory with specific pipeline
+    rpc LoadModel(LoadModelRequest) returns (LoadModelResponse);
+    
+    // Unload a model from memory
+    rpc UnloadModel(UnloadModelRequest) returns (StatusResponse);
+    
+    // Get a model file from Rust's cache (streamed)
+    rpc GetModelFile(ModelFileRequest) returns (stream ModelFileChunk);
+    
+    // Get list of loaded models
+    rpc GetLoadedModels(EmptyRequest) returns (LoadedModelsResponse);
+}
+
+message LoadModelRequest {
+    string model_id = 1;           // e.g., "microsoft/Florence-2-base"
+    string pipeline_type = 2;      // e.g., "florence2", "text-generation", "whisper"
+    string architecture = 3;       // e.g., "Florence2", "Llama", "Whisper" (optional hint)
+    map<string, string> options = 4; // Additional options (dtype, device, etc.)
+}
+
+message LoadModelResponse {
+    bool success = 1;
+    string message = 2;
+    int64 vram_allocated_mb = 3;
+    int64 ram_allocated_mb = 4;
+}
+
+message UnloadModelRequest {
+    string model_id = 1;
+}
+
+message ModelFileRequest {
+    string model_id = 1;         // e.g., "microsoft/Florence-2-base"
+    string file_path = 2;        // e.g., "config.json", "model.safetensors"
+}
+
+message ModelFileChunk {
+    bytes data = 1;
+    int64 offset = 2;
+    int64 total_size = 3;
+    bool is_last = 4;
+}
+
+message EmptyRequest {}
+
+message LoadedModelsResponse {
+    repeated LoadedModelInfo models = 1;
+}
+
+message LoadedModelInfo {
+    string model_id = 1;
+    string pipeline_type = 2;
+    int64 vram_mb = 3;
+    int64 ram_mb = 4;
+    int64 loaded_at = 5;
+}
+
+message StatusResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// ========================================
+// Transformers Service
+// ========================================
+service TransformersService {
+    // Stream text generation token by token
+    rpc GenerateText(TextRequest) returns (stream TextResponse);
+    
+    // Generate embeddings for texts
+    rpc GenerateEmbeddings(GenerateEmbeddingsRequest) returns (GeneratedEmbeddingsResponse);
+    
+    // Chat completion
+    rpc ChatCompletion(ChatRequest) returns (stream ChatResponse);
+}
+
+message TextRequest {
+    string prompt = 1;
+    string model = 2;
+    int32 max_length = 3;
+    float temperature = 4;
+    float top_p = 5;
+}
+
+message TextResponse {
+    string text = 1;
+    bool done = 2;
+    int32 tokens_generated = 3;
+}
+
+message GenerateEmbeddingsRequest {
+    repeated string texts = 1;
+    string model = 2;
+}
+
+message GeneratedEmbeddingsResponse {
+    repeated GeneratedEmbedding embeddings = 1;
+}
+
+message GeneratedEmbedding {
+    repeated float values = 1;
+}
+
+message ChatRequest {
+    repeated ChatMessage messages = 1;
+    string model = 2;
+    float temperature = 3;
+}
+
+message ChatMessage {
+    string role = 1;  // "user", "assistant", "system"
+    string content = 2;
+}
+
+message ChatResponse {
+    string content = 1;
+    bool done = 2;
+    string finish_reason = 3;
+}
+
+// ========================================
+// MediaPipe Service - FULL IMPLEMENTATION
+// All desktop examples as streaming services
+// ========================================
+service MediapipeService {
+    // Single frame detection (legacy)
+    rpc DetectFaces(ImageRequest) returns (FaceDetectionResponse);
+    rpc DetectHands(ImageRequest) returns (HandDetectionResponse);
+    rpc DetectPose(ImageRequest) returns (PoseDetectionResponse);
+    
+    // Real-time streaming video processing
+    rpc StreamFaceDetection(stream VideoFrame) returns (stream FaceDetectionResponse);
+    rpc StreamHandTracking(stream VideoFrame) returns (stream HandDetectionResponse);
+    rpc StreamPoseTracking(stream VideoFrame) returns (stream PoseDetectionResponse);
+    rpc StreamHolisticTracking(stream VideoFrame) returns (stream HolisticTrackingResponse);
+    rpc StreamFaceMesh(stream VideoFrame) returns (stream FaceMeshResponse);
+    rpc StreamIrisTracking(stream VideoFrame) returns (stream IrisTrackingResponse);
+    
+    // Object detection & tracking
+    rpc StreamObjectDetection(stream VideoFrame) returns (stream ObjectDetectionResponse);
+    rpc StreamObjectTracking(stream VideoFrame) returns (stream ObjectTrackingResponse);
+    rpc StreamObjectDetection3D(stream VideoFrame) returns (stream ObjectDetection3DResponse);
+    
+    // Segmentation
+    rpc StreamSelfieSegmentation(stream VideoFrame) returns (stream SegmentationResponse);
+    rpc StreamHairSegmentation(stream VideoFrame) returns (stream SegmentationResponse);
+    
+    // Advanced
+    rpc StreamTemplateMatching(stream TemplateMatchingRequest) returns (stream TemplateMatchingResponse);
+    rpc StreamAutoFlip(stream VideoFrame) returns (stream VideoFrame);
+    
+    // Media sequence (batch video processing)
+    rpc ProcessMediaSequence(stream MediaSequenceFrame) returns (MediaSequenceResponse);
+}
+
+// ========================================
+// Common Messages
+// ========================================
+
+message ImageRequest {
+    bytes image_data = 1;
+    string format = 2;  // "jpeg", "png", "raw"
+    int32 width = 3;
+    int32 height = 4;
+}
+
+message VideoFrame {
+    bytes frame_data = 1;           // Raw frame bytes
+    string format = 2;              // "rgb", "bgr", "rgba", "yuv420", "h264", "vp8"
+    int32 width = 3;
+    int32 height = 4;
+    int64 timestamp_ms = 5;         // Frame timestamp
+    int32 frame_number = 6;
+    map<string, string> metadata = 7; // Extra metadata
+}
+
+message MediaSequenceFrame {
+    bytes frame_data = 1;
+    int64 timestamp_ms = 2;
+    int32 frame_number = 3;
+    map<string, float> features = 4;
+}
+
+message MediaSequenceResponse {
+    repeated SequenceLabel labels = 1;
+    map<string, float> features = 2;
+    int32 total_frames = 3;
+}
+
+message SequenceLabel {
+    string label = 1;
+    float confidence = 2;
+    int32 start_frame = 3;
+    int32 end_frame = 4;
+}
+
+// ========================================
+// Face Detection & Tracking
+// ========================================
+
+message FaceDetectionResponse {
+    repeated FaceDetection faces = 1;
+    int64 timestamp_ms = 2;
+    int32 frame_number = 3;
+}
+
+message FaceDetection {
+    float x = 1;
+    float y = 2;
+    float width = 3;
+    float height = 4;
+    float confidence = 5;
+    repeated KeyPoint keypoints = 6;
+}
+
+message KeyPoint {
+    float x = 1;
+    float y = 2;
+    float confidence = 3;
+    string name = 4;
+}
+
+// ========================================
+// Face Mesh & Iris Tracking
+// ========================================
+
+message FaceMeshResponse {
+    repeated FaceMesh faces = 1;
+    int64 timestamp_ms = 2;
+    int32 frame_number = 3;
+}
+
+message FaceMesh {
+    repeated Landmark landmarks = 1;  // 468 3D face landmarks
+    repeated int32 contours = 2;      // Face contour indices
+    float confidence = 3;
+}
+
+message IrisTrackingResponse {
+    repeated IrisTracking eyes = 1;
+    int64 timestamp_ms = 2;
+    int32 frame_number = 3;
+}
+
+message IrisTracking {
+    repeated Landmark iris_landmarks = 1;  // 5 iris landmarks per eye
+    repeated Landmark eye_landmarks = 2;   // 71 eye region landmarks
+    string eye = 3;  // "left" or "right"
+    float confidence = 4;
+}
+
+// ========================================
+// Hand Detection & Tracking
+// ========================================
+
+message HandDetectionResponse {
+    repeated HandDetection hands = 1;
+    int64 timestamp_ms = 2;
+    int32 frame_number = 3;
+}
+
+message HandDetection {
+    repeated Landmark landmarks = 1;  // 21 hand landmarks
+    string handedness = 2;  // "Left", "Right"
+    float confidence = 3;
+    repeated Gesture gestures = 4;
+}
+
+message Gesture {
+    string name = 1;  // "Thumb_Up", "Victory", "Open_Palm", etc.
+    float confidence = 2;
+}
+
+// ========================================
+// Pose Detection & Tracking
+// ========================================
+
+message PoseDetectionResponse {
+    repeated PoseDetection poses = 1;
+    int64 timestamp_ms = 2;
+    int32 frame_number = 3;
+}
+
+message PoseDetection {
+    repeated Landmark landmarks = 1;  // 33 pose landmarks
+    float confidence = 2;
+    repeated Landmark world_landmarks = 3;  // Real-world 3D coordinates
+}
+
+// ========================================
+// Holistic Tracking (Face + Hands + Pose)
+// ========================================
+
+message HolisticTrackingResponse {
+    FaceMesh face = 1;
+    PoseDetection pose = 2;
+    repeated HandDetection hands = 3;
+    int64 timestamp_ms = 4;
+    int32 frame_number = 5;
+}
+
+// ========================================
+// Object Detection & Tracking
+// ========================================
+
+message ObjectDetectionResponse {
+    repeated ObjectDetection objects = 1;
+    int64 timestamp_ms = 2;
+    int32 frame_number = 3;
+}
+
+message ObjectDetection {
+    string label = 1;
+    float confidence = 2;
+    BoundingBox bbox = 3;
+    int32 track_id = 4;  // For tracking
+}
+
+message BoundingBox {
+    float x = 1;
+    float y = 2;
+    float width = 3;
+    float height = 4;
+}
+
+message ObjectTrackingResponse {
+    repeated TrackedObject objects = 1;
+    int64 timestamp_ms = 2;
+    int32 frame_number = 3;
+}
+
+message TrackedObject {
+    int32 track_id = 1;
+    string label = 2;
+    BoundingBox bbox = 3;
+    float confidence = 4;
+    repeated BoundingBox trajectory = 5;  // Past positions
+}
+
+message ObjectDetection3DResponse {
+    repeated Object3D objects = 1;
+    int64 timestamp_ms = 2;
+    int32 frame_number = 3;
+}
+
+message Object3D {
+    string label = 1;
+    float confidence = 2;
+    BoundingBox bbox = 3;
+    Pose3D pose = 4;
+    repeated Landmark keypoints_3d = 5;
+}
+
+message Pose3D {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+    float roll = 4;
+    float pitch = 5;
+    float yaw = 6;
+}
+
+// ========================================
+// Segmentation
+// ========================================
+
+message SegmentationResponse {
+    bytes mask = 1;  // Binary mask (1 channel)
+    int32 width = 2;
+    int32 height = 3;
+    string format = 4;  // "binary", "colored", "alpha"
+    int64 timestamp_ms = 5;
+    int32 frame_number = 6;
+}
+
+// ========================================
+// Template Matching
+// ========================================
+
+message TemplateMatchingRequest {
+    bytes frame_data = 1;
+    bytes template_data = 2;
+    int32 frame_width = 3;
+    int32 frame_height = 4;
+    int32 template_width = 5;
+    int32 template_height = 6;
+    float threshold = 7;
+}
+
+message TemplateMatchingResponse {
+    repeated TemplateMatch matches = 1;
+    int64 timestamp_ms = 2;
+}
+
+message TemplateMatch {
+    float x = 1;
+    float y = 2;
+    float confidence = 3;
+}
+
+// ========================================
+// Shared Types
+// ========================================
+
+message Landmark {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+    float visibility = 4;
+    float presence = 5;
+}

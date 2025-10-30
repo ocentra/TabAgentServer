@@ -27,9 +27,9 @@
 pub mod routes;
 pub mod state;
 pub mod hf_auth;
-pub mod python_bridge;
+pub mod orchestrator;
 
 pub use state::{AppState, AppStateConfig};
 pub use hf_auth::HfAuthManager;
-pub use python_bridge::PythonMlBridge;
+pub use orchestrator::{ModelOrchestrator, LoadedModelInfo};
 

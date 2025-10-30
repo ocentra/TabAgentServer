@@ -70,18 +70,14 @@ pub async fn handle_rerank(
         }
         
         Backend::Python { engine } if engine.contains("transformers") => {
-            // Forward to Python for transformer-based reranking
-            let reranked = state.python_ml_bridge
-                .rerank(model, query, documents, n)
-                .await
-                .context("Python reranking failed")?;
-
-            Ok(ResponseValue::chat(
-                "reranked",
-                "system",
-                format!("Python reranked {} documents", reranked.len()),
-                TokenUsage::zero(),
-            ))
+            // TODO: Implement transformer-based reranking via ML client
+            // This would require adding a rerank RPC to the ml_inference.proto
+            // For now, fall back to similarity-based reranking
+            
+            anyhow::bail!(
+                "Transformer-based reranking not yet implemented in new ML client architecture. \
+                 Consider using ONNX-based reranking or adding rerank RPC to ml_inference.proto"
+            )
         }
         
         _ => anyhow::bail!("{:?} does not support reranking", model_info.backend),

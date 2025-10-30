@@ -18,11 +18,17 @@ path = "src/main.rs"
 appstate = { path = "../appstate" }
 common = { path = "../common" }
 tabagent-values = { path = "../values" }
+storage = { path = "../storage" }
 
 # Transport layer crates (API, Native Messaging, WebRTC)
 tabagent-api = { path = "../api" }
 tabagent-native-messaging = { path = "../native-messaging" }
 tabagent-webrtc = { path = "../webrtc" }
+
+# gRPC
+tonic = { workspace = true }
+prost = { workspace = true }
+bincode = { workspace = true }
 
 async-trait = "0.1"
 # Note: python-ml-bridge exists but is for Weaver's MlBridge trait

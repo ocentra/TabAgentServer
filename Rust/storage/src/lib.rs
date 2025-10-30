@@ -48,6 +48,11 @@ pub mod experience;
 pub mod knowledge;
 mod storage_manager;
 pub mod summaries;
+pub mod grpc_server;
+pub mod database_client;
+
+// Re-export for convenience
+pub use database_client::DatabaseClient;
 pub mod time_queries;
 pub mod time_scope;
 pub mod tool_results;

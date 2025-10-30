@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package database;
+
+// Database service for all storage operations
+service DatabaseService {
+    // Conversations
+    rpc GetConversations(ConversationRequest) returns (ConversationResponse);
+    rpc StoreConversation(StoreConversationRequest) returns (StatusResponse);
+    
+    // Knowledge
+    rpc GetKnowledge(KnowledgeRequest) returns (KnowledgeResponse);
+    rpc StoreKnowledge(StoreKnowledgeRequest) returns (StatusResponse);
+    
+    // Embeddings (stored)
+    rpc GetStoredEmbeddings(GetStoredEmbeddingsRequest) returns (StoredEmbeddingsResponse);
+    rpc StoreEmbedding(StoreEmbeddingRequest) returns (StatusResponse);
+    
+    // Tool Results
+    rpc GetToolResults(ToolResultRequest) returns (ToolResultResponse);
+    rpc StoreToolResult(StoreToolResultRequest) returns (StatusResponse);
+}
+
+// Request/Response messages
+message ConversationRequest {
+    string session_id = 1;
+}
+
+message ConversationResponse {
+    repeated Conversation conversations = 1;
+}
+
+message Conversation {
+    string id = 1;
+    string session_id = 2;
+    string content = 3;
+    int64 timestamp = 4;
+    string role = 5;
+}
+
+message StoreConversationRequest {
+    Conversation conversation = 1;
+}
+
+message KnowledgeRequest {
+    string id = 1;
+}
+
+message KnowledgeResponse {
+    Knowledge knowledge = 1;
+}
+
+message Knowledge {
+    string id = 1;
+    string content = 2;
+    string source = 3;
+    int64 timestamp = 4;
+}
+
+message StoreKnowledgeRequest {
+    Knowledge knowledge = 1;
+}
+
+message GetStoredEmbeddingsRequest {
+    string query = 1;
+    int32 limit = 2;
+}
+
+message StoredEmbeddingsResponse {
+    repeated StoredEmbedding embeddings = 1;
+}
+
+message StoredEmbedding {
+    string id = 1;
+    repeated float vector = 2;
+    string text = 3;
+}
+
+message StoreEmbeddingRequest {
+    StoredEmbedding embedding = 1;
+}
+
+message ToolResultRequest {
+    string tool_name = 1;
+    int64 start_time = 2;
+    int64 end_time = 3;
+}
+
+message ToolResultResponse {
+    repeated ToolResult results = 1;
+}
+
+message ToolResult {
+    string id = 1;
+    string tool_name = 2;
+    string result = 3;
+    int64 timestamp = 4;
+}
+
+message StoreToolResultRequest {
+    ToolResult result = 1;
+}
+
+message StatusResponse {
+    bool success = 1;
+    string message = 2;
+}
+

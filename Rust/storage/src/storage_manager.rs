@@ -571,4 +571,49 @@ impl StorageManager {
     pub fn index_manager(&self) -> Option<&indexing::IndexManager> {
         self.index_manager.as_ref().map(|arc| arc.as_ref())
     }
+    
+    // --- Iteration and Scanning Operations ---
+    
+    /// Scan nodes with a given key prefix
+    /// 
+    /// This is useful for querying nodes by session, chat, or other prefix patterns.
+    /// Returns an iterator over key-value pairs matching the prefix.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use tabagent_storage::StorageManager;
+    /// # let storage = StorageManager::with_default_path("my_db").unwrap();
+    /// // Scan all messages in a session
+    /// for result in storage.scan_prefix(b"session:123:") {
+    ///     let (key, value) = result.unwrap();
+    ///     // Process key-value pair
+    /// }
+    /// ```
+    pub fn scan_prefix(&self, prefix: &[u8]) -> impl Iterator<Item = common::DbResult<(Vec<u8>, Vec<u8>)>> {
+        self.nodes.scan_prefix(prefix).map(|result| {
+            result.map(|(k, v)| (k.to_vec(), v.to_vec())).map_err(|e| e.into())
+        })
+    }
+    
+    /// Iterate over all nodes
+    /// 
+    /// Returns an iterator over all key-value pairs in the nodes tree.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use tabagent_storage::StorageManager;
+    /// # let storage = StorageManager::with_default_path("my_db").unwrap();
+    /// // Iterate all nodes
+    /// for result in storage.iter() {
+    ///     let (key, value) = result.unwrap();
+    ///     // Process key-value pair
+    /// }
+    /// ```
+    pub fn iter(&self) -> impl Iterator<Item = common::DbResult<(Vec<u8>, Vec<u8>)>> {
+        self.nodes.iter().map(|result| {
+            result.map(|(k, v)| (k.to_vec(), v.to_vec())).map_err(|e| e.into())
+        })
+    }
 }

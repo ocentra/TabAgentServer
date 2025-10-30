@@ -36,16 +36,47 @@ use std::sync::{Arc, RwLock};
 /// WARM/COLD tiers (Recent, Archive) are lazy-loaded on first access.
 pub struct DatabaseCoordinator {
     // Composed managers for different database types
-    conversation_manager: ConversationManager,
-    knowledge_manager: KnowledgeManager,
-    embedding_manager: EmbeddingManager,
-    tool_result_manager: ToolResultManager,
-    experience_manager: ExperienceManager,
-    summary_manager: SummaryManager,
+    pub conversation_manager: ConversationManager,
+    pub knowledge_manager: KnowledgeManager,
+    pub embedding_manager: EmbeddingManager,
+    pub tool_result_manager: ToolResultManager,
+    pub experience_manager: ExperienceManager,
+    pub summary_manager: SummaryManager,
 
     // ========== INDEX DATABASE ==========
     /// Meta: Query routing, performance stats, confidence maps
-    meta: Arc<StorageManager>,
+    pub meta: Arc<StorageManager>,
+}
+
+// Implement DirectAccessOperations for safe public access to storage managers
+impl crate::traits::DirectAccessOperations for DatabaseCoordinator {
+    fn conversations_active(&self) -> Arc<StorageManager> {
+        self.conversation_manager.conversations_active.clone()
+    }
+    
+    fn knowledge_active(&self) -> Arc<StorageManager> {
+        self.knowledge_manager.knowledge_active.clone()
+    }
+    
+    fn knowledge_stable(&self) -> Arc<StorageManager> {
+        self.knowledge_manager.knowledge_stable.clone()
+    }
+    
+    fn embeddings_active(&self) -> Arc<StorageManager> {
+        self.embedding_manager.embeddings_active.clone()
+    }
+    
+    fn tool_results(&self) -> Arc<StorageManager> {
+        self.tool_result_manager.tool_results.clone()
+    }
+    
+    fn experience(&self) -> Arc<StorageManager> {
+        self.experience_manager.experience.clone()
+    }
+    
+    fn meta(&self) -> Arc<StorageManager> {
+        self.meta.clone()
+    }
 }
 
 impl DatabaseCoordinator {

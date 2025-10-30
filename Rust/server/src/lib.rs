@@ -10,8 +10,14 @@
 
 pub mod config;
 pub mod error;
+pub mod grpc_config;
+pub mod database_client;
+pub mod ml_client;
 
 // Re-export server configuration types
 pub use config::{CliArgs, ServerMode};
 pub use error::{ServerError, ServerResult};
+pub use grpc_config::GrpcConfig;
+pub use database_client::DatabaseClient;
+pub use ml_client::MlClient;
 

@@ -49,8 +49,13 @@ pub async fn handle_save_message(
         metadata: serde_json::json!({}),
     };
 
-    // Save to database
-    state.db.insert_message(db_message)
+    // Save to database using the new DatabaseClient
+    // Get the underlying coordinator for direct access (in-process mode)
+    let coordinator = state.db_client.coordinator()
+        .ok_or_else(|| anyhow::anyhow!("Database client is not in in-process mode"))?;
+    
+    use storage::traits::ConversationOperations;
+    coordinator.conversation_manager.insert_message(db_message)
         .context("Failed to save message to database")?;
     
     Ok(ResponseValue::chat(
