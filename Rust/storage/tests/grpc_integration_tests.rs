@@ -36,7 +36,7 @@ async fn start_test_server(coordinator: Arc<DatabaseCoordinator>) -> (u16, tokio
     let port = listener.local_addr().unwrap().port();
     drop(listener);
     
-    let server = DatabaseServer::new(coordinator);
+    let server = DatabaseServer::with_arc(coordinator);
     let addr = format!("127.0.0.1:{}", port).parse().unwrap();
     
     let handle = tokio::spawn(async move {

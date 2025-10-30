@@ -19,6 +19,8 @@ tonic = { workspace = true }
 prost = { workspace = true }
 tokio-stream = { workspace = true }
 tonic-prost = "0.14"
+tokio = { workspace = true, features = ["sync", "time", "process"] }
+tracing = { workspace = true }
 
 [build-dependencies]
 tonic-prost-build = "0.14" 
