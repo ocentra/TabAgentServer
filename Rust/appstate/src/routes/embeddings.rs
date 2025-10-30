@@ -39,14 +39,10 @@ pub async fn handle(
         
         Backend::Python { engine } if engine.contains("transformers") => {
             // Forward to Python ML client for transformers embeddings via gRPC
-            use common::grpc::ml::GenerateEmbeddingsRequest;
-            
-            let request = GenerateEmbeddingsRequest {
-                texts: texts.clone(),
-                model: model.to_string(),
-            };
-            
-            let response = state.ml_client.generate_embeddings(request).await
+            let response = state.ml_client.generate_embeddings(
+                texts.clone(),
+                model.to_string()
+            ).await
                 .context("Python embedding generation failed")?;
             
             // Convert from gRPC response to Vec<Vec<f32>>

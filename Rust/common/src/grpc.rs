@@ -26,10 +26,14 @@ pub use database::{
 pub use ml::{
     transformers_service_server, transformers_service_client,
     mediapipe_service_server, mediapipe_service_client,
+    model_management_service_server, model_management_service_client,
     TextRequest, TextResponse,
     GenerateEmbeddingsRequest, GeneratedEmbeddingsResponse, GeneratedEmbedding,
     ChatRequest, ChatResponse, ChatMessage,
     ImageRequest, FaceDetectionResponse, FaceDetection,
     HandDetectionResponse, HandDetection, Landmark,
     PoseDetectionResponse,
+    LoadModelRequest, LoadModelResponse,
+    UnloadModelRequest, StatusResponse as MlStatusResponse,
+    EmptyRequest, LoadedModelsResponse, LoadedModelInfo,
 };

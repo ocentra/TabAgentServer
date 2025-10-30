@@ -8,14 +8,19 @@ use tonic::transport::Channel;
 use crate::grpc::ml::{
     transformers_service_client::TransformersServiceClient,
     mediapipe_service_client::MediapipeServiceClient,
+    model_management_service_client::ModelManagementServiceClient,
     TextRequest, ChatRequest,
+    LoadModelRequest, LoadModelResponse,
+    UnloadModelRequest, StatusResponse as MlStatusResponse,
+    GenerateEmbeddingsRequest, GeneratedEmbeddingsResponse,
 };
 
-/// ML client for Transformers and Mediapipe services
+/// ML client for Transformers, Mediapipe, and Model Management services
 #[derive(Clone)]
 pub struct MlClient {
     transformers: Option<TransformersServiceClient<Channel>>,
     mediapipe: Option<MediapipeServiceClient<Channel>>,
+    model_management: Option<ModelManagementServiceClient<Channel>>,
 }
 
 impl MlClient {
@@ -23,10 +28,12 @@ impl MlClient {
     pub async fn new(endpoint: &str) -> Result<Self> {
         let transformers = TransformersServiceClient::connect(endpoint.to_string()).await.ok();
         let mediapipe = MediapipeServiceClient::connect(endpoint.to_string()).await.ok();
+        let model_management = ModelManagementServiceClient::connect(endpoint.to_string()).await.ok();
         
         Ok(Self {
             transformers,
             mediapipe,
+            model_management,
         })
     }
     
@@ -35,6 +42,7 @@ impl MlClient {
         Self {
             transformers: None,
             mediapipe: None,
+            model_management: None,
         }
     }
     
@@ -111,6 +119,42 @@ impl MlClient {
         }
         
         Ok(full_response)
+    }
+    
+    /// Load a model via ModelManagementService
+    pub async fn load_model(&self, request: LoadModelRequest) -> Result<LoadModelResponse> {
+        let mut client = self.model_management.clone()
+            .ok_or_else(|| anyhow::anyhow!("Model Management service not available"))?;
+        
+        let response = client.load_model(request).await?.into_inner();
+        Ok(response)
+    }
+    
+    /// Unload a model via ModelManagementService
+    pub async fn unload_model(&self, request: UnloadModelRequest) -> Result<MlStatusResponse> {
+        let mut client = self.model_management.clone()
+            .ok_or_else(|| anyhow::anyhow!("Model Management service not available"))?;
+        
+        let response = client.unload_model(request).await?.into_inner();
+        Ok(response)
+    }
+    
+    /// Generate embeddings via TransformersService
+    pub async fn generate_embeddings(
+        &self,
+        texts: Vec<String>,
+        model: String,
+    ) -> Result<GeneratedEmbeddingsResponse> {
+        let mut client = self.transformers.clone()
+            .ok_or_else(|| anyhow::anyhow!("Transformers service not available"))?;
+        
+        let request = GenerateEmbeddingsRequest {
+            texts,
+            model,
+        };
+        
+        let response = client.generate_embeddings(request).await?.into_inner();
+        Ok(response)
     }
 }
 

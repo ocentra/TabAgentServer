@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use anyhow::{Context, Result, anyhow};
 use tracing::{info, warn, error, debug};
-use tabagent_model_cache::{ModelCache, DownloadOptions, ModelInfo};
+use tabagent_model_cache::ModelCache;
 use common::{MlClient, grpc::ml::{LoadModelRequest, UnloadModelRequest}};
 use std::collections::HashMap;
 
@@ -51,33 +51,18 @@ impl ModelOrchestrator {
         }
     }
     
-    /// Download a model if not already cached
+    /// Ensure model manifest exists and is scanned
     ///
-    /// Returns the local path to the model
-    pub async fn ensure_model_downloaded(
-        &self,
-        model_id: &str,
-        options: Option<DownloadOptions>,
-    ) -> Result<std::path::PathBuf> {
-        info!("Ensuring model is downloaded: {}", model_id);
+    /// This delegates to ModelCache to ensure the model's manifest is ready
+    pub async fn ensure_model_manifest(&self, repo_id: &str) -> Result<()> {
+        info!("Ensuring model manifest exists: {}", repo_id);
         
-        // Check if already cached
-        if let Some(cached_path) = self.cache.get_model_path(model_id) {
-            debug!("Model {} already cached at: {:?}", model_id, cached_path);
-            return Ok(cached_path);
-        }
-        
-        // Download the model
-        info!("Downloading model: {}", model_id);
-        let options = options.unwrap_or_default();
-        
-        self.cache.download_model(model_id, options)
+        self.cache.ensure_manifest(repo_id)
             .await
-            .context(format!("Failed to download model: {}", model_id))?;
+            .context(format!("Failed to ensure manifest for: {}", repo_id))?;
         
-        // Get the cached path
-        self.cache.get_model_path(model_id)
-            .ok_or_else(|| anyhow!("Model downloaded but path not found: {}", model_id))
+        debug!("Model {} manifest ready", repo_id);
+        Ok(())
     }
     
     /// Load a model into memory for inference
@@ -106,8 +91,8 @@ impl ModelOrchestrator {
             }
         }
         
-        // Ensure model is downloaded first
-        self.ensure_model_downloaded(model_id, None).await?;
+        // Ensure model manifest exists first
+        self.ensure_model_manifest(model_id).await?;
         
         // Send LoadModel request to Python
         let request = LoadModelRequest {
@@ -206,8 +191,6 @@ impl ModelOrchestrator {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    
     // Tests would go here
     // TODO: Add comprehensive tests
 }
