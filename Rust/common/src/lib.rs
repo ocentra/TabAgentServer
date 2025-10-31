@@ -41,6 +41,7 @@ pub mod backend;
 pub mod grpc;
 pub mod ml_client;
 pub mod python_process_manager;
+pub mod logging;
 
 // Re-export for convenience
 pub use ml_client::MlClient;

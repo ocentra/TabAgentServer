@@ -9,7 +9,7 @@ members = [
     "gguf-loader",
     "hardware",
     "indexing",
-    "knowledge-graph",
+    "knowledge-graph", "mcp",
     "model-bindings",
     "model-cache",
     "model-cache-bindings",
