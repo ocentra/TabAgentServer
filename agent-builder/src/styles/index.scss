@@ -1,0 +1,104 @@
+// Import design system tokens
+@use 'primitives';
+@use 'tokens';
+
+// Apply primitives and light theme by default
+:root {
+  @include primitives.primitives;
+  @include tokens.theme;
+}
+
+// Dark theme - inline the dark theme vars instead
+[data-theme="dark"],
+.dark-theme {
+  // Canvas
+  --canvas--color--background: hsl(220, 1%, 18%);
+  --canvas--dot--color: hsl(220, 2%, 33%);
+  --canvas--color--selected: rgba(255, 255, 255, 0.25);
+  
+  // Nodes
+  --node--color--background: hsl(220, 2%, 26%);
+  --node--border-color: hsl(220, 4%, 58%);
+  
+  // Text
+  --color--text--shade-1: hsl(220, 40%, 96%);
+  --color--text: hsl(220, 18%, 80%);
+  
+  // Background
+  --color--background: hsl(220, 2%, 33%);
+  --color--background--light-1: hsl(220, 1%, 22%);
+  --color--background--light-2: hsl(220, 1%, 18%);
+  
+  // Foreground
+  --color--foreground: hsl(220, 2%, 33%);
+  --color--foreground--shade-1: hsl(220, 4%, 58%);
+  --color--foreground--shade-2: hsl(220, 18%, 80%);
+  
+  // Shadows
+  --shadow: 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 6px rgba(0, 0, 0, 0.1);
+  --shadow--dark: 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 6px rgba(0, 0, 0, 0.2);
+}
+
+// Canvas specific overrides
+.vue-flow {
+  background: var(--canvas--color--background, #f6f6f6) !important;
+  
+  .vue-flow__node {
+    background: var(--node--color--background, white) !important;
+    border: 2px solid var(--node--border-color, #ddd) !important;
+    border-radius: 8px;
+    padding: 12px 16px;
+    box-shadow: var(--shadow, 0 2px 4px rgba(0, 0, 0, 0.1));
+    font-size: 14px;
+    color: var(--color--text--shade-1, #333) !important;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      box-shadow: var(--shadow--dark, 0 4px 8px rgba(0, 0, 0, 0.15));
+    }
+    
+    &.selected {
+      border-color: #ff6d5a !important;
+      box-shadow: 0 0 0 4px var(--canvas--color--selected, rgba(255, 109, 90, 0.2)),
+                  0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+  }
+  
+  .vue-flow__edge {
+    &-path {
+      stroke: var(--color--foreground, #999);
+      stroke-width: 2px;
+    }
+    
+    &.selected .vue-flow__edge-path {
+      stroke: #ff6d5a;
+      stroke-width: 3px;
+    }
+  }
+  
+  .vue-flow__handle {
+    width: 12px;
+    height: 12px;
+    background: var(--color--foreground, #666);
+    border: 2px solid var(--node--color--background, white);
+    border-radius: 50%;
+    
+    &:hover {
+      background: #ff6d5a;
+    }
+  }
+  
+  .vue-flow__controls {
+    button {
+      background: var(--color--background--light-2, white) !important;
+      border: 1px solid var(--color--foreground--shade-2, #ddd);
+      box-shadow: var(--shadow, 0 2px 4px rgba(0, 0, 0, 0.1));
+      color: var(--color--text, #333);
+      
+      &:hover {
+        background: var(--color--background--light-1, #f5f5f5) !important;
+      }
+    }
+  }
+}
+

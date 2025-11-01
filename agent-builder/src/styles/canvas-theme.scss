@@ -1,0 +1,113 @@
+// Workflow Canvas Theme
+:root {
+  // Canvas colors
+  --canvas--color--background: #f6f6f6;
+  --canvas--dot--color: #ddd;
+  --canvas--color--selected: rgba(255, 109, 90, 0.1);
+  
+  // Node colors
+  --node--color--background: #ffffff;
+  --node--border-color: #ddd;
+  --node--border-color--selected: #ff6d5a;
+  --node--border-width: 2px;
+  --node--border-radius: 8px;
+  
+  // Node states
+  --color--success: #10B981;
+  --color--danger: #EF4444;
+  --color--warning: #F59E0B;
+  --color--info: #3B82F6;
+  
+  // Text colors
+  --color--text--shade-1: #2c3e50;
+  --color--text: #555;
+  --color--text--tint-1: #777;
+  --color--text--tint-2: #999;
+  
+  // Spacing
+  --spacing--2xs: 4px;
+  --spacing--xs: 8px;
+  --spacing--sm: 12px;
+  --spacing--md: 16px;
+  --spacing--lg: 24px;
+  
+  // Node dimensions
+  --canvas-node--width: 240px;
+  --canvas-node--height: 100px;
+  --node--icon--size: 40px;
+  
+  // Grid
+  --grid-size: 20px;
+}
+
+[data-theme="dark"] {
+  --canvas--color--background: #2e2e2e;
+  --canvas--dot--color: #444;
+  --node--color--background: #3a3a3a;
+  --node--border-color: #555;
+  --color--text--shade-1: #e0e0e0;
+  --color--text: #ccc;
+}
+
+// Vue Flow styling
+.vue-flow {
+  background: var(--canvas--color--background) !important;
+  
+  .vue-flow__node {
+    background: var(--node--color--background);
+    border: var(--node--border-width) solid var(--node--border-color);
+    border-radius: var(--node--border-radius);
+    padding: 12px 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    font-size: 14px;
+    color: var(--color--text--shade-1);
+    transition: all 0.2s ease;
+    
+    &:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    }
+    
+    &.selected {
+      border-color: var(--node--border-color--selected);
+      box-shadow: 0 0 0 4px var(--canvas--color--selected),
+                  0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+  }
+  
+  .vue-flow__edge {
+    &-path {
+      stroke: #999;
+      stroke-width: 2px;
+    }
+    
+    &.selected .vue-flow__edge-path {
+      stroke: var(--node--border-color--selected);
+      stroke-width: 3px;
+    }
+  }
+  
+  .vue-flow__handle {
+    width: 12px;
+    height: 12px;
+    background: #666;
+    border: 2px solid white;
+    border-radius: 50%;
+    
+    &:hover {
+      background: var(--node--border-color--selected);
+    }
+  }
+  
+  .vue-flow__controls {
+    button {
+      background: white;
+      border: 1px solid #ddd;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      
+      &:hover {
+        background: #f5f5f5;
+      }
+    }
+  }
+}
+
