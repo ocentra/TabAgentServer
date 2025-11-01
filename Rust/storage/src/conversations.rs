@@ -3,19 +3,19 @@
 //! This module provides implementations for conversation-related operations
 //! including messages and chats across different temperature tiers.
 
-use crate::{traits::ConversationOperations, StorageManager, TemperatureTier};
+use crate::{traits::ConversationOperations, DefaultStorageManager, TemperatureTier};
 use common::{models::*, platform::get_quarter_from_timestamp, DbResult};
 use std::sync::{Arc, RwLock};
 
 /// Implementation of conversation operations
 pub struct ConversationManager {
     /// Conversations/active: 0-30 days (HOT - always loaded)
-    pub(crate) conversations_active: Arc<StorageManager>,
+    pub(crate) conversations_active: Arc<DefaultStorageManager>,
     /// Conversations/recent: 30-90 days (WARM - lazy load)
-    pub(crate) conversations_recent: Arc<RwLock<Option<StorageManager>>>,
+    pub(crate) conversations_recent: Arc<RwLock<Option<DefaultStorageManager>>>,
     /// Conversations/archive: 90+ days by quarter (COLD - on-demand)
     pub(crate) conversations_archives:
-        Arc<RwLock<std::collections::HashMap<String, StorageManager>>>,
+        Arc<RwLock<std::collections::HashMap<String, DefaultStorageManager>>>,
 }
 
 impl ConversationOperations for ConversationManager {
@@ -28,22 +28,32 @@ impl ConversationOperations for ConversationManager {
     /// Get a message by ID, searching across all conversation tiers
     fn get_message(&self, message_id: &str) -> DbResult<Option<Message>> {
         // Try active first (HOT - most common)
-        if let Some(Node::Message(msg)) = self.conversations_active.get_node(message_id)? {
-            return Ok(Some(msg));
-        }
-
-        // Try recent (WARM - lazy load if needed)
-        if let Some(recent) = self.get_or_load_conversations_recent()? {
-            if let Some(Node::Message(msg)) = recent.get_node(message_id)? {
+        if let Some(node_ref) = self.conversations_active.get_node_ref(message_id)? {
+            let node = node_ref.deserialize()?;
+            if let Node::Message(msg) = node {
                 return Ok(Some(msg));
             }
         }
 
+        // Try recent (WARM - lazy load if needed)
+        if let Some(recent) = self.get_or_load_conversations_recent()? {
+            if let Some(node_ref) = recent.get_node_ref(message_id)? {
+                let node = node_ref.deserialize()?;
+                if let Node::Message(msg) = node {
+                    return Ok(Some(msg));
+                }
+            }
+        }
+
         // Try archives (COLD - search all loaded quarters)
-        let archives = self.conversations_archives.read().unwrap();
+        let archives = self.conversations_archives.read()
+            .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
         for (_quarter, storage) in archives.iter() {
-            if let Some(Node::Message(msg)) = storage.get_node(message_id)? {
-                return Ok(Some(msg));
+            if let Some(node_ref) = storage.get_node_ref(message_id)? {
+                let node = node_ref.deserialize()?;
+                if let Node::Message(msg) = node {
+                    return Ok(Some(msg));
+                }
             }
         }
 
@@ -57,14 +67,20 @@ impl ConversationOperations for ConversationManager {
         timestamp_hint_ms: i64,
     ) -> DbResult<Option<Message>> {
         // Try active first (HOT - most common)
-        if let Some(Node::Message(msg)) = self.conversations_active.get_node(message_id)? {
-            return Ok(Some(msg));
+        if let Some(node_ref) = self.conversations_active.get_node_ref(message_id)? {
+            let node = node_ref.deserialize()?;
+            if let Node::Message(msg) = node {
+                return Ok(Some(msg));
+            }
         }
 
         // Try recent (WARM - lazy load if needed)
         if let Some(recent) = self.get_or_load_conversations_recent()? {
-            if let Some(Node::Message(msg)) = recent.get_node(message_id)? {
-                return Ok(Some(msg));
+            if let Some(node_ref) = recent.get_node_ref(message_id)? {
+                let node = node_ref.deserialize()?;
+                if let Node::Message(msg) = node {
+                    return Ok(Some(msg));
+                }
             }
         }
 
@@ -75,15 +91,19 @@ impl ConversationOperations for ConversationManager {
         }
 
         // If not found in the hinted quarter, search all other loaded quarters
-        let archives = self.conversations_archives.read().unwrap();
+        let archives = self.conversations_archives.read()
+            .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
         for (quarter_name, storage) in archives.iter() {
             // Skip the quarter we already searched
             if quarter_name == &quarter {
                 continue;
             }
 
-            if let Some(Node::Message(msg)) = storage.get_node(message_id)? {
-                return Ok(Some(msg));
+            if let Some(node_ref) = storage.get_node_ref(message_id)? {
+                let node = node_ref.deserialize()?;
+                if let Node::Message(msg) = node {
+                    return Ok(Some(msg));
+                }
             }
         }
 
@@ -98,22 +118,32 @@ impl ConversationOperations for ConversationManager {
     /// Get a chat by ID, searching across all conversation tiers
     fn get_chat(&self, chat_id: &str) -> DbResult<Option<Chat>> {
         // Try active
-        if let Some(Node::Chat(chat)) = self.conversations_active.get_node(chat_id)? {
-            return Ok(Some(chat));
-        }
-
-        // Try recent
-        if let Some(recent) = self.get_or_load_conversations_recent()? {
-            if let Some(Node::Chat(chat)) = recent.get_node(chat_id)? {
+        if let Some(node_ref) = self.conversations_active.get_node_ref(chat_id)? {
+            let node = node_ref.deserialize()?;
+            if let Node::Chat(chat) = node {
                 return Ok(Some(chat));
             }
         }
 
+        // Try recent
+        if let Some(recent) = self.get_or_load_conversations_recent()? {
+            if let Some(node_ref) = recent.get_node_ref(chat_id)? {
+                let node = node_ref.deserialize()?;
+                if let Node::Chat(chat) = node {
+                    return Ok(Some(chat));
+                }
+            }
+        }
+
         // Try archives
-        let archives = self.conversations_archives.read().unwrap();
+        let archives = self.conversations_archives.read()
+            .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
         for (_quarter, storage) in archives.iter() {
-            if let Some(Node::Chat(chat)) = storage.get_node(chat_id)? {
-                return Ok(Some(chat));
+            if let Some(node_ref) = storage.get_node_ref(chat_id)? {
+                let node = node_ref.deserialize()?;
+                if let Node::Chat(chat) = node {
+                    return Ok(Some(chat));
+                }
             }
         }
 
@@ -126,34 +156,41 @@ impl ConversationOperations for ConversationManager {
         message_id: &str,
         current_timestamp_ms: i64,
     ) -> DbResult<bool> {
-        // Try to get the message from active tier
-        if let Some(Node::Message(msg)) = self.conversations_active.get_node(message_id)? {
-            // Check if message is older than 30 days (30 * 24 * 60 * 60 * 1000 = 2,592,000,000 ms)
-            let age_ms = current_timestamp_ms - msg.timestamp;
-            let thirty_days_ms = 30 * 24 * 60 * 60 * 1000;
-
-            if age_ms >= thirty_days_ms {
-                // Load recent tier if needed
-                let recent_storage =
-                    if let Some(recent) = self.get_or_load_conversations_recent()? {
+        // Check timestamp before deserializing
+        if let Some(node_ref) = self.conversations_active.get_node_ref(message_id)? {
+            // Access timestamp field directly
+            if let Some(timestamp) = node_ref.message_timestamp() {
+                // Check if message is older than 30 days
+                let age_ms = current_timestamp_ms - timestamp;
+                let thirty_days_ms = 30 * 24 * 60 * 60 * 1000;
+                
+                if age_ms < thirty_days_ms {
+                    return Ok(false);  // Not old enough
+                }
+                
+                // Deserialize to move
+                let node = node_ref.deserialize()?;
+                if let Node::Message(msg) = node {
+                    // Load recent tier if needed
+                    let recent_storage = if let Some(recent) = self.get_or_load_conversations_recent()? {
                         recent
                     } else {
-                        // If recent tier doesn't exist, create it
                         let recent_db = StorageManager::open_typed_with_indexing(
                             crate::DatabaseType::Conversations,
                             Some(TemperatureTier::Recent),
                         )?;
-                        let mut recent_guard = self.conversations_recent.write().unwrap();
-                        *recent_guard = Some(recent_db);
-                        Arc::new(recent_guard.as_ref().unwrap().clone())
+                        let mut recent_guard = self.conversations_recent.write()
+                            .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
+                        *recent_guard = Some(recent_db.clone());
+                        Arc::new(recent_db)
                     };
 
-                // Move message to recent tier
-                recent_storage.insert_node(&Node::Message(msg))?;
-                // Remove message from active tier
-                self.conversations_active.delete_node(message_id)?;
-
-                return Ok(true);
+                    // Move message to recent tier
+                    recent_storage.insert_node(&Node::Message(msg))?;
+                    // Remove from active tier
+                    self.conversations_active.delete_node(message_id)?;
+                    return Ok(true);
+                }
             }
         }
 
@@ -162,7 +199,8 @@ impl ConversationOperations for ConversationManager {
 
     /// Get or lazy-load conversations/recent tier
     fn get_or_load_conversations_recent(&self) -> DbResult<Option<Arc<StorageManager>>> {
-        let mut recent_guard = self.conversations_recent.write().unwrap();
+        let mut recent_guard = self.conversations_recent.write()
+            .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
 
         if recent_guard.is_none() {
             // Lazy load recent tier
@@ -180,12 +218,15 @@ impl ConversationOperations for ConversationManager {
             }
         }
 
-        Ok(Some(Arc::new(recent_guard.as_ref().unwrap().clone())))
+        let storage = recent_guard.as_ref()
+            .ok_or_else(|| common::DbError::Other("Recent storage not loaded".to_string()))?;
+        Ok(Some(Arc::new(storage.clone())))
     }
 
     /// Get or lazy-load a specific archive quarter
     fn get_or_load_archive(&self, quarter: &str) -> DbResult<Option<Arc<StorageManager>>> {
-        let mut archives = self.conversations_archives.write().unwrap();
+        let mut archives = self.conversations_archives.write()
+            .map_err(|e| common::DbError::Other(format!("Lock poisoned: {}", e)))?;
 
         if !archives.contains_key(quarter) {
             // Implement archive loading with quarter-specific paths
@@ -236,8 +277,11 @@ impl ConversationOperations for ConversationManager {
         quarter: &str,
     ) -> DbResult<Option<Message>> {
         if let Some(archive_storage) = self.get_or_load_archive(quarter)? {
-            if let Some(Node::Message(msg)) = archive_storage.get_node(message_id)? {
-                return Ok(Some(msg));
+            if let Some(node_ref) = archive_storage.get_node_ref(message_id)? {
+                let node = node_ref.deserialize()?;
+                if let Node::Message(msg) = node {
+                    return Ok(Some(msg));
+                }
             }
         }
         Ok(None)

@@ -36,10 +36,18 @@ fn test_storage_manager_concurrent_access() -> DbResult<()> {
     for i in 0..5 {
         let storage_clone = Arc::clone(&storage);
         let handle = thread::spawn(move || -> DbResult<Option<Chat>> {
-            // Each thread tries to read the chat
-            match storage_clone.get_node("concurrent_chat")? {
-                Some(Node::Chat(chat)) => Ok(Some(chat)),
-                _ => Ok(None),
+            // Each thread tries to read the chat - ZERO-COPY path
+            if let Some(guard) = storage_clone.get_node_guard("concurrent_chat")? {
+                let archived = rkyv::check_archived_root::<common::models::Node>(guard.data())
+                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
+                let node = archived.deserialize(&mut rkyv::Infallible)
+                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
+                match node {
+                    Node::Chat(chat) => Ok(Some(chat)),
+                    _ => Ok(None),
+                }
+            } else {
+                Ok(None)
             }
         });
         handles.push(handle);
@@ -99,13 +107,19 @@ fn test_concurrent_writes() -> DbResult<()> {
         assert!(result.is_ok());
     }
 
-    // Verify all chats were inserted
+    // Verify all chats were inserted - ZERO-COPY path
     for i in 0..5 {
         let chat_id = format!("concurrent_chat_{}", i);
-        let chat = storage.get_node(&chat_id)?;
-        assert!(chat.is_some());
-        if let Some(Node::Chat(chat)) = chat {
-            assert_eq!(chat.title, format!("Concurrent Chat {}", i));
+        if let Some(guard) = storage.get_node_guard(&chat_id)? {
+            let archived = rkyv::check_archived_root::<common::models::Node>(guard.data())
+                .map_err(|e| common::DbError::Serialization(e.to_string()))?;
+            let node = archived.deserialize(&mut rkyv::Infallible)
+                .map_err(|e| common::DbError::Serialization(e.to_string()))?;
+            if let Node::Chat(chat) = node {
+                assert_eq!(chat.title, format!("Concurrent Chat {}", i));
+            }
+        } else {
+            panic!("Chat should exist");
         }
     }
 

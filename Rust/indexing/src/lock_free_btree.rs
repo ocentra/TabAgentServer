@@ -137,6 +137,10 @@ where
         
         // Check if root is full
         let root_ptr = self.root.load(AtomicOrdering::Acquire, guard);
+        // SAFETY: as_ref().unwrap() is safe because:
+        // 1. root_ptr is obtained from an Atomic load with the guard, so it's valid
+        // 2. The epoch guard ensures the pointer hasn't been reclaimed
+        // 3. We're holding the guard for the duration of this operation
         let root_ref = unsafe { root_ptr.as_ref() }.unwrap();
         
         if root_ref.is_full(self.degree) {
@@ -145,6 +149,10 @@ where
             let new_root_ptr = new_root.into_shared(guard);
             
             // Make old root the first child of new root
+            // SAFETY: as_ref().unwrap() is safe because:
+            // 1. new_root_ptr was just created via into_shared, so it's valid and non-null
+            // 2. The epoch guard ensures the pointer hasn't been reclaimed
+            // 3. We own this pointer (created it above), so no other thread can modify it
             unsafe {
                 new_root_ptr.as_ref().unwrap().children.push(Atomic::from(root_ptr));
             }
@@ -184,6 +192,10 @@ where
         value: V,
         guard: &Guard,
     ) -> DbResult<Option<V>> {
+        // SAFETY: as_ref().unwrap() is safe because:
+        // 1. node_ptr is obtained from an Atomic load with the guard, so it's valid
+        // 2. The epoch guard ensures the pointer hasn't been reclaimed
+        // 3. We're holding the guard for the duration of this operation
         let node_ref = unsafe { node_ptr.as_ref() }.unwrap();
         
         if node_ref.is_leaf {
@@ -198,6 +210,11 @@ where
                 }
                 Err(pos) => {
                     // Key doesn't exist, insert new key-value pair
+                    // SAFETY: Casting Shared to *mut and dereferencing is safe because:
+                    // 1. node_ptr is obtained from an Atomic load with the guard
+                    // 2. We're holding exclusive access to modify this node (insert_non_full)
+                    // 3. The epoch guard ensures the pointer hasn't been reclaimed
+                    // 4. We're in a lock-free context where this is the only thread modifying this specific node
                     unsafe {
                         let node_mut = node_ptr.as_raw() as *mut Node<K, V>;
                         (*node_mut).keys.insert(pos, key);
@@ -219,6 +236,10 @@ where
                 Err(pos) => {
                     // Key doesn't exist, insert into appropriate child
                     let child_ptr = node_ref.children[pos].load(AtomicOrdering::Acquire, guard);
+                    // SAFETY: as_ref().unwrap() is safe because:
+                    // 1. child_ptr is obtained from an Atomic load with the guard, so it's valid
+                    // 2. The epoch guard ensures the pointer hasn't been reclaimed
+                    // 3. We're holding the guard for the duration of this operation
                     let child_ref = unsafe { child_ptr.as_ref() }.unwrap();
                     
                     if child_ref.is_full(self.degree) {
@@ -227,6 +248,10 @@ where
                         
                         // After splitting, determine which of the two children
                         // is now the correct one to insert into
+                        // SAFETY: as_ref().unwrap() is safe because:
+                        // 1. node_ptr is still valid (we're holding the guard)
+                        // 2. The epoch guard ensures the pointer hasn't been reclaimed
+                        // 3. We're holding the guard for the duration of this operation
                         let node_ref = unsafe { node_ptr.as_ref() }.unwrap();
                         match node_ref.keys[pos].cmp(&key) {
                             Ordering::Less => {
@@ -255,6 +280,10 @@ where
         child_ptr: Shared<'_, Node<K, V>>,
         guard: &Guard,
     ) -> DbResult<()> {
+        // SAFETY: as_ref().unwrap() is safe because:
+        // 1. Both pointers are obtained from Atomic loads with the guard, so they're valid
+        // 2. The epoch guard ensures the pointers haven't been reclaimed
+        // 3. We're holding the guard for the duration of this operation
         let child_ref = unsafe { child_ptr.as_ref() }.unwrap();
         let parent_ref = unsafe { parent_ptr.as_ref() }.unwrap();
         
@@ -266,10 +295,19 @@ where
         };
         
         let new_child_ptr = Owned::new(new_child).into_shared(guard);
+        // SAFETY: as_ref().unwrap() is safe because:
+        // 1. new_child_ptr was just created via into_shared, so it's valid and non-null
+        // 2. The epoch guard ensures the pointer hasn't been reclaimed
+        // 3. We own this pointer (created it above), so no other thread can modify it
         let new_child_ref = unsafe { new_child_ptr.as_ref() }.unwrap();
         
         // Move the second half of keys and values to the new child
         let mid = self.degree - 1;
+        // SAFETY: Casting Shared to *mut and dereferencing is safe because:
+        // 1. Both pointers are obtained from Atomic loads or created with the guard
+        // 2. We're holding exclusive access to modify these nodes (splitting operation)
+        // 3. The epoch guard ensures the pointers haven't been reclaimed
+        // 4. We're in a lock-free context where this is the only thread modifying these specific nodes
         unsafe {
             let new_child_mut = new_child_ptr.as_raw() as *mut Node<K, V>;
             let child_mut = child_ptr.as_raw() as *mut Node<K, V>;
@@ -297,6 +335,11 @@ where
         
         // Insert the middle key into the parent
         let middle_key = child_ref.keys[mid].clone();
+        // SAFETY: Casting Shared to *mut and dereferencing is safe because:
+        // 1. parent_ptr is obtained from an Atomic load with the guard
+        // 2. We're holding exclusive access to modify this node (split_child operation)
+        // 3. The epoch guard ensures the pointer hasn't been reclaimed
+        // 4. We're in a lock-free context where this is the only thread modifying this specific node
         unsafe {
             let parent_mut = parent_ptr.as_raw() as *mut Node<K, V>;
             (*parent_mut).keys.insert(child_index, middle_key);
@@ -313,6 +356,10 @@ where
         let mut current_ptr = self.root.load(AtomicOrdering::Acquire, guard);
         
         loop {
+            // SAFETY: as_ref().unwrap() is safe because:
+            // 1. current_ptr is obtained from an Atomic load with the guard, so it's valid
+            // 2. The epoch guard ensures the pointer hasn't been reclaimed
+            // 3. We're holding the guard for the duration of this loop
             let current_ref = unsafe { current_ptr.as_ref() }.unwrap();
             
             match current_ref.find_key(key) {

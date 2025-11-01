@@ -31,9 +31,8 @@
 //! ```no_run
 //! # use indexing::IndexManager;
 //! # fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! // Create a sled database
-//! let db = sled::open("my_database")?;
-//! let index_manager = IndexManager::new(&db)?;
+//! // Create index manager with libmdbx
+//! let index_manager = IndexManager::new("my_database")?;
 //!
 //! // Indexes update automatically when nodes are added
 //! // Query by property
@@ -109,6 +108,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::thread;
 use serde::{Deserialize, Serialize};
+use libmdbx::{Environment, NoWriteMap, Database};
+use dashmap::DashMap;
+use std::path::Path;
 
 
 pub use structural::StructuralIndex;
@@ -406,31 +408,31 @@ impl IndexManager {
     /// Creates a new `IndexManager` instance with default configuration.
     ///
     /// This initializes all three index types (structural, graph, vector) using
-    /// the provided `sled::Db` instance.
+    /// the provided libmdbx path.
     ///
     /// # Arguments
     ///
-    /// * `db` - Reference to the sled database
+    /// * `path` - Path to the libmdbx database
     ///
     /// # Errors
     ///
     /// Returns `DbError` if any index fails to initialize.
-    pub fn new(db: &sled::Db) -> DbResult<Self> {
-        Self::new_with_config(db, HybridIndexConfig::default())
+    pub fn new(path: impl AsRef<Path>) -> DbResult<Self> {
+        Self::new_with_config(path, HybridIndexConfig::default())
     }
     
     /// Creates a new `IndexManager` instance with custom configuration.
     ///
     /// # Arguments
     ///
-    /// * `db` - Reference to the sled database
+    /// * `path` - Path to the libmdbx database
     /// * `config` - Configuration for hybrid indexing features
     ///
     /// # Errors
     ///
     /// Returns `DbError` if any index fails to initialize.
-    pub fn new_with_config(db: &sled::Db, config: HybridIndexConfig) -> DbResult<Self> {
-        Self::new_with_hybrid(db, config.enabled)
+    pub fn new_with_config(path: impl AsRef<Path>, config: HybridIndexConfig) -> DbResult<Self> {
+        Self::new_with_hybrid(path, config.enabled)
             .map(|mut manager| {
                 manager.config = Arc::new(Mutex::new(config));
                 manager
@@ -441,22 +443,47 @@ impl IndexManager {
     ///
     /// # Arguments
     ///
-    /// * `db` - Reference to the sled database
+    /// * `path` - Path to the libmdbx database
     /// * `with_hybrid` - Whether to initialize hybrid indexes
     ///
     /// # Errors
     ///
     /// Returns `DbError` if any index fails to initialize.
-    pub fn new_with_hybrid(db: &sled::Db, with_hybrid: bool) -> DbResult<Self> {
-        // Open the required sled trees for each index type
-        let structural_tree = db.open_tree("structural_index")?;
-        let outgoing_tree = db.open_tree("graph_outgoing")?;
-        let incoming_tree = db.open_tree("graph_incoming")?;
+    pub fn new_with_hybrid(path: impl AsRef<Path>, with_hybrid: bool) -> DbResult<Self> {
+        // Create libmdbx environment
+        let env = Arc::new(Environment::<NoWriteMap>::new()
+            .set_max_dbs(16)
+            .set_geometry(libmdbx::Geometry {
+                size: Some(0..(1024 * 1024 * 1024 * 1024)), // 1TB max
+                growth_step: Some(1024 * 1024 * 1024), // 1GB grow step
+                shrink_threshold: None,
+                page_size: None,
+            })
+            .open(path.as_ref())
+            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to open libmdbx environment: {}", e)))?);
+        
+        // Create databases for indexes
+        let databases = Arc::new(DashMap::new());
+        
+        let structural_db = env.create_db(Some("structural_index"), libmdbx::DatabaseFlags::empty())
+            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to create structural_index db: {}", e)))?;
+        databases.insert("structural_index".to_string(), structural_db);
+        
+        let outgoing_db = env.create_db(Some("graph_outgoing"), libmdbx::DatabaseFlags::empty())
+            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to create graph_outgoing db: {}", e)))?;
+        databases.insert("graph_outgoing".to_string(), outgoing_db);
+        
+        let incoming_db = env.create_db(Some("graph_incoming"), libmdbx::DatabaseFlags::empty())
+            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to create graph_incoming db: {}", e)))?;
+        databases.insert("graph_incoming".to_string(), incoming_db);
         
         // Note: VectorIndex persists to disk
         // TODO: In production, derive path from db location. For now, use a temp path.
         use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| common::DbError::InvalidOperation(format!("System time error: {}", e)))?
+            .as_nanos();
         let vector_path = std::env::temp_dir().join(format!("vec_idx_{}", timestamp));
         let vector_index = VectorIndex::new(&vector_path)?;
         
@@ -475,16 +502,25 @@ impl IndexManager {
             let graph_cache = Arc::new(GraphTraversalCache::new(500, 500, 200)); // BFS, DFS, shortest path caches
             
             // Initialize warm layer caches
+            let graph_outgoing = databases.get("graph_outgoing")
+                .ok_or_else(|| common::DbError::InvalidOperation("graph_outgoing database not found".to_string()))?;
+            let graph_incoming = databases.get("graph_incoming")
+                .ok_or_else(|| common::DbError::InvalidOperation("graph_incoming database not found".to_string()))?;
+            
             let graph_arc = Arc::new(GraphIndex::new(
-                db.open_tree("graph_outgoing")?,
-                db.open_tree("graph_incoming")?
+                Arc::clone(&env),
+                graph_outgoing.clone(),
+                graph_incoming.clone(),
+                Arc::clone(&databases)
             ));
             let vector_arc = Arc::new(std::sync::RwLock::new(VectorIndex::new(&vector_path)?));
             
             let warm_graph_cache = Arc::new(WarmGraphCache::new(
                 Arc::new(std::sync::RwLock::new(GraphIndex::new(
-                    db.open_tree("graph_outgoing")?,
-                    db.open_tree("graph_incoming")?
+                    Arc::clone(&env),
+                    graph_outgoing.clone(),
+                    graph_incoming.clone(),
+                    Arc::clone(&databases)
                 ))),
                 WarmGraphCacheConfig::default()
             ));
@@ -499,9 +535,25 @@ impl IndexManager {
             (None, None, None, None)
         };
         
+        let structural_db = databases.get("structural_index")
+            .ok_or_else(|| common::DbError::InvalidOperation("structural_index database not found".to_string()))?;
+        let graph_outgoing = databases.get("graph_outgoing")
+            .ok_or_else(|| common::DbError::InvalidOperation("graph_outgoing database not found".to_string()))?;
+        let graph_incoming = databases.get("graph_incoming")
+            .ok_or_else(|| common::DbError::InvalidOperation("graph_incoming database not found".to_string()))?;
+        
         Ok(Self {
-            structural: Arc::new(StructuralIndex::new(structural_tree)),
-            graph: Arc::new(GraphIndex::new(outgoing_tree, incoming_tree)),
+            structural: Arc::new(StructuralIndex::new(
+                Arc::clone(&env),
+                structural_db.clone(),
+                Arc::clone(&databases)
+            )),
+            graph: Arc::new(GraphIndex::new(
+                Arc::clone(&env),
+                graph_outgoing.clone(),
+                graph_incoming.clone(),
+                Arc::clone(&databases)
+            )),
             vector: Arc::new(Mutex::new(vector_index)),
             hot_graph,
             hot_vector,
@@ -763,6 +815,12 @@ impl IndexManager {
                 self.structural.add("action_type", &outcome.action_type, outcome.id.as_str())?;
                 self.structural.add("conversation_context", &outcome.conversation_context, outcome.id.as_str())?;
             }
+            Node::Log(log) => {
+                self.structural.add("node_type", "Log", log.id.as_str())?;
+                self.structural.add("level", &log.level.to_string(), log.id.as_str())?;
+                self.structural.add("context", &log.context, log.id.as_str())?;
+                self.structural.add("source", &log.source.to_string(), log.id.as_str())?;
+            }
         }
         Ok(())
     }
@@ -818,6 +876,12 @@ impl IndexManager {
                 self.structural.remove("node_type", "ActionOutcome", outcome.id.as_str())?;
                 self.structural.remove("action_type", &outcome.action_type, outcome.id.as_str())?;
                 self.structural.remove("conversation_context", &outcome.conversation_context, outcome.id.as_str())?;
+            }
+            Node::Log(log) => {
+                self.structural.remove("node_type", "Log", log.id.as_str())?;
+                self.structural.remove("level", &log.level.to_string(), log.id.as_str())?;
+                self.structural.remove("context", &log.context, log.id.as_str())?;
+                self.structural.remove("source", &log.source.to_string(), log.id.as_str())?;
             }
         }
         Ok(())
@@ -1710,8 +1774,7 @@ mod tests {
     
     fn create_test_manager() -> (IndexManager, TempDir) {
         let temp_dir = TempDir::new().unwrap();
-        let db = sled::open(temp_dir.path()).unwrap();
-        let manager = IndexManager::new(&db).unwrap();
+        let manager = IndexManager::new(temp_dir.path()).unwrap();
         (manager, temp_dir)
     }
 
@@ -1728,7 +1791,7 @@ mod tests {
             message_ids: vec![],
             summary_ids: vec![],
             embedding_id: None,
-            metadata: json!({}),
+            metadata: "{}".to_string(),
         });
         
         manager.index_node(&chat).unwrap();
@@ -1753,7 +1816,7 @@ mod tests {
             text_content: "Hello".to_string(),
             attachment_ids: vec![],
             embedding_id: None,
-            metadata: json!({}),
+            metadata: "{}".to_string(),
         });
         
         manager.index_node(&message).unwrap();
@@ -1773,7 +1836,7 @@ mod tests {
             to_node: NodeId::from("msg_456"),
             edge_type: "CONTAINS".to_string(),
             created_at: 1697500000000,
-            metadata: json!({}),
+            metadata: "{}".to_string(),
         };
         
         manager.index_edge(&edge).unwrap();

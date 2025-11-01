@@ -76,7 +76,7 @@ pub struct VectorIndex {
     next_index: Arc<RwLock<usize>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct VectorMetadata {
     pub timestamp: i64,
     pub dimension: usize,

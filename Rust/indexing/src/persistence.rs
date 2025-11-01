@@ -14,7 +14,7 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
 /// Serialized representation of a vector index for persistence.
-#[derive(Debug, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Serialize, Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 struct SerializedVectorIndex {
     /// Mapping from embedding ID to internal index
     id_to_index: HashMap<EmbeddingId, usize>,
@@ -79,7 +79,9 @@ impl PersistentVectorIndex {
         reader.read_to_end(&mut buffer)?;
         
         // Deserialize the index
-        let (serialized, _): (SerializedVectorIndex, usize) = bincode::decode_from_slice(&buffer, bincode::config::standard())
+        let archived = rkyv::check_archived_root::<SerializedVectorIndex>(&buffer)
+            .map_err(|e| DbError::Serialization(e.to_string()))?;
+        let serialized = archived.deserialize(&mut rkyv::Infallible)
             .map_err(|e| DbError::Serialization(e.to_string()))?;
         
         // Create a new vector index
@@ -112,7 +114,7 @@ impl PersistentVectorIndex {
             .truncate(true)
             .open(&self.persist_path)?;
         let mut writer = BufWriter::new(file);
-        let bytes = bincode::encode_to_vec(&serialized, bincode::config::standard())
+        let bytes = rkyv::to_bytes::<_, 256>(&serialized)
             .map_err(|e| DbError::Serialization(e.to_string()))?;
         writer.write_all(&bytes)?;
         

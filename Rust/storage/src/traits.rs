@@ -3,7 +3,7 @@
 //! This module defines traits that provide interfaces for different types of
 //! database operations, making the system more modular and maintainable.
 
-use crate::{time_scope::TimeScope, StorageManager, TemperatureTier};
+use crate::{time_scope::TimeScope, DefaultStorageManager, TemperatureTier};
 use common::{models::*, DbResult};
 use std::sync::Arc;
 
@@ -36,10 +36,10 @@ pub trait ConversationOperations {
     ) -> DbResult<bool>;
 
     /// Get or lazy-load conversations/recent tier
-    fn get_or_load_conversations_recent(&self) -> DbResult<Option<Arc<StorageManager>>>;
+    fn get_or_load_conversations_recent(&self) -> DbResult<Option<Arc<DefaultStorageManager>>>;
 
     /// Get or lazy-load a specific archive quarter
-    fn get_or_load_archive(&self, quarter: &str) -> DbResult<Option<Arc<StorageManager>>>;
+    fn get_or_load_archive(&self, quarter: &str) -> DbResult<Option<Arc<DefaultStorageManager>>>;
 
     /// Get the quarter string for a given timestamp
     fn get_quarter_for_timestamp(&self, timestamp_ms: i64) -> String;
@@ -80,13 +80,13 @@ pub trait EmbeddingOperations {
     fn insert_embedding(&self, embedding: Embedding) -> DbResult<()>;
 
     /// Get or lazy-load embeddings/recent tier
-    fn get_or_load_embeddings_recent(&self) -> DbResult<Option<Arc<StorageManager>>>;
+    fn get_or_load_embeddings_recent(&self) -> DbResult<Option<Arc<DefaultStorageManager>>>;
 
     /// Get or lazy-load a specific embeddings archive quarter
     fn get_or_load_embeddings_archive(
         &self,
         quarter: &str,
-    ) -> DbResult<Option<Arc<StorageManager>>>;
+    ) -> DbResult<Option<Arc<DefaultStorageManager>>>;
 
     /// Get an embedding from a specific archive quarter
     fn get_embedding_from_archive(
@@ -146,7 +146,7 @@ pub trait ExperienceOperations {
 /// Trait for summary operations
 pub trait SummaryOperations {
     /// Get or lazy-load a specific summary tier
-    fn get_or_load_summary(&self, tier: TemperatureTier) -> DbResult<Arc<StorageManager>>;
+    fn get_or_load_summary(&self, tier: TemperatureTier) -> DbResult<Arc<DefaultStorageManager>>;
 
     /// Insert a summary into the appropriate tier
     fn insert_summary(&self, summary: Summary) -> DbResult<()>;
@@ -219,23 +219,23 @@ pub trait TimeBasedQueryOperations {
 /// Trait for direct database access
 pub trait DirectAccessOperations {
     /// Get direct access to conversations/active database
-    fn conversations_active(&self) -> Arc<StorageManager>;
+    fn conversations_active(&self) -> Arc<DefaultStorageManager>;
 
     /// Get direct access to knowledge/active database
-    fn knowledge_active(&self) -> Arc<StorageManager>;
+    fn knowledge_active(&self) -> Arc<DefaultStorageManager>;
 
     /// Get direct access to knowledge/stable database
-    fn knowledge_stable(&self) -> Arc<StorageManager>;
+    fn knowledge_stable(&self) -> Arc<DefaultStorageManager>;
 
     /// Get direct access to embeddings/active database
-    fn embeddings_active(&self) -> Arc<StorageManager>;
+    fn embeddings_active(&self) -> Arc<DefaultStorageManager>;
 
     /// Get direct access to tool-results database
-    fn tool_results(&self) -> Arc<StorageManager>;
+    fn tool_results(&self) -> Arc<DefaultStorageManager>;
 
     /// Get direct access to experience database
-    fn experience(&self) -> Arc<StorageManager>;
+    fn experience(&self) -> Arc<DefaultStorageManager>;
 
     /// Get direct access to meta database
-    fn meta(&self) -> Arc<StorageManager>;
+    fn meta(&self) -> Arc<DefaultStorageManager>;
 }

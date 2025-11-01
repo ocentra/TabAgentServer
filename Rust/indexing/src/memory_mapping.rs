@@ -100,12 +100,22 @@ impl MemoryMappedVectorStorage {
         let (mmap, mmap_mut, vector_count, write_pos) = if file_size > 0 {
             // Load existing data
             let mmap = if config.enabled {
+                // SAFETY: Mmap::map is safe because:
+                // 1. The file was successfully opened and exists
+                // 2. file_size > 0 ensures the file has content
+                // 3. memmap2 guarantees safety when mapping a valid, readable file
+                // 4. The file descriptor remains valid for the lifetime of the mapping
                 Some(unsafe { Mmap::map(&file)? })
             } else {
                 None
             };
             
             let mmap_mut = if config.enabled && !config.copy_on_write {
+                // SAFETY: MmapMut::map_mut is safe because:
+                // 1. The file was successfully opened with write permissions
+                // 2. file_size > 0 ensures the file has content
+                // 3. memmap2 guarantees safety when mapping a valid, writable file
+                // 4. The file descriptor remains valid for the lifetime of the mapping
                 Some(unsafe { MmapMut::map_mut(&file)? })
             } else {
                 None
@@ -238,10 +248,18 @@ impl MemoryMappedVectorStorage {
             
             // Remap if needed
             if self.mmap.is_some() {
+                // SAFETY: Mmap::map is safe because:
+                // 1. The file was successfully extended with set_len
+                // 2. The file descriptor remains valid
+                // 3. memmap2 guarantees safety when mapping a valid, readable file
                 self.mmap = Some(unsafe { Mmap::map(&self.file)? });
             }
             
             if self.mmap_mut.is_some() {
+                // SAFETY: MmapMut::map_mut is safe because:
+                // 1. The file was successfully extended with set_len
+                // 2. The file descriptor remains valid
+                // 3. memmap2 guarantees safety when mapping a valid, writable file
                 self.mmap_mut = Some(unsafe { MmapMut::map_mut(&self.file)? });
             }
         }
@@ -376,12 +394,20 @@ impl MemoryMappedPayloadStorage {
         // Initialize memory mapping
         let (mmap, mmap_mut, write_pos) = if file_size > 0 {
             let mmap = if config.enabled {
+                // SAFETY: Mmap::map is safe because:
+                // 1. The file was successfully opened and exists
+                // 2. file_size > 0 ensures the file has content
+                // 3. memmap2 guarantees safety when mapping a valid, readable file
                 Some(unsafe { Mmap::map(&file)? })
             } else {
                 None
             };
             
             let mmap_mut = if config.enabled && !config.copy_on_write {
+                // SAFETY: MmapMut::map_mut is safe because:
+                // 1. The file was successfully opened with write permissions
+                // 2. file_size > 0 ensures the file has content
+                // 3. memmap2 guarantees safety when mapping a valid, writable file
                 Some(unsafe { MmapMut::map_mut(&file)? })
             } else {
                 None
@@ -427,10 +453,18 @@ impl MemoryMappedPayloadStorage {
             
             // Remap if needed
             if self.mmap.is_some() {
+                // SAFETY: Mmap::map is safe because:
+                // 1. The file was successfully extended with set_len
+                // 2. The file descriptor remains valid
+                // 3. memmap2 guarantees safety when mapping a valid, readable file
                 self.mmap = Some(unsafe { Mmap::map(&self.file)? });
             }
             
             if self.mmap_mut.is_some() {
+                // SAFETY: MmapMut::map_mut is safe because:
+                // 1. The file was successfully extended with set_len
+                // 2. The file descriptor remains valid
+                // 3. memmap2 guarantees safety when mapping a valid, writable file
                 self.mmap_mut = Some(unsafe { MmapMut::map_mut(&self.file)? });
             }
         }
@@ -593,12 +627,20 @@ impl MemoryMappedGraphStorage {
         // Initialize memory mapping
         let (nodes_mmap, nodes_mmap_mut, nodes_write_pos) = if nodes_file_size > 0 {
             let mmap = if config.enabled {
+                // SAFETY: Mmap::map is safe because:
+                // 1. The file was successfully opened and exists
+                // 2. nodes_file_size > 0 ensures the file has content
+                // 3. memmap2 guarantees safety when mapping a valid, readable file
                 Some(unsafe { Mmap::map(&nodes_file)? })
             } else {
                 None
             };
             
             let mmap_mut = if config.enabled && !config.copy_on_write {
+                // SAFETY: MmapMut::map_mut is safe because:
+                // 1. The file was successfully opened with write permissions
+                // 2. nodes_file_size > 0 ensures the file has content
+                // 3. memmap2 guarantees safety when mapping a valid, writable file
                 Some(unsafe { MmapMut::map_mut(&nodes_file)? })
             } else {
                 None
@@ -613,12 +655,20 @@ impl MemoryMappedGraphStorage {
         
         let (edges_mmap, edges_mmap_mut, edges_write_pos) = if edges_file_size > 0 {
             let mmap = if config.enabled {
+                // SAFETY: Mmap::map is safe because:
+                // 1. The file was successfully opened and exists
+                // 2. edges_file_size > 0 ensures the file has content
+                // 3. memmap2 guarantees safety when mapping a valid, readable file
                 Some(unsafe { Mmap::map(&edges_file)? })
             } else {
                 None
             };
             
             let mmap_mut = if config.enabled && !config.copy_on_write {
+                // SAFETY: MmapMut::map_mut is safe because:
+                // 1. The file was successfully opened with write permissions
+                // 2. edges_file_size > 0 ensures the file has content
+                // 3. memmap2 guarantees safety when mapping a valid, writable file
                 Some(unsafe { MmapMut::map_mut(&edges_file)? })
             } else {
                 None

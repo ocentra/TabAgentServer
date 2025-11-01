@@ -45,6 +45,13 @@ pub trait MlBridge: Send + Sync {
     /// A concise summary of the conversation.
     async fn summarize(&self, messages: &[String]) -> DbResult<String>;
 
+    /// Get the current embedding model name.
+    ///
+    /// # Returns
+    ///
+    /// The name/identifier of the embedding model currently being used.
+    async fn get_embedding_model_name(&self) -> DbResult<String>;
+
     /// Check if the ML bridge is healthy and responsive.
     async fn health_check(&self) -> DbResult<bool>;
 }
@@ -131,6 +138,11 @@ impl MlBridge for MockMlBridge {
             messages.first().unwrap(),
             messages.last().unwrap()
         ))
+    }
+
+    async fn get_embedding_model_name(&self) -> DbResult<String> {
+        // Mock: Return default model name
+        Ok("all-MiniLM-L6-v2".to_string())
     }
 
     async fn health_check(&self) -> DbResult<bool> {

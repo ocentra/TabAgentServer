@@ -112,8 +112,12 @@ async fn main() -> Result<()> {
             kill_port_process(args.port).await?;
             kill_port_process(args.webrtc_port).await?;
         }
-        ServerMode::Native => {
-            // Native messaging doesn't use ports, skip
+        ServerMode::Native | ServerMode::Mcp => {
+            // Native messaging and MCP don't use ports, skip
+        }
+        ServerMode::Everything => {
+            kill_port_process(args.port).await?;
+            kill_port_process(args.webrtc_port).await?;
         }
     }
 
@@ -381,6 +385,104 @@ async fn main() -> Result<()> {
                 }
                 _ = webrtc_handle => {
                     error!("WebRTC server terminated unexpectedly");
+                }
+            }
+        }
+        ServerMode::Mcp => {
+            info!("Starting MCP transport (stdio for AI assistants)");
+            
+            // Create coordinator for MCP logs
+            let coordinator = Arc::new(storage::DatabaseCoordinator::new()?);
+            let mcp_manager = tabagent_mcp::McpManager::new(state.clone(), coordinator);
+            
+            // Run MCP stdio transport
+            tabagent_mcp::transport::run_stdio_transport(mcp_manager).await?;
+        }
+        ServerMode::Everything => {
+            info!("Running ALL transports: HTTP ({}), WebRTC ({}), Native Messaging, MCP", args.port, args.webrtc_port);
+            
+            // HTTP API
+            let http_handle = {
+                let state = state.clone();
+                let port = args.port;
+                tokio::spawn(async move {
+                    info!("Starting HTTP API on port {}", port);
+                    if let Err(e) = tabagent_api::run_server(state, port).await {
+                        error!("HTTP server error: {}", e);
+                    }
+                })
+            };
+            
+            // Native Messaging (runs in background, may exit if no Chrome)
+            let state_for_native = state.clone();
+            tokio::spawn(async move {
+                info!("Starting Native Messaging (stdin/stdout)");
+                match tabagent_native_messaging::run_host_with_state(
+                    state_for_native,
+                    tabagent_native_messaging::NativeMessagingConfig::default()
+                ).await {
+                    Ok(_) => {
+                        info!("Native messaging exited gracefully (stdin closed)");
+                    }
+                    Err(e) => {
+                        error!("Native messaging error: {}", e);
+                    }
+                }
+            });
+            
+            // WebRTC (HTTP API on different port with WebRTC manager)
+            let webrtc_handle = {
+                let state = state.clone();
+                let port = args.webrtc_port;
+                tokio::spawn(async move {
+                    info!("Starting WebRTC signaling (HTTP API) on port {}", port);
+                    
+                    let webrtc_config = tabagent_webrtc::WebRtcConfig {
+                        max_sessions: 1000,
+                        max_sessions_per_client: 10,
+                        session_timeout: std::time::Duration::from_secs(3600),
+                        ..Default::default()
+                    };
+                    
+                    let state_for_webrtc = state.clone();
+                    let app_state_handler: Arc<dyn Fn(tabagent_values::RequestValue) -> futures::future::BoxFuture<'static, anyhow::Result<tabagent_values::ResponseValue>> + Send + Sync> = 
+                        Arc::new(move |request| {
+                            let state = state_for_webrtc.clone();
+                            Box::pin(async move {
+                                state.handle_request(request).await
+                            })
+                        });
+                    
+                    let webrtc_manager = Arc::new(tabagent_webrtc::WebRtcManager::new(webrtc_config, app_state_handler));
+                    
+                    let config = tabagent_api::ApiConfig { port, ..Default::default() };
+                    if let Err(e) = tabagent_api::run_server_with_config(state, Some(webrtc_manager), config).await {
+                        error!("WebRTC signaling server error: {}", e);
+                    }
+                })
+            };
+            
+            // MCP stdio transport
+            let state_for_mcp = state.clone();
+            let coordinator = Arc::new(storage::DatabaseCoordinator::new()?);
+            let mcp_manager = tabagent_mcp::McpManager::new(state_for_mcp, coordinator);
+            let mcp_handle = tokio::spawn(async move {
+                info!("Starting MCP transport (stdio)");
+                if let Err(e) = tabagent_mcp::transport::run_stdio_transport(mcp_manager).await {
+                    error!("MCP transport error: {}", e);
+                }
+            });
+            
+            // Wait for any transport to fail
+            tokio::select! {
+                _ = http_handle => {
+                    error!("HTTP server terminated unexpectedly");
+                }
+                _ = webrtc_handle => {
+                    error!("WebRTC server terminated unexpectedly");
+                }
+                _ = mcp_handle => {
+                    error!("MCP transport terminated unexpectedly");
                 }
             }
         }

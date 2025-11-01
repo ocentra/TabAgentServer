@@ -8,28 +8,28 @@
 //! The DatabaseCoordinator is designed to be thread-safe and can be safely shared
 //! across multiple threads. It uses the following concurrency primitives:
 //!
-//! - `Arc<StorageManager>`: For shared ownership of database instances
-//! - `Arc<RwLock<Option<StorageManager>>>`: For lazy-loaded tiers that may be initialized concurrently
-//! - `Arc<RwLock<HashMap<String, StorageManager>>>`: For archive tiers that may be accessed concurrently
+//! - `Arc<DefaultStorageManager>`: For shared ownership of database instances
+//! - `Arc<RwLock<Option<DefaultStorageManager>>>`: For lazy-loaded tiers that may be initialized concurrently
+//! - `Arc<RwLock<HashMap<String, DefaultStorageManager>>>`: For archive tiers that may be accessed concurrently
 //!
-//! The underlying sled database is thread-safe, so multiple threads can safely
+//! The underlying storage engine is thread-safe, so multiple threads can safely
 //! perform operations on the same database instances without additional synchronization.
 
 use crate::{
     conversations::ConversationManager, embeddings::EmbeddingManager,
     experience::ExperienceManager, knowledge::KnowledgeManager, summaries::SummaryManager,
-    tool_results::ToolResultManager, traits::*, DatabaseType, StorageManager, TemperatureTier,
+    tool_results::ToolResultManager, traits::*, DatabaseType, DefaultStorageManager, TemperatureTier,
 };
 use common::{models::*, DbResult};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-/// High-level coordinator for ALL 7 database types in MIA's memory system
+/// High-level coordinator for ALL 8 database types in MIA's memory system
 ///
 /// The coordinator manages:
 /// - 2 SOURCE databases (Conversations, Experience)
 /// - 3 DERIVED databases (Knowledge, Embeddings, Summaries)
-/// - 1 EXTERNAL database (ToolResults)
+/// - 2 EXTERNAL databases (ToolResults, Logs)
 /// - 1 INDEX database (Meta)
 ///
 /// HOT tiers (Active, Stable, Session) are always loaded.
@@ -45,36 +45,40 @@ pub struct DatabaseCoordinator {
 
     // ========== INDEX DATABASE ==========
     /// Meta: Query routing, performance stats, confidence maps
-    pub meta: Arc<StorageManager>,
+    pub meta: Arc<DefaultStorageManager>,
+
+    // ========== SYSTEM LOGS DATABASE ==========
+    /// Logs: System logs from all components
+    pub logs: Arc<DefaultStorageManager>,
 }
 
 // Implement DirectAccessOperations for safe public access to storage managers
 impl crate::traits::DirectAccessOperations for DatabaseCoordinator {
-    fn conversations_active(&self) -> Arc<StorageManager> {
+    fn conversations_active(&self) -> Arc<DefaultStorageManager> {
         self.conversation_manager.conversations_active.clone()
     }
     
-    fn knowledge_active(&self) -> Arc<StorageManager> {
+    fn knowledge_active(&self) -> Arc<DefaultStorageManager> {
         self.knowledge_manager.knowledge_active.clone()
     }
     
-    fn knowledge_stable(&self) -> Arc<StorageManager> {
+    fn knowledge_stable(&self) -> Arc<DefaultStorageManager> {
         self.knowledge_manager.knowledge_stable.clone()
     }
     
-    fn embeddings_active(&self) -> Arc<StorageManager> {
+    fn embeddings_active(&self) -> Arc<DefaultStorageManager> {
         self.embedding_manager.embeddings_active.clone()
     }
     
-    fn tool_results(&self) -> Arc<StorageManager> {
+    fn tool_results(&self) -> Arc<DefaultStorageManager> {
         self.tool_result_manager.tool_results.clone()
     }
     
-    fn experience(&self) -> Arc<StorageManager> {
+    fn experience(&self) -> Arc<DefaultStorageManager> {
         self.experience_manager.experience.clone()
     }
     
-    fn meta(&self) -> Arc<StorageManager> {
+    fn meta(&self) -> Arc<DefaultStorageManager> {
         self.meta.clone()
     }
 }
@@ -95,7 +99,7 @@ impl DatabaseCoordinator {
         // Helper function to open a database with optional custom base path
         let open_db = |db_type: DatabaseType,
                        tier: Option<TemperatureTier>|
-         -> DbResult<StorageManager> {
+         -> DbResult<DefaultStorageManager> {
             if let Some(ref base) = base_path {
                 // Use custom path
                 let path = if let Some(t) = tier {
@@ -111,17 +115,17 @@ impl DatabaseCoordinator {
                     common::DbError::InvalidOperation("Invalid UTF-8 in database path".to_string())
                 })?;
 
-                StorageManager::with_indexing(path_str)
+                DefaultStorageManager::with_indexing(path_str)
             } else {
                 // Use default platform paths
-                StorageManager::open_typed_with_indexing(db_type, tier)
+                DefaultStorageManager::open_typed_with_indexing(db_type, tier)
             }
         };
 
         // Helper function to open a database without indexing (for single-tier DBs)
         let open_db_no_index = |db_type: DatabaseType,
                                 tier: Option<TemperatureTier>|
-         -> DbResult<StorageManager> {
+         -> DbResult<DefaultStorageManager> {
             if let Some(ref base) = base_path {
                 // Use custom path
                 let path = if let Some(t) = tier {
@@ -137,10 +141,10 @@ impl DatabaseCoordinator {
                     common::DbError::InvalidOperation("Invalid UTF-8 in database path".to_string())
                 })?;
 
-                StorageManager::new(path_str)
+                DefaultStorageManager::new(path_str)
             } else {
                 // Use default platform paths
-                StorageManager::open_typed(db_type, tier)
+                DefaultStorageManager::open_typed(db_type, tier)
             }
         };
 
@@ -198,6 +202,7 @@ impl DatabaseCoordinator {
             experience_manager,
             summary_manager,
             meta: Arc::new(open_db_no_index(DatabaseType::Meta, None)?),
+            logs: Arc::new(open_db_no_index(DatabaseType::Logs, None)?),
         })
     }
 
@@ -359,42 +364,5 @@ impl DatabaseCoordinator {
     /// Get a summary by ID, searching across all summary tiers
     pub fn get_summary(&self, summary_id: &str) -> DbResult<Option<Summary>> {
         self.summary_manager.get_summary(summary_id)
-    }
-
-    // ========== DIRECT ACCESS TO DATABASES (for specialized operations) ==========
-
-    /// Get direct access to conversations/active database
-    pub fn conversations_active(&self) -> Arc<StorageManager> {
-        Arc::clone(&self.conversation_manager.conversations_active)
-    }
-
-    /// Get direct access to knowledge/active database
-    pub fn knowledge_active(&self) -> Arc<StorageManager> {
-        Arc::clone(&self.knowledge_manager.knowledge_active)
-    }
-
-    /// Get direct access to knowledge/stable database
-    pub fn knowledge_stable(&self) -> Arc<StorageManager> {
-        Arc::clone(&self.knowledge_manager.knowledge_stable)
-    }
-
-    /// Get direct access to embeddings/active database
-    pub fn embeddings_active(&self) -> Arc<StorageManager> {
-        Arc::clone(&self.embedding_manager.embeddings_active)
-    }
-
-    /// Get direct access to tool-results database
-    pub fn tool_results(&self) -> Arc<StorageManager> {
-        Arc::clone(&self.tool_result_manager.tool_results)
-    }
-
-    /// Get direct access to experience database
-    pub fn experience(&self) -> Arc<StorageManager> {
-        Arc::clone(&self.experience_manager.experience)
-    }
-
-    /// Get direct access to meta database
-    pub fn meta(&self) -> Arc<StorageManager> {
-        Arc::clone(&self.meta)
     }
 }

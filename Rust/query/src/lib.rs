@@ -59,6 +59,7 @@ use common::{DbError, NodeId};
 use hashbrown::{HashMap, HashSet};
 use indexing::IndexManager;
 use models::*;
+use rkyv;
 use storage::DatabaseCoordinator;
 
 // Re-export key types for convenience
@@ -304,9 +305,14 @@ impl<'a> QueryManager<'a> {
                     }
                 };
 
-                // Fetch actual Edge objects and traverse
+                // Fetch actual Edge objects and traverse - ZERO-COPY path
                 for edge_id in edge_ids {
-                    let Some(edge) = self.coordinator.conversations_active().get_edge(edge_id.as_str())? else {
+                    let edge = if let Some(guard) = self.coordinator.conversations_active().get_edge_guard(edge_id.as_str())? {
+                        let archived = rkyv::check_archived_root::<common::models::Edge>(guard.data())
+                            .map_err(|e| QueryError::Storage(e.to_string()))?;
+                        archived.deserialize(&mut rkyv::Infallible)
+                            .map_err(|e| QueryError::Storage(e.to_string()))?
+                    } else {
                         continue; // Edge was deleted
                     };
 
@@ -515,10 +521,14 @@ impl<'a> QueryManager<'a> {
                 return Ok(path);
             }
             
-            // Get neighbors
+            // Get neighbors - ZERO-COPY path
             let outgoing_edges = self.indexing.get_outgoing_edges(&current_node)?;
             for edge_id in outgoing_edges {
-                if let Some(edge) = self.coordinator.conversations_active().get_edge(edge_id.as_str())? {
+                if let Some(guard) = self.coordinator.conversations_active().get_edge_guard(edge_id.as_str())? {
+                    let archived = rkyv::check_archived_root::<common::models::Edge>(guard.data())
+                        .map_err(|e| QueryError::Storage(e.to_string()))?;
+                    let edge = archived.deserialize(&mut rkyv::Infallible)
+                        .map_err(|e| QueryError::Storage(e.to_string()))?;
                     let neighbor = edge.to_node.as_str();
                     
                     if !visited.contains(neighbor) {
@@ -673,10 +683,14 @@ impl<'a> QueryManager<'a> {
                                 }
                             }
                             Err(_) => {
-                                // If hot graph doesn't have the data, fall back to persistent index
+                                // If hot graph doesn't have the data, fall back to persistent index - ZERO-COPY path
                                 let edge_ids = self.indexing.get_outgoing_edges(node_id.as_str())?;
                                 for edge_id in edge_ids {
-                                    if let Some(edge) = self.coordinator.conversations_active().get_edge(edge_id.as_str())? {
+                                    if let Some(guard) = self.coordinator.conversations_active().get_edge_guard(edge_id.as_str())? {
+                                        let archived = rkyv::check_archived_root::<common::models::Edge>(guard.data())
+                                            .map_err(|e| QueryError::Storage(e.to_string()))?;
+                                        let edge = archived.deserialize(&mut rkyv::Infallible)
+                                            .map_err(|e| QueryError::Storage(e.to_string()))?;
                                         next_level.insert(edge.to_node.clone());
                                     }
                                 }

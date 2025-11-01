@@ -302,32 +302,6 @@ pub fn configure_routes(
         router
     };
     
-    // Add static file serving for dashboard and demos
-    use tower_http::services::{ServeDir, ServeFile};
-    
-    let static_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("server/static");
-    
-    router = if static_dir.exists() {
-        tracing::info!("📁 Serving static files from {:?}", static_dir);
-        
-        // Serve index.html at root
-        let index_file = static_dir.join("index.html");
-        let router = if index_file.exists() {
-            router.route_service("/", ServeFile::new(index_file))
-        } else {
-            router
-        };
-        
-        // Serve all static files under /demo/
-        router.nest_service("/demo", ServeDir::new(static_dir.clone()))
-    } else {
-        tracing::warn!("⚠️ Static directory not found: {:?}", static_dir);
-        router
-    };
-
     // AXUM 0.8 FIX: Apply middleware layers BEFORE .with_state()
     // Order matters: outer to inner
     router = router

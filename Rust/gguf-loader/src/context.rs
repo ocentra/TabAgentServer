@@ -294,6 +294,7 @@ impl Context {
         };
 
         // Clear KV cache before generation
+        // SAFETY: Clearing KV cache with valid context pointer owned by this struct
         unsafe {
             (self.model.functions().llama_kv_cache_clear)(self.context_ptr);
         }
@@ -334,6 +335,7 @@ impl Context {
             };
 
             if logits.is_null() {
+                // SAFETY: Free batch before returning error - batch was initialized above
                 unsafe { (self.model.functions().llama_batch_free)(batch); }
                 return Err(ModelError::InferenceError(
                     "Failed to get logits".to_string()

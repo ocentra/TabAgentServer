@@ -3,14 +3,14 @@
 //! This module provides implementations for experience-related operations
 //! including action outcomes and learning patterns.
 
-use crate::{traits::ExperienceOperations, StorageManager};
+use crate::{traits::ExperienceOperations, DefaultStorageManager};
 use common::{models::*, DbResult};
 use std::sync::Arc;
 
 /// Implementation of experience operations
 pub struct ExperienceManager {
     /// Experience: Agent action outcomes, user feedback, patterns (CRITICAL for learning!)
-    pub(crate) experience: Arc<StorageManager>,
+    pub(crate) experience: Arc<DefaultStorageManager>,
 }
 
 impl ExperienceOperations for ExperienceManager {
@@ -21,10 +21,13 @@ impl ExperienceOperations for ExperienceManager {
 
     /// Get an action outcome by ID
     fn get_action_outcome(&self, outcome_id: &str) -> DbResult<Option<ActionOutcome>> {
-        match self.experience.get_node(outcome_id)? {
-            Some(Node::ActionOutcome(outcome)) => Ok(Some(outcome)),
-            _ => Ok(None),
+        if let Some(node_ref) = self.experience.get_node_ref(outcome_id)? {
+            let node = node_ref.deserialize()?;
+            if let Node::ActionOutcome(outcome) = node {
+                return Ok(Some(outcome));
+            }
         }
+        Ok(None)
     }
 
     /// Update an existing action outcome with user feedback
@@ -33,12 +36,14 @@ impl ExperienceOperations for ExperienceManager {
         outcome_id: &str,
         feedback: UserFeedback,
     ) -> DbResult<()> {
-        if let Some(Node::ActionOutcome(mut outcome)) = self.experience.get_node(outcome_id)? {
-            outcome.user_feedback = Some(feedback);
-            self.experience.insert_node(&Node::ActionOutcome(outcome))
-        } else {
-            Err(common::DbError::NotFound(outcome_id.to_string()))
+        if let Some(node_ref) = self.experience.get_node_ref(outcome_id)? {
+            let node = node_ref.deserialize()?;
+            if let Node::ActionOutcome(mut outcome) = node {
+                outcome.user_feedback = Some(feedback);
+                return self.experience.insert_node(&Node::ActionOutcome(outcome));
+            }
         }
+        Err(common::DbError::NotFound(outcome_id.to_string()))
     }
 
     /// Get all action outcomes with a specific action type

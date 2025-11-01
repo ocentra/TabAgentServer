@@ -5,6 +5,7 @@
 
 use crate::{WeaverContext, WeaverResult};
 use common::{NodeId, EdgeId, models::{Edge, Entity as EntityNode, Node}};
+use rkyv;
 
 /// Processes a newly created node for entity extraction and linking.
 pub async fn on_node_created(
@@ -20,12 +21,12 @@ pub async fn on_node_created(
     }
     
     // Load the node
-    let node = match context.coordinator.conversations_active().get_node(node_id)? {
-        Some(n) => n,
-        None => {
-            log::warn!("Node {} not found for entity linking", node_id);
-            return Ok(());
-        }
+    let node = if let Some(node_ref) = context.coordinator.conversations_active().get_node_ref(node_id)? {
+        node_ref.deserialize()
+            .map_err(|e| WeaverError::Storage(e))?
+    } else {
+        log::warn!("Node {} not found for entity linking", node_id);
+        return Ok(());
     };
     
     // Extract text content
@@ -84,10 +85,41 @@ async fn create_or_find_entity(
     label: &str,
     entity_type: &str,
 ) -> WeaverResult<String> {
-    // Try to find existing entity with same label and type
-    // TODO: Implement proper query for existing entities
-    // For now, always create new entity
+    // Try to find existing entity with same label and type using structural index
+    // Query by entity.label property first
+    if let Ok(matching_ids) = context.knowledge_index.get_nodes_by_property("entity_label", label) {
+        // Check each candidate to see if it matches both label and entity_type
+        for candidate_id in matching_ids {
+            // Load the entity node to verify entity_type matches
+            if let Some(node_ref) = context.coordinator.knowledge_active().get_node_ref(candidate_id.as_str())? {
+                let node = node_ref.deserialize()
+                    .map_err(|e| WeaverError::Storage(e))?;
+                
+                if let Node::Entity(entity) = node {
+                    // Check if entity_type matches
+                    if entity.entity_type == entity_type {
+                        log::debug!("Found existing entity: {} ({})", label, entity_type);
+                        return Ok(entity.id.as_str().to_string());
+                    }
+                }
+            }
+            
+            // Also check stable knowledge tier
+            if let Some(node_ref) = context.coordinator.knowledge_stable().get_node_ref(candidate_id.as_str())? {
+                let node = node_ref.deserialize()
+                    .map_err(|e| WeaverError::Storage(e))?;
+                
+                if let Node::Entity(entity) = node {
+                    if entity.entity_type == entity_type {
+                        log::debug!("Found existing entity in stable: {} ({})", label, entity_type);
+                        return Ok(entity.id.as_str().to_string());
+                    }
+                }
+            }
+        }
+    }
     
+    // No matching entity found, create a new one
     let entity_id = format!("ent_{}", uuid::Uuid::new_v4());
     let entity = EntityNode {
         id: NodeId::from(entity_id.as_str()),
@@ -118,7 +150,9 @@ async fn create_mentions_edge(
         edge_type: "MENTIONS".to_string(),
         created_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .map_err(|e| WeaverError::Storage(common::DbError::InvalidOperation(
+                format!("System time error: {}", e)
+            )))?
             .as_millis() as i64,
         metadata: serde_json::json!({}),
     };

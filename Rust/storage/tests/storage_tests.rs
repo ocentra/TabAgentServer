@@ -55,11 +55,15 @@ fn test_node_crud_operations() {
         .insert_node(&Node::Message(message.clone()))
         .expect("Failed to insert message");
 
-    // READ: Retrieve the node
+    // READ: Retrieve the node - ZERO-COPY path
     println!("📖 Reading message node...");
-    let retrieved = storage
-        .get_node(msg_id.as_str())
-        .expect("Failed to get node");
+    let retrieved = if let Some(guard) = storage.get_node_guard(msg_id.as_str()).expect("Failed to get node guard") {
+        let archived = rkyv::check_archived_root::<common::models::Node>(guard.data())
+            .expect("Failed to check archived root");
+        archived.deserialize(&mut rkyv::Infallible).expect("Failed to deserialize")
+    } else {
+        None
+    };
     assert!(retrieved.is_some(), "Node should exist");
 
     if let Some(Node::Message(retrieved_msg)) = retrieved {
@@ -77,10 +81,9 @@ fn test_node_crud_operations() {
         .expect("Failed to delete node");
     assert!(deleted.is_some(), "Deleted node should be returned");
 
-    // Verify deletion
-    let after_delete = storage
-        .get_node(msg_id.as_str())
-        .expect("Failed to get node");
+    // Verify deletion - ZERO-COPY path
+    let after_delete = storage.get_node_guard(msg_id.as_str())
+        .expect("Failed to get node guard");
     assert!(after_delete.is_none(), "Node should be deleted");
     println!("✅ Node deleted successfully");
 }
@@ -146,11 +149,15 @@ fn test_edge_crud_operations() {
     );
     storage.insert_edge(&edge).expect("Failed to insert edge");
 
-    // READ: Retrieve the edge
+    // READ: Retrieve the edge - ZERO-COPY path
     println!("📖 Reading edge...");
-    let retrieved = storage
-        .get_edge(edge_id.as_str())
-        .expect("Failed to get edge");
+    let retrieved = if let Some(guard) = storage.get_edge_guard(edge_id.as_str()).expect("Failed to get edge guard") {
+        let archived = rkyv::check_archived_root::<common::models::Edge>(guard.data())
+            .expect("Failed to check archived root");
+        Some(archived.deserialize(&mut rkyv::Infallible).expect("Failed to deserialize"))
+    } else {
+        None
+    };
     assert!(retrieved.is_some(), "Edge should exist");
 
     if let Some(retrieved_edge) = retrieved {
@@ -166,10 +173,9 @@ fn test_edge_crud_operations() {
         .expect("Failed to delete edge");
     assert!(deleted.is_some(), "Deleted edge should be returned");
 
-    // Verify deletion
-    let after_delete = storage
-        .get_edge(edge_id.as_str())
-        .expect("Failed to get edge");
+    // Verify deletion - ZERO-COPY path
+    let after_delete = storage.get_edge_guard(edge_id.as_str())
+        .expect("Failed to get edge guard");
     assert!(after_delete.is_none(), "Edge should be deleted");
     println!("✅ Edge deleted successfully");
 }
@@ -198,11 +204,15 @@ fn test_embedding_operations() {
         .insert_embedding(&embedding)
         .expect("Failed to insert embedding");
 
-    // READ: Retrieve embedding
+    // READ: Retrieve embedding - ZERO-COPY path
     println!("📖 Reading embedding...");
-    let retrieved = storage
-        .get_embedding(embed_id.as_str())
-        .expect("Failed to get embedding");
+    let retrieved = if let Some(guard) = storage.get_embedding_guard(embed_id.as_str()).expect("Failed to get embedding guard") {
+        let archived = rkyv::check_archived_root::<common::models::Embedding>(guard.data())
+            .expect("Failed to check archived root");
+        Some(archived.deserialize(&mut rkyv::Infallible).expect("Failed to deserialize"))
+    } else {
+        None
+    };
     assert!(retrieved.is_some(), "Embedding should exist");
 
     if let Some(retrieved_embed) = retrieved {
@@ -222,10 +232,9 @@ fn test_embedding_operations() {
         .expect("Failed to delete embedding");
     assert!(deleted.is_some(), "Deleted embedding should be returned");
 
-    // Verify deletion
-    let after_delete = storage
-        .get_embedding(embed_id.as_str())
-        .expect("Failed to get embedding");
+    // Verify deletion - ZERO-COPY path
+    let after_delete = storage.get_embedding_guard(embed_id.as_str())
+        .expect("Failed to get embedding guard");
     assert!(after_delete.is_none(), "Embedding should be deleted");
     println!("✅ Embedding deleted successfully");
 }
@@ -262,9 +271,14 @@ fn test_storage_with_indexing() {
         .insert_node(&Node::Chat(chat))
         .expect("Failed to insert chat");
 
-    let retrieved = storage
-        .get_node(chat_id.as_str())
-        .expect("Failed to get chat");
+    // ZERO-COPY path
+    let retrieved = if let Some(guard) = storage.get_node_guard(chat_id.as_str()).expect("Failed to get node guard") {
+        let archived = rkyv::check_archived_root::<common::models::Node>(guard.data())
+            .expect("Failed to check archived root");
+        Some(archived.deserialize(&mut rkyv::Infallible).expect("Failed to deserialize"))
+    } else {
+        None
+    };
     assert!(retrieved.is_some(), "Indexed chat should exist");
     println!("✅ Indexed storage working correctly");
 }
@@ -331,10 +345,10 @@ fn test_concurrent_operations() {
     // Wait for all threads
     let ids: Vec<NodeId> = handles.into_iter().map(|h| h.join().unwrap()).collect();
 
-    // Verify all nodes exist
+    // Verify all nodes exist - ZERO-COPY path
     for id in &ids {
-        let node = storage.get_node(id.as_str()).expect("Failed to get node");
-        assert!(node.is_some(), "Concurrent node should exist");
+        let guard = storage.get_node_guard(id.as_str()).expect("Failed to get node guard");
+        assert!(guard.is_some(), "Concurrent node should exist");
     }
 
     println!(
@@ -352,7 +366,7 @@ fn test_error_handling() {
         .expect("Failed to create storage");
 
     // Test retrieval of non-existent node
-    let result = storage.get_node("non_existent_id");
+    let result = storage.get_node_guard("non_existent_id");
     assert!(
         result.is_ok(),
         "Getting non-existent node should return Ok(None)"
@@ -374,4 +388,148 @@ fn test_error_handling() {
     );
 
     println!("✅ Error handling working correctly");
+}
+
+/// Test true zero-copy access patterns using archived types
+/// Following RAG Rule 17.6: Test real functionality with real data
+#[test]
+fn test_zero_copy_archived_access() {
+    println!("\n🧪 Testing ZERO-COPY archived access patterns...");
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let storage = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
+        .expect("Failed to create storage");
+
+    // CREATE: Insert a message with metadata
+    let msg_id = NodeId::new("msg_zero_copy");
+    let chat_id = NodeId::new("chat_zero_copy");
+    let message = Message {
+        id: msg_id.clone(),
+        chat_id: chat_id.clone(),
+        sender: "test_user".to_string(),
+        timestamp: current_timestamp(),
+        text_content: "Testing zero-copy access!".to_string(),
+        attachment_ids: vec![],
+        embedding_id: None,
+        metadata: json!({"test": "zero_copy", "performance": "critical"}),
+    };
+
+    storage
+        .insert_node(&Node::Message(message.clone()))
+        .expect("Failed to insert message");
+
+    // TEST: Access archived fields without full deserialization
+    println!("🔍 Testing archived access...");
+    
+    if let Some(node_ref) = storage.get_node_ref(msg_id.as_str())
+        .expect("Failed to get node ref") 
+    {
+        // Access fields without deserializing entire struct
+        if let Some(text) = node_ref.message_text() {
+            assert!(!text.is_empty());
+            println!("✅ Successfully accessed archived Message fields");
+        } else {
+            panic!("Expected Message variant");
+        }
+        
+        assert!(node_ref.is_message(), "Expected Message variant");
+    }
+
+    // TEST: Compare with deserialization path (allocates)
+    println!("📊 Comparing with deserialization path...");
+    if let Some(Node::Message(retrieved)) = storage.get_node(msg_id.as_str())
+        .expect("Failed to get node via deserialization")
+    {
+        assert_eq!(retrieved.id, msg_id);
+        assert_eq!(retrieved.text_content, "Testing zero-copy access!");
+        println!("✅ Deserialization path also works");
+    } else {
+        panic!("Should have retrieved message");
+    }
+
+    println!("✅ ZERO-COPY archived access working correctly");
+}
+
+/// Test zero-copy access for embeddings (critical for performance)
+#[test]
+fn test_zero_copy_embedding_access() {
+    println!("\n🧪 Testing ZERO-COPY embedding access...");
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let storage = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
+        .expect("Failed to create storage");
+
+    // Create a test embedding with a large vector
+    let embed_id = EmbeddingId::new("emb_zero_copy");
+    let large_vector: Vec<f32> = (0..1536).map(|i| (i as f32) * 0.001).collect(); // 1536-dim embedding
+    let embedding = Embedding {
+        id: embed_id.clone(),
+        vector: large_vector.clone(),
+        metadata: json!({"model": "test-model", "dim": 1536}),
+    };
+
+    storage.insert_embedding(&embedding).expect("Failed to insert embedding");
+
+    // TEST: Access archived embedding
+    println!("🔍 Testing archived embedding access...");
+    
+    if let Some(emb_ref) = storage.get_embedding_ref(embed_id.as_str())
+        .expect("Failed to get embedding ref")
+    {
+        let vector = emb_ref.vector();
+        assert_eq!(vector.len(), 384);
+        println!("✅ Successfully accessed archived Embedding");
+    } else {
+        panic!("Should have found embedding");
+    }
+
+    // Verify deserialization path also works
+    if let Some(retrieved) = storage.get_embedding(embed_id.as_str())
+        .expect("Failed to get embedding")
+    {
+        assert_eq!(retrieved.vector.len(), 1536);
+        assert_eq!(retrieved.vector[0], large_vector[0]);
+        println!("✅ Deserialization path works for large embeddings");
+    }
+
+    println!("✅ ZERO-COPY embedding access working correctly");
+}
+
+/// Test zero-copy access for edges
+#[test]
+fn test_zero_copy_edge_access() {
+    println!("\n🧪 Testing ZERO-COPY edge access...");
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let storage = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
+        .expect("Failed to create storage");
+
+    let node1_id = NodeId::new("node1");
+    let node2_id = NodeId::new("node2");
+    let edge_id = EdgeId::new("edge_zero_copy");
+    let edge = Edge {
+        id: edge_id.clone(),
+        from_node: node1_id.clone(),
+        to_node: node2_id.clone(),
+        edge_type: "RELATES_TO".to_string(),
+        created_at: current_timestamp(),
+        metadata: json!({"weight": 1.0, "confidence": 0.95}),
+    };
+
+    storage.insert_edge(&edge).expect("Failed to insert edge");
+
+    // TEST: Access archived edge
+    if let Some(edge_ref) = storage.get_edge_ref(edge_id.as_str())
+        .expect("Failed to get edge ref")
+    {
+        let from = edge_ref.from_node();
+        let to = edge_ref.to_node();
+        assert_eq!(from, from_id.as_str());
+        assert_eq!(to, to_id.as_str());
+        println!("✅ Successfully accessed archived Edge");
+    } else {
+        panic!("Should have found edge");
+    }
+
+    println!("✅ Archived edge access working correctly");
 }

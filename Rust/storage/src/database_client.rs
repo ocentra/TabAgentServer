@@ -46,18 +46,26 @@ impl DatabaseClient {
                 let session_prefix = format!("session:{}", session_id);
                 
                 let conversations: Vec<Conversation> = storage
-                    .scan_prefix(session_prefix.as_bytes())
+                    .scan_prefix_nodes_ref(session_prefix.as_bytes())
                     .filter_map(|result| result.ok())
-                    .filter_map(|(key, value)| {
-                        let (node, _): (Node, usize) = bincode::serde::decode_from_slice(&value, bincode::config::standard()).ok()?;
-                        
-                        if let Node::Message(msg) = node {
+                    .filter_map(|(key, node_ref)| {
+                        if let (
+                            Some(text),
+                            Some(timestamp),
+                            Some(sender),
+                            Some(id)
+                        ) = (
+                            node_ref.message_text(),
+                            node_ref.message_timestamp(),
+                            node_ref.message_sender(),
+                            node_ref.message_id()
+                        ) {
                             Some(Conversation {
-                                id: msg.id.to_string(),
+                                id: id.to_string(),
                                 session_id: session_id.clone(),
-                                content: msg.text_content,
-                                timestamp: msg.timestamp,
-                                role: msg.sender,
+                                content: text.to_string(),
+                                timestamp,
+                                role: sender.to_string(),
                             })
                         } else {
                             None

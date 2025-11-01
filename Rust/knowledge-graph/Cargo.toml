@@ -20,7 +20,6 @@ thiserror = { workspace = true }
 petgraph = { workspace = true }
 
 # Database
-sled = { workspace = true }
 
 # Collections
 hashbrown = "0.16.0"

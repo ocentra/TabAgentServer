@@ -160,9 +160,9 @@ fn test_concurrent_access_without_isolation() -> DbResult<()> {
 
                 storage.insert_node(&Node::Chat(chat))?;
 
-                // Try to read it back
-                let retrieved = storage.get_node(&format!("concurrent_chat_{}", i))?;
-                if retrieved.is_some() {
+                // Try to read it back - ZERO-COPY path
+                let guard = storage.get_node_guard(&format!("concurrent_chat_{}", i))?;
+                if guard.is_some() {
                     println!(
                         "✅ Thread {} successfully inserted and retrieved its chat",
                         i

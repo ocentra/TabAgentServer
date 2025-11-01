@@ -65,12 +65,16 @@ pub enum ServerMode {
     Http,
     /// WebRTC signaling and data channels only
     WebRtc,
+    /// MCP transport only (stdio for AI assistants)
+    Mcp,
     /// HTTP + WebRTC (no Native Messaging) - best for terminal use
     Web,
     /// Both native messaging and HTTP simultaneously
     Both,
     /// All three transports: HTTP, WebRTC, and Native Messaging
     All,
+    /// All four transports: HTTP, WebRTC, Native Messaging, and MCP
+    Everything,
 }
 
 /// Full server configuration (merged from all sources).

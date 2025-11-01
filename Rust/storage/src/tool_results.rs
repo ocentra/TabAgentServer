@@ -3,14 +3,14 @@
 //! This module provides implementations for tool result operations
 //! including web searches and scraped pages.
 
-use crate::{traits::ToolResultOperations, StorageManager};
+use crate::{traits::ToolResultOperations, DefaultStorageManager};
 use common::{models::*, DbResult};
 use std::sync::Arc;
 
 /// Implementation of tool result operations
 pub struct ToolResultManager {
     /// Tool-results: Cached searches, scrapes, API responses
-    pub(crate) tool_results: Arc<StorageManager>,
+    pub(crate) tool_results: Arc<DefaultStorageManager>,
 }
 
 impl ToolResultOperations for ToolResultManager {
@@ -21,10 +21,13 @@ impl ToolResultOperations for ToolResultManager {
 
     /// Get a web search by ID
     fn get_web_search(&self, search_id: &str) -> DbResult<Option<WebSearch>> {
-        match self.tool_results.get_node(search_id)? {
-            Some(Node::WebSearch(search)) => Ok(Some(search)),
-            _ => Ok(None),
+        if let Some(node_ref) = self.tool_results.get_node_ref(search_id)? {
+            let node = node_ref.deserialize()?;
+            if let Node::WebSearch(search) = node {
+                return Ok(Some(search));
+            }
         }
+        Ok(None)
     }
 
     /// Insert a scraped page

@@ -1,0 +1,207 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    
+    /* Light theme variables */
+    --color-background: 249 250 251; /* gray-50 */
+    --color-foreground: 17 24 39; /* gray-900 */
+    --color-card: 255 255 255; /* white */
+    --color-card-foreground: 17 24 39; /* gray-900 */
+    --color-popover: 255 255 255; /* white */
+    --color-popover-foreground: 17 24 39; /* gray-900 */
+    --color-primary: 59 130 246; /* blue-500 */
+    --color-primary-foreground: 255 255 255; /* white */
+    --color-secondary: 243 244 246; /* gray-100 */
+    --color-secondary-foreground: 17 24 39; /* gray-900 */
+    --color-muted: 243 244 246; /* gray-100 */
+    --color-muted-foreground: 107 114 128; /* gray-500 */
+    --color-accent: 243 244 246; /* gray-100 */
+    --color-accent-foreground: 17 24 39; /* gray-900 */
+    --color-destructive: 239 68 68; /* red-500 */
+    --color-destructive-foreground: 255 255 255; /* white */
+    --color-border: 229 231 235; /* gray-200 */
+    --color-input: 229 231 235; /* gray-200 */
+    --color-ring: 59 130 246; /* blue-500 */
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* Dark theme variables */
+    --color-background: 17 24 39; /* gray-900 */
+    --color-foreground: 249 250 251; /* gray-50 */
+    --color-card: 31 41 55; /* gray-800 */
+    --color-card-foreground: 249 250 251; /* gray-50 */
+    --color-popover: 31 41 55; /* gray-800 */
+    --color-popover-foreground: 249 250 251; /* gray-50 */
+    --color-primary: 59 130 246; /* blue-500 */
+    --color-primary-foreground: 255 255 255; /* white */
+    --color-secondary: 55 65 81; /* gray-700 */
+    --color-secondary-foreground: 249 250 251; /* gray-50 */
+    --color-muted: 55 65 81; /* gray-700 */
+    --color-muted-foreground: 156 163 175; /* gray-400 */
+    --color-accent: 55 65 81; /* gray-700 */
+    --color-accent-foreground: 249 250 251; /* gray-50 */
+    --color-destructive: 239 68 68; /* red-500 */
+    --color-destructive-foreground: 255 255 255; /* white */
+    --color-border: 75 85 99; /* gray-600 */
+    --color-input: 75 85 99; /* gray-600 */
+    --color-ring: 59 130 246; /* blue-500 */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  /* CSS custom properties for design tokens */
+  .bg-background { background-color: rgb(var(--color-background)); }
+  .text-foreground { color: rgb(var(--color-foreground)); }
+  .bg-card { background-color: rgb(var(--color-card)); }
+  .text-card-foreground { color: rgb(var(--color-card-foreground)); }
+  .bg-popover { background-color: rgb(var(--color-popover)); }
+  .text-popover-foreground { color: rgb(var(--color-popover-foreground)); }
+  .bg-primary { background-color: rgb(var(--color-primary)); }
+  .text-primary { color: rgb(var(--color-primary)); }
+  .text-primary-foreground { color: rgb(var(--color-primary-foreground)); }
+  .bg-secondary { background-color: rgb(var(--color-secondary)); }
+  .text-secondary-foreground { color: rgb(var(--color-secondary-foreground)); }
+  .bg-muted { background-color: rgb(var(--color-muted)); }
+  .text-muted-foreground { color: rgb(var(--color-muted-foreground)); }
+  .bg-accent { background-color: rgb(var(--color-accent)); }
+  .text-accent-foreground { color: rgb(var(--color-accent-foreground)); }
+  .bg-destructive { background-color: rgb(var(--color-destructive)); }
+  .text-destructive { color: rgb(var(--color-destructive)); }
+  .text-destructive-foreground { color: rgb(var(--color-destructive-foreground)); }
+  .border-border { border-color: rgb(var(--color-border)); }
+  .border-input { border-color: rgb(var(--color-input)); }
+  .ring-ring { --tw-ring-color: rgb(var(--color-ring)); }
+  
+  /* Primary color variants */
+  .bg-primary-50 { background-color: rgb(239 246 255); }
+  .bg-primary-100 { background-color: rgb(219 234 254); }
+  .bg-primary-500 { background-color: rgb(59 130 246); }
+  .bg-primary-600 { background-color: rgb(37 99 235); }
+  .bg-primary-900 { background-color: rgb(30 58 138); }
+  .text-primary-600 { color: rgb(37 99 235); }
+  .text-primary-700 { color: rgb(29 78 216); }
+  .text-primary-800 { color: rgb(30 64 175); }
+  .text-primary-200 { color: rgb(191 219 254); }
+  .text-primary-300 { color: rgb(147 197 253); }
+  .text-primary-400 { color: rgb(96 165 250); }
+}
+
+@layer components {
+  /* Custom scrollbar styles */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-gray-100 dark:bg-gray-800;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400 dark:bg-gray-500;
+  }
+
+  /* Default scrollbar for all elements */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(209 213 219) rgb(243 244 246);
+  }
+
+  .dark * {
+    scrollbar-color: rgb(75 85 99) rgb(31 41 55);
+  }
+
+  /* Focus styles */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+  }
+
+  /* Animation utilities */
+  .animate-in {
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .animate-out {
+    animation: fadeOut 0.2s ease-in;
+  }
+
+  /* Line clamp utility */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+@layer utilities {
+  /* Text utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Layout utilities */
+  .container-padding {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Interactive utilities */
+  .interactive {
+    @apply transition-colors duration-200 ease-in-out;
+  }
+
+  .interactive:hover {
+    @apply bg-gray-50 dark:bg-gray-800;
+  }
+
+  /* Status utilities */
+  .status-online {
+    @apply bg-success-500 text-white;
+  }
+
+  .status-offline {
+    @apply bg-error-500 text-white;
+  }
+
+  .status-degraded {
+    @apply bg-warning-500 text-white;
+  }
+}
+
+/* Additional keyframes */
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}

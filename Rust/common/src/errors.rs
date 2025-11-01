@@ -10,10 +10,6 @@ use std::io;
 /// Enhanced error types for database operations.
 #[derive(Debug, Error)]
 pub enum DatabaseError {
-    /// Error from the sled storage backend.
-    #[error("Sled database error: {0}")]
-    Sled(#[from] sled::Error),
-    
     /// Error during serialization/deserialization.
     #[error("Serialization error: {0}")]
     Serialization(#[from] SerializationError),
@@ -74,7 +70,6 @@ pub enum DatabaseError {
 impl Clone for DatabaseError {
     fn clone(&self) -> Self {
         match self {
-            DatabaseError::Sled(_) => DatabaseError::Other("Sled error".to_string()),
             DatabaseError::Serialization(e) => DatabaseError::Serialization(e.clone()),
             DatabaseError::NotFound(s) => DatabaseError::NotFound(s.clone()),
             DatabaseError::InvalidOperation(s) => DatabaseError::InvalidOperation(s.clone()),
@@ -96,10 +91,6 @@ impl Clone for DatabaseError {
 /// Enhanced serialization error types.
 #[derive(Debug, Error)]
 pub enum SerializationError {
-    /// Bincode serialization error.
-    #[error("Bincode error: {0}")]
-    Bincode(String),
-    
     /// JSON serialization error.
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
@@ -120,7 +111,6 @@ pub enum SerializationError {
 impl Clone for SerializationError {
     fn clone(&self) -> Self {
         match self {
-            SerializationError::Bincode(s) => SerializationError::Bincode(s.clone()),
             SerializationError::Json(_) => SerializationError::Custom("JSON error".to_string()),
             SerializationError::MessagePack(s) => SerializationError::MessagePack(s.clone()),
             SerializationError::Protobuf(s) => SerializationError::Protobuf(s.clone()),
@@ -129,17 +119,6 @@ impl Clone for SerializationError {
     }
 }
 
-impl From<bincode::error::EncodeError> for SerializationError {
-    fn from(err: bincode::error::EncodeError) -> Self {
-        SerializationError::Bincode(err.to_string())
-    }
-}
-
-impl From<bincode::error::DecodeError> for SerializationError {
-    fn from(err: bincode::error::DecodeError) -> Self {
-        SerializationError::Bincode(err.to_string())
-    }
-}
 
 /// Enhanced error types for graph operations.
 #[derive(Debug, Error, Clone)]
@@ -597,8 +576,8 @@ mod tests {
     
     #[test]
     fn test_serialization_error() {
-        let error = SerializationError::Bincode("test".to_string());
-        assert_eq!(format!("{}", error), "Bincode error: test");
+        let error = SerializationError::Custom("test".to_string());
+        assert_eq!(format!("{}", error), "Custom serialization error: test");
     }
     
     #[test]

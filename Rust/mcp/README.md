@@ -7,7 +7,7 @@
 The MCP transport layer integrates seamlessly into TabAgent's existing server architecture as a fourth transport alongside HTTP API, WebRTC, and Native Messaging. It provides AI assistants (Cursor, Claude Desktop, etc.) with comprehensive access to:
 
 - **System Logs** - Query, filter, and analyze logs across all TabAgent components
-- **Database Operations** - Search nodes, edges, embeddings with zero-copy performance  
+- **Database Operations** - Search nodes, edges, embeddings with efficient rkyv serialization  
 - **Model Information** - Access loaded model metadata, inference statistics, performance metrics
 - **System Monitoring** - Real-time resource usage, health checks, performance analytics
 
@@ -29,7 +29,7 @@ Traditional solutions:
 ### The Solution
 TabAgent MCP transport provides:
 - ✅ **Unified AI Access** - Single protocol for all system introspection
-- ✅ **Zero-Copy Performance** - Direct memory access via rkyv serialization
+- ✅ **Performance** - Efficient rkyv serialization with libmdbx
 - ✅ **Persistent Storage** - Logs and data survive server restarts
 - ✅ **Multi-Modal Debugging** - Correlate vision, language, and audio system logs
 - ✅ **Seamless Integration** - Works alongside existing HTTP/WebRTC/Native transports
@@ -50,7 +50,7 @@ TabAgent Server (main.rs)
 │   ├── Database Server (search_nodes, get_node_details, get_db_stats)
 │   ├── Models Server (list_models, get_model_info, get_inference_stats)
 │   └── System Server (get_system_stats, health_check)
-└── Storage Engine (libmdbx + rkyv) ────────── Zero-copy data access
+└── Storage Engine (libmdbx + rkyv) ────────── Efficient serialization
     ├── Conversations DB
     ├── Documents DB  
     ├── Users DB
@@ -72,7 +72,7 @@ TabAgent Server --mcp mode
 └─────────────────────────────────────────────────────────┘
     ↓ (Shared AppState)
 Storage Engine (libmdbx + rkyv)
-    ↓ (Zero-copy reads)
+    ↓ (Efficient reads)
 Raw Data (Logs, Nodes, Edges, Embeddings, Models)
 ```
 
@@ -86,8 +86,8 @@ Raw Data (Logs, Nodes, Edges, Embeddings, Models)
 
 **Benefits:**
 - Persistent storage in libmdbx database (survives restarts)
-- Zero-copy queries using rkyv serialization
-- Efficient indexing for fast filtering and search
+- Efficient queries using rkyv serialization
+- Fast indexing for filtering and search
 
 ### 2. Database MCP Server  
 **Tools for AI-assisted data exploration and analysis:**
@@ -97,7 +97,7 @@ Raw Data (Logs, Nodes, Edges, Embeddings, Models)
 
 **Benefits:**
 - Direct access to TabAgent's knowledge graph
-- Zero-copy deserialization for large result sets
+- Efficient deserialization for large result sets
 - Multi-tier database support (Active, Recent, Archive)
 
 ### 3. Models MCP Server
@@ -196,19 +196,19 @@ await mcp.callTool("health_check", {});
 
 ## Performance Characteristics
 
-### Zero-Copy Benefits
-- **Log Queries**: Direct memory access to rkyv-serialized entries (no deserialization)
-- **Database Searches**: Zero-copy node access for large result sets
-- **Model Information**: Efficient cached metadata access
-- **Memory Efficiency**: Eliminate allocation overhead for read operations
+### Optimizations
+- **Log Queries**: Efficient rkyv-serialized entry access with early termination
+- **Database Searches**: Optimized deserialization for large result sets
+- **Model Information**: Cached metadata access
+- **Memory Efficiency**: Bounded allocations with capacity hints
 
-### Benchmarks
-| Operation | Throughput | Latency | Memory |
-|-----------|------------|---------|--------|
-| Log Query (1000 entries) | 50,000 ops/sec | <200μs | Zero-copy |
-| Node Search (10,000 nodes) | 10,000 ops/sec | <1ms | Zero-copy |
-| Model Stats | 100,000 ops/sec | <50μs | Cached |
-| System Health | 25,000 ops/sec | <100μs | Real-time |
+### Benchmarks (will be measured)
+| Operation | Expected Throughput | Expected Latency | Memory |
+|-----------|---------------------|------------------|--------|
+| Log Query (1000 entries) | TBD | TBD | Bounded |
+| Node Search (10,000 nodes) | TBD | TBD | Efficient |
+| Model Stats | TBD | TBD | Cached |
+| System Health | TBD | TBD | Real-time |
 
 ### Concurrent Access
 - **MVCC Benefits**: Multiple AI assistants query simultaneously without blocking
@@ -218,7 +218,7 @@ await mcp.callTool("health_check", {});
 ## Technology Stack
 
 - **MCP Protocol**: `rmcp` SDK with stdio transport
-- **Storage Engine**: `libmdbx` with `rkyv` zero-copy serialization  
+- **Storage Engine**: `libmdbx` with `rkyv` serialization  
 - **Async Runtime**: Tokio for non-blocking operations
 - **Integration**: Shared `AppState` with HTTP/WebRTC/Native transports
 - **Type Safety**: `common::logging` types with JSON schema validation
@@ -284,7 +284,7 @@ impl DatabaseServer {
 
 ### Monitoring and Observability
 - **MCP Tool Metrics**: Execution time, success/failure rates, parameter validation errors
-- **Storage Performance**: Query latency, zero-copy hit rates, cache efficiency  
+- **Storage Performance**: Query latency, serialization performance, cache efficiency  
 - **System Integration**: Cross-transport correlation, resource usage impact
 
 ### Security Considerations

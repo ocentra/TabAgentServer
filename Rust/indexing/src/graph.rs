@@ -22,84 +22,59 @@
 use common::{DbError, DbResult, EdgeId};
 use std::collections::HashSet;
 use common::models::Edge;
+use libmdbx::{Environment, NoWriteMap, Database, Transaction as MdbxTxn};
+use dashmap::DashMap;
+use std::sync::Arc;
 
 /// Graph index for fast relationship traversal.
 pub struct GraphIndex {
-    outgoing_tree: sled::Tree,
-    incoming_tree: sled::Tree,
+    env: Arc<Environment<NoWriteMap>>,
+    outgoing_db: Database,
+    incoming_db: Database,
+    _databases: Arc<DashMap<String, Database>>,
 }
 
 impl GraphIndex {
-    /// Creates a new graph index using the given sled trees.
-    pub fn new(outgoing_tree: sled::Tree, incoming_tree: sled::Tree) -> Self {
+    /// Creates a new graph index using the given libmdbx environment and databases.
+    pub fn new(env: Arc<Environment<NoWriteMap>>, outgoing_db: Database, incoming_db: Database, databases: Arc<DashMap<String, Database>>) -> Self {
         Self {
-            outgoing_tree,
-            incoming_tree,
+            env,
+            outgoing_db,
+            incoming_db,
+            _databases: databases,
         }
     }
     
     /// Adds an edge to both the outgoing and incoming indexes.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use indexing::graph::GraphIndex;
-    /// # use common::models::Edge;
-    /// # use common::{EdgeId, NodeId};
-    /// # use serde_json::json;
-    /// # fn example(index: &GraphIndex) -> Result<(), Box<dyn std::error::Error>> {
-    /// let edge = Edge {
-    ///     id: EdgeId::from("edge_1"),
-    ///     from_node: NodeId::from("chat_1"),
-    ///     to_node: NodeId::from("msg_1"),
-    ///     edge_type: "CONTAINS_MESSAGE".to_string(),
-    ///     created_at: 1697500000000,
-    ///     metadata: json!({}),
-    /// };
-    /// index.add_edge(&edge)?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn add_edge(&self, edge: &Edge) -> DbResult<()> {
-        // Add to outgoing index (convert newtypes to &str)
-        self.add_to_index(&self.outgoing_tree, edge.from_node.as_str(), edge.id.as_str())?;
+        // Add to outgoing index
+        self.add_to_index(true, edge.from_node.as_str(), edge.id.as_str())?;
         
         // Add to incoming index
-        self.add_to_index(&self.incoming_tree, edge.to_node.as_str(), edge.id.as_str())?;
+        self.add_to_index(false, edge.to_node.as_str(), edge.id.as_str())?;
         
         Ok(())
     }
     
     /// Removes an edge from both indexes.
     pub fn remove_edge(&self, edge: &Edge) -> DbResult<()> {
-        // Remove from outgoing index (convert newtypes to &str)
-        self.remove_from_index(&self.outgoing_tree, edge.from_node.as_str(), edge.id.as_str())?;
+        // Remove from outgoing index
+        self.remove_from_index(true, edge.from_node.as_str(), edge.id.as_str())?;
         
         // Remove from incoming index
-        self.remove_from_index(&self.incoming_tree, edge.to_node.as_str(), edge.id.as_str())?;
+        self.remove_from_index(false, edge.to_node.as_str(), edge.id.as_str())?;
         
         Ok(())
     }
     
     /// Retrieves all outgoing edge IDs from a node.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use indexing::graph::GraphIndex;
-    /// # fn example(index: &GraphIndex) -> Result<(), Box<dyn std::error::Error>> {
-    /// let outgoing = index.get_outgoing("chat_1")?;
-    /// println!("Chat has {} outgoing edges", outgoing.len());
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn get_outgoing(&self, node_id: &str) -> DbResult<Vec<EdgeId>> {
-        self.get_from_index(&self.outgoing_tree, node_id)
+        self.get_from_index(true, node_id)
     }
     
     /// Retrieves all incoming edge IDs to a node.
     pub fn get_incoming(&self, node_id: &str) -> DbResult<Vec<EdgeId>> {
-        self.get_from_index(&self.incoming_tree, node_id)
+        self.get_from_index(false, node_id)
     }
     
     /// Returns the number of outgoing edges from a node.
@@ -113,20 +88,18 @@ impl GraphIndex {
     }
     
     /// Removes all edges (both incoming and outgoing) for a node.
-    ///
-    /// Useful when deleting a node from the graph.
     pub fn remove_all_edges(&self, node_id: &str) -> DbResult<usize> {
         let mut removed = 0;
         
         // Remove outgoing
         let out_key = format!("out:{}", node_id);
-        if self.outgoing_tree.remove(out_key.as_bytes())?.is_some() {
+        if self.remove_raw(true, out_key.as_bytes())? {
             removed += 1;
         }
         
         // Remove incoming
         let in_key = format!("in:{}", node_id);
-        if self.incoming_tree.remove(in_key.as_bytes())?.is_some() {
+        if self.remove_raw(false, in_key.as_bytes())? {
             removed += 1;
         }
         
@@ -135,76 +108,125 @@ impl GraphIndex {
     
     // Helper methods
     
-    fn add_to_index(&self, tree: &sled::Tree, node_id: &str, edge_id: &str) -> DbResult<()> {
-        // Use tree name to determine if it's outgoing or incoming
-        let tree_name = tree.name();
-        let key = if tree_name.ends_with(b"_out") {
+    fn add_to_index(&self, is_outgoing: bool, node_id: &str, edge_id: &str) -> DbResult<()> {
+        let key = if is_outgoing {
             format!("out:{}", node_id)
         } else {
             format!("in:{}", node_id)
         };
         
         // Get existing set or create new
-        let mut edge_set: HashSet<EdgeId> = tree
-            .get(&key)?
-            .map(|bytes| bincode::decode_from_slice(&bytes, bincode::config::standard()).map(|(v, _)| v))
-            .transpose()
-            .map_err(|e| DbError::Serialization(e.to_string()))?
+        let mut edge_set: HashSet<EdgeId> = self.get_raw(is_outgoing, key.as_bytes())?
+            .map(|bytes| {
+                let archived = rkyv::check_archived_root::<HashSet<EdgeId>>(&bytes)
+                    .map_err(|e| DbError::Serialization(format!("rkyv check error: {}", e)))?;
+                archived.deserialize(&mut rkyv::Infallible)
+                    .map_err(|e| DbError::Serialization(format!("rkyv deserialize error: {}", e)))
+            })
+            .transpose()?
             .unwrap_or_default();
         
-        // Add edge ID (convert &str to EdgeId)
+        // Add edge ID
         edge_set.insert(EdgeId::from(edge_id));
         
-        // Store back
-        let serialized = bincode::encode_to_vec(&edge_set, bincode::config::standard())
-            .map_err(|e| DbError::Serialization(e.to_string()))?;
-        tree.insert(key.as_bytes(), serialized)?;
+        // Store back with rkyv
+        let bytes = rkyv::to_bytes::<_, 256>(&edge_set)
+            .map_err(|e| DbError::Serialization(format!("rkyv serialize error: {}", e)))?;
+        self.set_raw(is_outgoing, key.as_bytes(), bytes)?;
         
         Ok(())
     }
     
-    fn remove_from_index(&self, tree: &sled::Tree, node_id: &str, edge_id: &str) -> DbResult<()> {
-        let tree_name = tree.name();
-        let key = if tree_name.ends_with(b"_out") {
+    fn remove_from_index(&self, is_outgoing: bool, node_id: &str, edge_id: &str) -> DbResult<()> {
+        let key = if is_outgoing {
             format!("out:{}", node_id)
         } else {
             format!("in:{}", node_id)
         };
         
-        if let Some(bytes) = tree.get(&key)? {
-            let (mut edge_set, _): (HashSet<EdgeId>, usize) = bincode::decode_from_slice(&bytes, bincode::config::standard())
-                .map_err(|e| DbError::Serialization(e.to_string()))?;
+        if let Some(bytes) = self.get_raw(is_outgoing, key.as_bytes())? {
+            let archived = rkyv::check_archived_root::<HashSet<EdgeId>>(&bytes)
+                .map_err(|e| DbError::Serialization(format!("rkyv check error: {}", e)))?;
+            let mut edge_set = archived.deserialize(&mut rkyv::Infallible)
+                .map_err(|e| DbError::Serialization(format!("rkyv deserialize error: {}", e)))?;
             
             edge_set.remove(&EdgeId::from(edge_id));
             
             if edge_set.is_empty() {
-                tree.remove(key.as_bytes())?;
+                self.remove_raw(is_outgoing, key.as_bytes())?;
             } else {
-                let serialized = bincode::encode_to_vec(&edge_set, bincode::config::standard())
-                    .map_err(|e| DbError::Serialization(e.to_string()))?;
-                tree.insert(key.as_bytes(), serialized)?;
+                let bytes = rkyv::to_bytes::<_, 256>(&edge_set)
+                    .map_err(|e| DbError::Serialization(format!("rkyv serialize error: {}", e)))?;
+                self.set_raw(is_outgoing, key.as_bytes(), bytes)?;
             }
         }
         
         Ok(())
     }
     
-    fn get_from_index(&self, tree: &sled::Tree, node_id: &str) -> DbResult<Vec<EdgeId>> {
-        let tree_name = tree.name();
-        let key = if tree_name.ends_with(b"_out") {
+    fn get_from_index(&self, is_outgoing: bool, node_id: &str) -> DbResult<Vec<EdgeId>> {
+        let key = if is_outgoing {
             format!("out:{}", node_id)
         } else {
             format!("in:{}", node_id)
         };
         
-        let edge_set: HashSet<EdgeId> = tree
-            .get(&key)?
-            .map(|bytes| bincode::decode_from_slice(&bytes, bincode::config::standard()).map(|(v, _)| v))
-            .transpose()
-            .map_err(|e| DbError::Serialization(e.to_string()))?
+        let edge_set: HashSet<EdgeId> = self.get_raw(is_outgoing, key.as_bytes())?
+            .map(|bytes| {
+                let archived = rkyv::check_archived_root::<HashSet<EdgeId>>(&bytes)
+                    .map_err(|e| DbError::Serialization(format!("rkyv check error: {}", e)))?;
+                archived.deserialize(&mut rkyv::Infallible)
+                    .map_err(|e| DbError::Serialization(format!("rkyv deserialize error: {}", e)))
+            })
+            .transpose()?
             .unwrap_or_default();
         
         Ok(edge_set.into_iter().collect())
+    }
+    
+    // Internal raw operations using libmdbx
+    fn get_raw(&self, is_outgoing: bool, key: &[u8]) -> Result<Option<Vec<u8>>, DbError> {
+        let db = if is_outgoing { &self.outgoing_db } else { &self.incoming_db };
+        let txn = self.env.begin_ro_txn()
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx ro txn error: {}", e)))?;
+        
+        match txn.get(db, key) {
+            Ok(Some(data)) => Ok(Some(data.to_vec())),
+            Ok(None) => Ok(None),
+            Err(e) => Err(DbError::InvalidOperation(format!("libmdbx get error: {}", e))),
+        }
+    }
+    
+    fn set_raw(&self, is_outgoing: bool, key: &[u8], value: Vec<u8>) -> Result<(), DbError> {
+        let db = if is_outgoing { &self.outgoing_db } else { &self.incoming_db };
+        let mut txn = self.env.begin_rw_txn()
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx rw txn error: {}", e)))?;
+        
+        txn.put(db, key, &value, libmdbx::WriteFlags::empty())
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx put error: {}", e)))?;
+        
+        txn.commit()
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx commit error: {}", e)))?;
+        
+        Ok(())
+    }
+    
+    fn remove_raw(&self, is_outgoing: bool, key: &[u8]) -> Result<bool, DbError> {
+        let db = if is_outgoing { &self.outgoing_db } else { &self.incoming_db };
+        let mut txn = self.env.begin_rw_txn()
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx rw txn error: {}", e)))?;
+        
+        let existed = txn.get(db, key)
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx get error: {}", e)))?
+            .is_some();
+        
+        txn.del(db, key, None)
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx del error: {}", e)))?;
+        
+        txn.commit()
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx commit error: {}", e)))?;
+        
+        Ok(existed)
     }
 }
 
@@ -214,14 +236,25 @@ mod tests {
     use tempfile::TempDir;
     use serde_json::json;
     use common::{NodeId, EdgeId};
-    use common::models::Edge;
     
     fn create_test_index() -> (GraphIndex, TempDir) {
         let temp_dir = TempDir::new().unwrap();
-        let db = sled::open(temp_dir.path()).unwrap();
-        let outgoing = db.open_tree("test_graph_out").unwrap();
-        let incoming = db.open_tree("test_graph_in").unwrap();
-        (GraphIndex::new(outgoing, incoming), temp_dir)
+        let env = Environment::<NoWriteMap>::new()
+            .set_max_dbs(8)
+            .set_geometry(libmdbx::Geometry {
+                size: Some(0..(1024 * 1024 * 1024)),
+                growth_step: Some(1024 * 1024 * 1024),
+                shrink_threshold: None,
+                page_size: None,
+            })
+            .open(temp_dir.path())
+            .unwrap();
+        
+        let outgoing_db = env.create_db(Some("test_graph_out"), libmdbx::DatabaseFlags::empty()).unwrap();
+        let incoming_db = env.create_db(Some("test_graph_in"), libmdbx::DatabaseFlags::empty()).unwrap();
+        let databases = Arc::new(DashMap::new());
+        
+        (GraphIndex::new(Arc::new(env), outgoing_db, incoming_db, databases), temp_dir)
     }
     
     fn create_test_edge(id: &str, from: &str, to: &str) -> Edge {
@@ -312,4 +345,3 @@ mod tests {
         assert_eq!(index.count_incoming("msg_1").unwrap(), 1);
     }
 }
-

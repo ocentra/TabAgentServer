@@ -165,6 +165,11 @@ impl MmapVectorStorage {
         }
         
         // Memory-map the file
+        // SAFETY: MmapMut::map_mut is safe because:
+        // 1. The file was successfully opened with write permissions
+        // 2. The file was created/truncated to the required size above
+        // 3. memmap2 guarantees safety when mapping a valid, writable file
+        // 4. The file descriptor remains valid for the lifetime of the mapping
         let mmap = unsafe { MmapMut::map_mut(&file)? };
         
         // Load existing mappings from file (simplified implementation)
@@ -220,6 +225,10 @@ impl MmapVectorStorage {
         if required_size > self.mmap.len() as u64 {
             // Extend the file and remap
             self.file.set_len(required_size)?;
+            // SAFETY: MmapMut::map_mut is safe because:
+            // 1. The file was successfully extended with set_len
+            // 2. The file descriptor remains valid
+            // 3. memmap2 guarantees safety when mapping a valid, writable file
             self.mmap = unsafe { MmapMut::map_mut(&self.file)? };
         }
         

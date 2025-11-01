@@ -1,8 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 
 /// Source of a log entry
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum LogSource {
     Extension,        // Browser extension (JS/TS)
@@ -41,7 +42,7 @@ impl From<&str> for LogSource {
 }
 
 /// Log level
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Debug,
@@ -83,27 +84,31 @@ impl std::fmt::Display for LogLevel {
 }
 
 /// A single log entry
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize)]
 pub struct LogEntry {
-    pub timestamp: DateTime<Utc>,
+    /// Unique identifier for this log entry
+    pub id: crate::NodeId,
+    /// Unix timestamp (milliseconds)
+    pub timestamp: i64,
     pub level: LogLevel,
     pub context: String,
     pub message: String,
     pub source: LogSource,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<serde_json::Value>,
+    /// Additional data stored as JSON string
+    pub data: String,
 }
 
 impl LogEntry {
-    /// Create a new log entry
+    /// Create a new log entry with auto-generated ID
     pub fn new(level: LogLevel, context: String, message: String, source: LogSource) -> Self {
         Self {
-            timestamp: Utc::now(),
+            id: crate::NodeId::generate(),
+            timestamp: Utc::now().timestamp_millis(),
             level,
             context,
             message,
             source,
-            data: None,
+            data: String::new(),
         }
     }
 
@@ -116,12 +121,27 @@ impl LogEntry {
         data: serde_json::Value,
     ) -> Self {
         Self {
-            timestamp: Utc::now(),
+            id: crate::NodeId::generate(),
+            timestamp: Utc::now().timestamp_millis(),
             level,
             context,
             message,
             source,
-            data: Some(data),
+            data: serde_json::to_string(&data).unwrap_or_default(),
+        }
+    }
+    
+    /// Get timestamp as DateTime<Utc>
+    pub fn datetime(&self) -> DateTime<Utc> {
+        DateTime::from_timestamp_millis(self.timestamp).unwrap_or_default()
+    }
+    
+    /// Get data as serde_json::Value
+    pub fn data_json(&self) -> Option<serde_json::Value> {
+        if self.data.is_empty() {
+            None
+        } else {
+            serde_json::from_str(&self.data).ok()
         }
     }
 }

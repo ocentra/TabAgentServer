@@ -5,6 +5,7 @@
 
 use crate::{WeaverContext, WeaverResult};
 use common::{EmbeddingId, models::{Embedding, Node}};
+use rkyv;
 
 /// Processes a newly created node for semantic indexing.
 ///
@@ -23,12 +24,12 @@ pub async fn on_node_created(
     }
     
     // Load the node
-    let node = match context.coordinator.conversations_active().get_node(node_id)? {
-        Some(n) => n,
-        None => {
-            log::warn!("Node {} not found for semantic indexing", node_id);
-            return Ok(());
-        }
+    let node = if let Some(node_ref) = context.coordinator.conversations_active().get_node_ref(node_id)? {
+        node_ref.deserialize()
+            .map_err(|e| WeaverError::Storage(e))?
+    } else {
+        log::warn!("Node {} not found for semantic indexing", node_id);
+        return Ok(());
     };
     
     // Check if already has embedding
@@ -52,22 +53,60 @@ pub async fn on_node_created(
     let vector = context.ml_bridge.generate_embedding(&text).await
         .map_err(|e| crate::WeaverError::MlInference(e.to_string()))?;
     
+    // Get model name from ML bridge
+    let model_name = context.ml_bridge.get_embedding_model_name().await
+        .unwrap_or_else(|_| "default".to_string());
+    
     // Create Embedding object
     let embedding_id = format!("emb_{}", uuid::Uuid::new_v4());
     let embedding = Embedding {
         id: EmbeddingId::from(embedding_id.as_str()),
         vector,
-        model: "default".to_string(), // TODO: Get model name from ML bridge
+        model: model_name,
     };
     
     // Store embedding (this will also update the vector index via storage's auto-indexing)
     context.coordinator.embeddings_active().insert_embedding(&embedding)?;
     
-    log::info!("Generated embedding {} for node {}", embedding_id, node_id);
+    // Update the node to include embedding_id
+    if let Some(node_ref) = context.coordinator.conversations_active().get_node_ref(node_id)? {
+        let mut node = node_ref.deserialize()
+            .map_err(|e| WeaverError::Storage(e))?;
+        
+        // Update embedding_id based on node type
+        match &mut node {
+            Node::Message(m) => {
+                m.embedding_id = Some(EmbeddingId::from(embedding_id.as_str()));
+                context.coordinator.conversations_active().insert_node(&node)?;
+            }
+            Node::Summary(s) => {
+                s.embedding_id = Some(EmbeddingId::from(embedding_id.as_str()));
+                context.coordinator.conversations_active().insert_node(&node)?;
+            }
+            Node::Entity(e) => {
+                e.embedding_id = Some(EmbeddingId::from(embedding_id.as_str()));
+                context.coordinator.knowledge_active().insert_node(&node)?;
+            }
+            Node::ScrapedPage(p) => {
+                p.embedding_id = Some(EmbeddingId::from(embedding_id.as_str()));
+                context.coordinator.conversations_active().insert_node(&node)?;
+            }
+            Node::WebSearch(w) => {
+                w.embedding_id = Some(EmbeddingId::from(embedding_id.as_str()));
+                context.coordinator.conversations_active().insert_node(&node)?;
+            }
+            Node::AudioTranscript(a) => {
+                a.embedding_id = Some(EmbeddingId::from(embedding_id.as_str()));
+                context.coordinator.conversations_active().insert_node(&node)?;
+            }
+            _ => {
+                // Node type doesn't support embeddings, skip update
+                log::debug!("Node type doesn't support embeddings: {:?}", node);
+            }
+        }
+    }
     
-    // TODO: Update the node to include embedding_id
-    // This requires updating the node's embedding_id field
-    // For now, the node will need to be updated separately
+    log::info!("Generated embedding {} for node {}", embedding_id, node_id);
     
     Ok(())
 }

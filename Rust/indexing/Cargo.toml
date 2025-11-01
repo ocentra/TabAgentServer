@@ -5,10 +5,10 @@ edition = "2021"
 
 [dependencies]
 common = { path = "../common" }
-sled = { workspace = true }
+libmdbx = { workspace = true }
+rkyv = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-bincode = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }
 rand = "0.9.2"

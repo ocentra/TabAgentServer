@@ -49,7 +49,8 @@ impl DatabaseClient {
                     .scan_prefix(session_prefix.as_bytes())
                     .filter_map(|result| result.ok())
                     .filter_map(|(key, value)| {
-                        let (node, _): (Node, usize) = bincode::serde::decode_from_slice(&value, bincode::config::standard()).ok()?;
+                        let archived = rkyv::check_archived_root::<Node>(&value).ok()?;
+                        let node = archived.deserialize(&mut rkyv::Infallible).ok()?;
                         
                         if let Node::Message(msg) = node {
                             Some(Conversation {

@@ -19,9 +19,6 @@ use std::thread;
 use std::time::Instant;
 #[cfg(test)]
 use tempfile::TempDir;
-#[cfg(test)]
-use sled::Db;
-
 /// Benchmark results for a specific test.
 #[derive(Debug, Clone)]
 pub struct BenchmarkResult {

@@ -7,6 +7,8 @@ edition = "2021"
 common = { path = "../common" }
 sled = { workspace = true }
 bincode = { workspace = true }
+libmdbx = { workspace = true }
+rkyv = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -17,6 +19,7 @@ futures = "0.3"
 bytes = "1.5"
 sha2 = "0.10"
 chrono = "0.4"
+dashmap = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

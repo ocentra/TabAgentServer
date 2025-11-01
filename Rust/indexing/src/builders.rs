@@ -13,6 +13,8 @@ use crate::persistence::EnhancedVectorIndex;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use libmdbx::{Environment, NoWriteMap, Database};
+use dashmap::DashMap;
 
 /// Builder for creating vector indexes with custom configurations.
 pub struct VectorIndexBuilder {
@@ -524,16 +526,13 @@ impl GraphIndexBuilder {
     }
     
     /// Builds the graph index.
-    /// 
-    /// Note: This is a simplified implementation as we don't have direct access
-    /// to the sled database in this context.
-    pub fn build(self, db: &sled::Db) -> DbResult<crate::graph::GraphIndex> {
-        // In a real implementation, we would use the paths to open the trees
-        // For now, we'll use the default tree names
-        let outgoing_tree = db.open_tree("graph_outgoing")?;
-        let incoming_tree = db.open_tree("graph_incoming")?;
-        
-        Ok(crate::graph::GraphIndex::new(outgoing_tree, incoming_tree))
+    pub fn build(self, env: Arc<Environment<NoWriteMap>>, outgoing_db: Database, incoming_db: Database, databases: Arc<DashMap<String, Database>>) -> DbResult<crate::graph::GraphIndex> {
+        Ok(crate::graph::GraphIndex::new(
+            env,
+            outgoing_db,
+            incoming_db,
+            databases
+        ))
     }
 }
 

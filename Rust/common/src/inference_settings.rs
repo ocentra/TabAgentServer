@@ -1,7 +1,7 @@
 /// Inference Settings - Full parity with extension
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct InferenceSettings {
     pub temperature: f32,
     pub max_length: u32,

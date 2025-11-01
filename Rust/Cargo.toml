@@ -4,20 +4,16 @@ members = [
     "api",
     "appstate",
     "common",
-    "db-bindings",
     "execution-providers",
     "gguf-loader",
     "hardware",
     "indexing",
-    "knowledge-graph", "mcp",
-    "model-bindings",
+    "knowledge-graph",
+    "mcp",
     "model-cache",
-    "model-cache-bindings",
-    "native-handler",
     "native-messaging",
     "onnx-loader",
     "pipeline",
-    "python-ml-bridge",
     "query",
     "server",
     "storage",
@@ -44,15 +40,20 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-bincode = { version = "2.0.1", features = ["serde"] }
 tokio = { version = "1.35", features = ["full"] }
 tokio-util = "0.7"
 
 # Database & Storage
-sled = "0.34"
 petgraph = "0.8.3"
 hashbrown = "0.16.0"
 dashmap = "6.1"
+sled = "0.34"
+bincode = { version = "2.0.1", features = ["serde"] }
+libmdbx = "0.6.3"
+rkyv = { version = "0.8.12", features = ["std"] }
+rkyv_derive = "0.8.12"
+rkyv_unsigned_varint = "0.3"
+bytecheck = "0.8.2"
 
 # Graph & Embeddings  
 hnsw_rs = "0.3"

@@ -87,6 +87,67 @@ pub enum ValueType {
     /// Health check request.
     Health,
 
+    /// Stop generation request.
+    StopGeneration {
+        request_id: String,
+    },
+
+    /// Get parameters request.
+    GetParams,
+
+    /// Set parameters request.
+    SetParams {
+        params: serde_json::Value,
+    },
+
+    /// Get statistics request.
+    GetStats,
+
+    /// Get resources request.
+    GetResources,
+
+    /// Estimate memory request.
+    EstimateMemory {
+        model: String,
+        quantization: Option<String>,
+    },
+
+    /// Semantic search request.
+    SemanticSearch {
+        query: String,
+        k: usize,
+        filters: Option<serde_json::Value>,
+    },
+
+    /// Calculate similarity request.
+    CalculateSimilarity {
+        text1: String,
+        text2: String,
+        model: Option<String>,
+    },
+
+    /// Evaluate embeddings request.
+    EvaluateEmbeddings {
+        model: String,
+        queries: Vec<String>,
+        documents: Vec<String>,
+    },
+
+    /// Cluster documents request.
+    ClusterDocuments {
+        documents: Vec<String>,
+        n_clusters: usize,
+        model: Option<String>,
+    },
+
+    /// Recommend content request.
+    RecommendContent {
+        query: String,
+        candidates: Vec<String>,
+        top_n: usize,
+        model: Option<String>,
+    },
+
     /// Audio stream configuration.
     AudioStream,
 

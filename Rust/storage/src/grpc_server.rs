@@ -47,20 +47,27 @@ impl DatabaseService for DatabaseServer {
         // Scan conversations_active for this session
         let storage = self.coordinator.conversations_active();
         let conversations: Vec<Conversation> = storage
-            .scan_prefix(session_prefix.as_bytes())
+            .scan_prefix_nodes_ref(session_prefix.as_bytes())
             .filter_map(|result| result.ok())
-            .filter_map(|(key, value)| {
-                // Deserialize the node using bincode v2 API
-                let (node, _): (Node, usize) = bincode::serde::decode_from_slice(&value, bincode::config::standard()).ok()?;
-                
-                // Extract message if it's a Message node
-                if let Node::Message(msg) = node {
+            .filter_map(|(key, node_ref)| {
+                // Use zero-copy accessors for ALL fields
+                if let (
+                    Some(text),
+                    Some(timestamp),
+                    Some(sender),
+                    Some(id)
+                ) = (
+                    node_ref.message_text(),
+                    node_ref.message_timestamp(),
+                    node_ref.message_sender(),
+                    node_ref.message_id()
+                ) {
                     Some(Conversation {
-                        id: msg.id.to_string(),
+                        id: id.to_string(),
                         session_id: req.session_id.clone(),
-                        content: msg.text_content,
-                        timestamp: msg.timestamp,
-                        role: msg.sender,
+                        content: text.to_string(),
+                        timestamp,
+                        role: sender.to_string(),
                     })
                 } else {
                     None
@@ -168,7 +175,7 @@ impl DatabaseService for DatabaseServer {
             .filter_map(|result| result.ok())
             .take(req.limit as usize)
             .filter_map(|(key, value)| {
-                let (node, _): (Node, usize) = bincode::serde::decode_from_slice(&value, bincode::config::standard()).ok()?;
+                let _archived = rkyv::check_archived_root::<Node>(&value).ok()?;
                 // Note: There's no Embedding variant in Node enum currently
                 // This would need to be added to common/models.rs if we want to support it
                 // For now, return None
@@ -202,7 +209,8 @@ impl DatabaseService for DatabaseServer {
             .iter()
             .filter_map(|result| result.ok())
             .filter_map(|(key, value)| {
-                let (node, _): (Node, usize) = bincode::serde::decode_from_slice(&value, bincode::config::standard()).ok()?;
+                let archived = rkyv::check_archived_root::<Node>(&value).ok()?;
+                let node = archived.deserialize(&mut rkyv::Infallible).ok()?;
                 // Filter based on tool_name and time range
                 match node {
                     Node::WebSearch(search) => {

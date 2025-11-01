@@ -3,18 +3,18 @@
 //! This module provides implementations for knowledge-related operations
 //! including entities across different temperature tiers.
 
-use crate::{traits::KnowledgeOperations, StorageManager};
+use crate::{traits::KnowledgeOperations, DefaultStorageManager};
 use common::{models::*, DbResult};
 use std::sync::Arc;
 
 /// Implementation of knowledge operations
 pub struct KnowledgeManager {
     /// Knowledge/active: Recently mentioned entities (HOT)
-    pub(crate) knowledge_active: Arc<StorageManager>,
+    pub(crate) knowledge_active: Arc<DefaultStorageManager>,
     /// Knowledge/stable: Proven important entities 10+ mentions (HOT)
-    pub(crate) knowledge_stable: Arc<StorageManager>,
+    pub(crate) knowledge_stable: Arc<DefaultStorageManager>,
     /// Knowledge/inferred: Experimental/low-confidence (COLD)
-    pub(crate) knowledge_inferred: Arc<StorageManager>,
+    pub(crate) knowledge_inferred: Arc<DefaultStorageManager>,
 }
 
 impl KnowledgeOperations for KnowledgeManager {
@@ -26,18 +26,27 @@ impl KnowledgeOperations for KnowledgeManager {
     /// Get an entity by ID, searching active → stable → inferred
     fn get_entity(&self, entity_id: &str) -> DbResult<Option<Entity>> {
         // Try active
-        if let Some(Node::Entity(entity)) = self.knowledge_active.get_node(entity_id)? {
-            return Ok(Some(entity));
+        if let Some(node_ref) = self.knowledge_active.get_node_ref(entity_id)? {
+            let node = node_ref.deserialize()?;
+            if let Node::Entity(entity) = node {
+                return Ok(Some(entity));
+            }
         }
 
         // Try stable
-        if let Some(Node::Entity(entity)) = self.knowledge_stable.get_node(entity_id)? {
-            return Ok(Some(entity));
+        if let Some(node_ref) = self.knowledge_stable.get_node_ref(entity_id)? {
+            let node = node_ref.deserialize()?;
+            if let Node::Entity(entity) = node {
+                return Ok(Some(entity));
+            }
         }
 
         // Try inferred
-        if let Some(Node::Entity(entity)) = self.knowledge_inferred.get_node(entity_id)? {
-            return Ok(Some(entity));
+        if let Some(node_ref) = self.knowledge_inferred.get_node_ref(entity_id)? {
+            let node = node_ref.deserialize()?;
+            if let Node::Entity(entity) = node {
+                return Ok(Some(entity));
+            }
         }
 
         Ok(None)

@@ -90,11 +90,21 @@ where
         for bucket_atomic in &self.buckets {
             let bucket_ptr = bucket_atomic.load(Ordering::Relaxed, &guard);
             if !bucket_ptr.is_null() {
+                // SAFETY: as_ref() is safe here because:
+                // 1. bucket_ptr is non-null (checked above)
+                // 2. The epoch guard ensures the pointer hasn't been reclaimed
+                // 3. The pointer was obtained from an Atomic load with the guard
+                // 4. We're holding the guard for the entire iteration, preventing reclamation
                 if let Some(bucket) = unsafe { bucket_ptr.as_ref() } {
                     let mut entry_ptr = bucket.head.load(Ordering::Acquire, &guard);
                     
                     // Traverse the linked list in this bucket
                     while !entry_ptr.is_null() {
+                        // SAFETY: as_ref() is safe here because:
+                        // 1. entry_ptr is non-null (checked in while condition)
+                        // 2. The epoch guard ensures the pointer hasn't been reclaimed
+                        // 3. The pointer was obtained from an Atomic load with the guard
+                        // 4. We're holding the guard for the entire iteration, preventing reclamation
                         if let Some(entry) = unsafe { entry_ptr.as_ref() } {
                             entries.push(Ok((entry.key.clone(), entry.value.clone())));
                             entry_ptr = entry.next.load(Ordering::Acquire, &guard);
@@ -142,15 +152,38 @@ where
                 Ordering::Acquire,
                 guard,
             ) {
-                Ok(bucket_ptr) => unsafe { bucket_ptr.as_ref() }.unwrap(),
-                Err(e) => unsafe { e.current.as_ref() }.unwrap(),
+                Ok(bucket_ptr) => {
+                    // SAFETY: as_ref().unwrap() is safe because:
+                    // 1. compare_exchange_weak succeeded, so bucket_ptr is valid and non-null
+                    // 2. The epoch guard ensures the pointer hasn't been reclaimed
+                    // 3. We're holding the guard for the duration of this operation
+                    unsafe { bucket_ptr.as_ref() }.unwrap()
+                }
+                Err(e) => {
+                    // SAFETY: as_ref().unwrap() is safe because:
+                    // 1. compare_exchange_weak failed because another thread created the bucket
+                    // 2. e.current is the current bucket pointer which is valid and non-null
+                    // 3. The epoch guard ensures the pointer hasn't been reclaimed
+                    // 4. We're holding the guard for the duration of this operation
+                    unsafe { e.current.as_ref() }.unwrap()
+                }
             }
         } else {
+            // SAFETY: as_ref().unwrap() is safe because:
+            // 1. bucket_ptr was checked to be non-null in the if condition above
+            // 2. The epoch guard ensures the pointer hasn't been reclaimed
+            // 3. The pointer was obtained from an Atomic load with the guard
+            // 4. We're holding the guard for the duration of this operation
             unsafe { bucket_ptr.as_ref() }.unwrap()
         };
         
         // Search for existing entry with the same key
         let mut current_ptr = bucket.head.load(Ordering::Acquire, guard);
+        // SAFETY: as_ref() is safe here because:
+        // 1. We check if the pointer is Some (non-null) via pattern matching
+        // 2. The epoch guard ensures the pointer hasn't been reclaimed
+        // 3. The pointer was obtained from an Atomic load with the guard
+        // 4. We're holding the guard for the entire while loop, preventing reclamation
         while let Some(current) = unsafe { current_ptr.as_ref() } {
             if current.hash == hash && current.key == key {
                 // Found existing entry, update the value
@@ -173,6 +206,11 @@ where
         let new_entry_ptr = new_entry.into_shared(guard);
         loop {
             let head_ptr = bucket.head.load(Ordering::Acquire, guard);
+            // SAFETY: as_ref().unwrap() is safe because:
+            // 1. new_entry_ptr was just created via into_shared, so it's valid and non-null
+            // 2. The epoch guard ensures the pointer hasn't been reclaimed
+            // 3. We own this pointer (created it above), so no other thread can modify it
+            // 4. We're holding the guard for the duration of this operation
             unsafe {
                 new_entry_ptr.as_ref().unwrap().next.store(head_ptr, Ordering::Release);
             }
@@ -190,6 +228,11 @@ where
                 }
                 Err(e) => {
                     // CAS failed, try again
+                    // SAFETY: as_ref().unwrap() is safe because:
+                    // 1. new_entry_ptr was just created via into_shared, so it's valid and non-null
+                    // 2. The epoch guard ensures the pointer hasn't been reclaimed
+                    // 3. We own this pointer, so no other thread can modify it
+                    // 4. We're holding the guard for the duration of this operation
                     unsafe {
                         new_entry_ptr.as_ref().unwrap().next.store(e.current, Ordering::Release);
                     }
@@ -211,10 +254,20 @@ where
             return Ok(None);
         }
         
+        // SAFETY: as_ref().unwrap() is safe because:
+        // 1. bucket_ptr was checked to be non-null above
+        // 2. The epoch guard ensures the pointer hasn't been reclaimed
+        // 3. The pointer was obtained from an Atomic load with the guard
+        // 4. We're holding the guard for the duration of this operation
         let bucket = unsafe { bucket_ptr.as_ref() }.unwrap();
         
         // Search for entry with the key
         let mut current_ptr = bucket.head.load(Ordering::Acquire, guard);
+        // SAFETY: as_ref() is safe here because:
+        // 1. We check if the pointer is Some (non-null) via pattern matching
+        // 2. The epoch guard ensures the pointer hasn't been reclaimed
+        // 3. The pointer was obtained from an Atomic load with the guard
+        // 4. We're holding the guard for the entire while loop, preventing reclamation
         while let Some(current) = unsafe { current_ptr.as_ref() } {
             if current.hash == hash && current.key == *key {
                 return Ok(Some(current.value.clone()));
@@ -240,12 +293,22 @@ where
             return Ok(None);
         }
         
+        // SAFETY: as_ref().unwrap() is safe because:
+        // 1. bucket_ptr was checked to be non-null above
+        // 2. The epoch guard ensures the pointer hasn't been reclaimed
+        // 3. The pointer was obtained from an Atomic load with the guard
+        // 4. We're holding the guard for the duration of this operation
         let bucket = unsafe { bucket_ptr.as_ref() }.unwrap();
         
         // Search for entry with the key
         let mut current_ptr = bucket.head.load(Ordering::Acquire, guard);
         let mut prev_ptr: Shared<'_, Entry<K, V>> = Shared::null();
         
+        // SAFETY: as_ref() is safe here because:
+        // 1. We check if the pointer is Some (non-null) via pattern matching
+        // 2. The epoch guard ensures the pointer hasn't been reclaimed
+        // 3. The pointer was obtained from an Atomic load with the guard
+        // 4. We're holding the guard for the entire while loop, preventing reclamation
         while let Some(current) = unsafe { current_ptr.as_ref() } {
             if current.hash == hash && current.key == *key {
                 // Found the entry to remove
@@ -274,6 +337,11 @@ where
                     }
                 } else {
                     // Removing from the middle or end of the list
+                    // SAFETY: as_ref().unwrap() is safe because:
+                    // 1. prev_ptr was checked to be non-null in the if condition above
+                    // 2. The epoch guard ensures the pointer hasn't been reclaimed
+                    // 3. prev_ptr was set from a previous iteration where we verified current_ptr was Some
+                    // 4. We're holding the guard for the duration of this operation
                     let prev = unsafe { prev_ptr.as_ref() }.unwrap();
                     match prev.next.compare_exchange_weak(
                         current_ptr,
@@ -333,6 +401,11 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         // If we have a current entry, return its key-value pair
         if let Some(entry_ptr) = self.current_entry {
+            // SAFETY: as_ref() is safe here because:
+            // 1. We check if the pointer is Some (non-null) via pattern matching
+            // 2. The epoch guard (self.guard) ensures the pointer hasn't been reclaimed
+            // 3. The pointer was obtained from an Atomic load with the guard
+            // 4. We're holding the guard for the lifetime of the iterator, preventing reclamation
             if let Some(entry) = unsafe { entry_ptr.as_ref() } {
                 let key = entry.key.clone();
                 let value = entry.value.clone();
@@ -366,6 +439,11 @@ where
             // Get the bucket
             let bucket_ptr = self.map.buckets[self.bucket_index].load(Ordering::Relaxed, self.guard);
             if !bucket_ptr.is_null() {
+                // SAFETY: as_ref().unwrap() is safe because:
+                // 1. bucket_ptr was checked to be non-null above
+                // 2. The epoch guard (self.guard) ensures the pointer hasn't been reclaimed
+                // 3. The pointer was obtained from an Atomic load with the guard
+                // 4. We're holding the guard for the lifetime of the iterator, preventing reclamation
                 let bucket = unsafe { bucket_ptr.as_ref() }.unwrap();
                 
                 // Get the first entry in the bucket

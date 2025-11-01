@@ -60,13 +60,20 @@ pub use backend::{AppStateProvider, AppStateWrapper};
 /// 
 /// **Type Safety**: Using newtype pattern instead of alias prevents accidental mixing
 /// of NodeId with EdgeId or EmbeddingId at compile time.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct NodeId(String);
 
 impl NodeId {
     /// Create a new NodeId from a string
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
+    }
+    
+    /// Generate a new unique NodeId
+    pub fn generate() -> Self {
+        use rand::Rng;
+        let id: u64 = rand::rng().random();
+        Self(format!("{:016x}", id))
     }
     
     /// Get the inner string reference
@@ -103,7 +110,7 @@ impl From<&str> for NodeId {
 /// Edges represent typed relationships like "CONTAINS_MESSAGE", "MENTIONS", etc.
 /// 
 /// **Type Safety**: Using newtype pattern prevents mixing with NodeId or EmbeddingId.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct EdgeId(String);
 
 impl EdgeId {
@@ -146,7 +153,7 @@ impl From<&str> for EdgeId {
 /// Embeddings are high-dimensional vectors used for semantic search.
 /// 
 /// **Type Safety**: Using newtype pattern prevents mixing with NodeId or EdgeId.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct EmbeddingId(String);
 
 impl EmbeddingId {
@@ -192,10 +199,6 @@ impl From<&str> for EmbeddingId {
 /// Each crate may extend this with its own error variants.
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
-    /// Error from the sled storage backend.
-    #[error("Sled database error: {0}")]
-    Sled(#[from] sled::Error),
-
     /// Error during serialization/deserialization.
     #[error("Serialization error: {0}")]
     Serialization(String),
@@ -217,48 +220,59 @@ pub enum DbError {
     Other(String),
 }
 
-// Implement From for bincode errors manually to convert to String
-impl From<bincode::error::EncodeError> for DbError {
-    fn from(err: bincode::error::EncodeError) -> Self {
-        DbError::Serialization(err.to_string())
-    }
-}
-
-impl From<bincode::error::DecodeError> for DbError {
-    fn from(err: bincode::error::DecodeError) -> Self {
-        DbError::Serialization(err.to_string())
-    }
-}
 
 /// Result type alias for database operations.
 pub type DbResult<T> = Result<T, DbError>;
 
 // --- Metadata Helper ---
 
-/// Helper module for serializing serde_json::Value with bincode.
+/// Helper module for serializing/deserializing JSON fields.
 ///
-/// Bincode doesn't support serde_json::Value directly, so we serialize it as a JSON string.
-/// This module provides custom serialization functions that can be used with
-/// `#[serde(with = "common::json_metadata")]`.
+/// Converts between serde_json::Value and String for rkyv compatibility.
 pub mod json_metadata {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    /// Serializes a serde_json::Value as a JSON string for bincode compatibility.
-    pub fn serialize<S>(value: &serde_json::Value, serializer: S) -> Result<S::Ok, S::Error>
+    /// Serializes a String as-is
+    pub fn to_str<S>(value: &String, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let json_string = serde_json::to_string(value).map_err(serde::ser::Error::custom)?;
-        json_string.serialize(serializer)
+        value.serialize(serializer)
     }
 
-    /// Deserializes a JSON string back to a serde_json::Value.
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<serde_json::Value, D::Error>
+    /// Deserializes from serde_json::Value to String
+    pub fn from_str<'de, D>(deserializer: D) -> Result<String, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let json_string = String::deserialize(deserializer)?;
-        serde_json::from_str(&json_string).map_err(serde::de::Error::custom)
+        let value = serde_json::Value::deserialize(deserializer)?;
+        serde_json::to_string(&value).map_err(serde::de::Error::custom)
+    }
+
+    /// Serializes from serde_json::Value to JSON string for serde
+    pub fn serialize_from_value<S>(value: &serde_json::Value, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let json_str = serde_json::to_string(value).map_err(serde::ser::Error::custom)?;
+        json_str.serialize(serializer)
+    }
+
+    /// Serializes a String as-is
+    pub fn to_value<S>(value: &String, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        value.serialize(serializer)
+    }
+
+    /// Deserializes from serde_json::Value to String
+    pub fn from_value<'de, D>(deserializer: D) -> Result<String, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        serde_json::to_string(&value).map_err(serde::de::Error::custom)
     }
 }
 

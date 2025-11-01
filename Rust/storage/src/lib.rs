@@ -1,20 +1,20 @@
 //! Core storage layer for the TabAgent embedded database.
 //!
 //! This crate provides a safe, transactional interface for CRUD operations on
-//! nodes, edges, and embeddings using the `sled` embedded database engine.
+//! nodes, edges, and embeddings using the `libmdbx` embedded database engine.
 //!
 //! # Architecture
 //!
 //! The storage layer implements the Hybrid Schema Model:
 //! - **Strongly-typed core fields** enable high-performance indexing
 //! - **Flexible metadata fields** provide extensibility
-//! - **Binary serialization** with `bincode` for performance
+//! - Serialization with `rkyv`
 //!
 //! # Concurrency Safety
 //!
 //! The `StorageManager` is designed to be thread-safe and can be safely shared
-//! across multiple threads. The underlying sled database is thread-safe, so
-//! multiple threads can perform operations concurrently without additional
+//! across multiple threads. The underlying libmdbx database provides MVCC concurrency,
+//! so multiple threads can perform operations concurrently without additional
 //! synchronization.
 //!
 //! For sharing across threads, wrap the StorageManager in an `Arc`:
@@ -40,10 +40,12 @@
 //! # }
 //! ```
 
+mod archived_node;
 pub mod conversations;
 pub mod coordinator;
 mod database_type;
 pub mod embeddings;
+pub mod engine;
 pub mod experience;
 pub mod knowledge;
 mod storage_manager;
@@ -52,7 +54,9 @@ pub mod grpc_server;
 pub mod database_client;
 
 // Re-export for convenience
+pub use archived_node::{ArchivedNodeRef, ArchivedEdgeRef, ArchivedEmbeddingRef};
 pub use database_client::DatabaseClient;
+pub use engine::{StorageEngine, StorageTransaction, MdbxEngine, MdbxEngineError};
 pub mod time_queries;
 pub mod time_scope;
 pub mod tool_results;
@@ -60,7 +64,7 @@ pub mod traits;
 
 pub use coordinator::DatabaseCoordinator;
 pub use database_type::{DatabaseType, TemperatureTier};
-pub use storage_manager::StorageManager;
+pub use storage_manager::{StorageManager, DefaultStorageManager};
 pub use time_scope::TimeScope;
 
 // Re-export commonly used types for convenience

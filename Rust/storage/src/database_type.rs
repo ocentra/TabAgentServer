@@ -47,6 +47,10 @@ pub enum DatabaseType {
     /// MODELS: Model files and manifests (separate system)
     /// Already implemented in model-cache crate
     ModelCache,
+
+    /// SYSTEM: Logs from all system components (EXTERNAL)
+    /// Contains log entries from extension, server, pipeline, etc.
+    Logs,
 }
 
 /// Temperature tier for data lifecycle management
@@ -155,6 +159,9 @@ impl DatabaseType {
             // === MODEL-CACHE (single tier, already exists) ===
             (DatabaseType::ModelCache, _) => base.join("model-cache"),
 
+            // === LOGS (single tier) ===
+            (DatabaseType::Logs, _) => base.join("logs"),
+
             // === CATCH-ALL for invalid tier combinations ===
             // This handles cases like Conversations with Stable tier, etc.
             _ => {
@@ -175,6 +182,7 @@ impl DatabaseType {
             DatabaseType::Summaries => "summaries",
             DatabaseType::Meta => "meta",
             DatabaseType::ModelCache => "model-cache",
+            DatabaseType::Logs => "logs",
         }
     }
 
@@ -193,7 +201,7 @@ impl DatabaseType {
 
     /// Is this an EXTERNAL database? (cached external data)
     pub fn is_external(&self) -> bool {
-        matches!(self, DatabaseType::ToolResults)
+        matches!(self, DatabaseType::ToolResults | DatabaseType::Logs)
     }
 
     /// Is this an INDEX database? (rebuildable)
@@ -229,7 +237,8 @@ impl DatabaseType {
             DatabaseType::ToolResults
             | DatabaseType::Experience
             | DatabaseType::Meta
-            | DatabaseType::ModelCache => vec![],
+            | DatabaseType::ModelCache
+            | DatabaseType::Logs => vec![],
         }
     }
 }

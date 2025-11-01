@@ -43,9 +43,9 @@ fn test_multiple_processes_same_database() -> DbResult<()> {
 
             storage1.insert_node(&Node::Chat(chat1))?;
 
-            // Try to read it using the second instance
-            let retrieved = storage2.get_node("chat_1")?;
-            assert!(retrieved.is_some());
+            // Try to read it using the second instance - ZERO-COPY path
+            let guard = storage2.get_node_guard("chat_1")?;
+            assert!(guard.is_some());
             println!("Successfully accessed the same database from two instances");
         }
         Err(e) => {

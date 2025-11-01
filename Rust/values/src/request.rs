@@ -515,12 +515,15 @@ impl RequestValue {
 
     /// Create a stop generation request.
     pub fn stop_generation(request_id: impl Into<String>) -> Self {
+        let request_id_str = request_id.into();
         Value {
             inner: ValueInner {
                 data: ValueData::Request(Box::new(RequestType::StopGeneration {
-                    request_id: request_id.into(),
+                    request_id: request_id_str.clone(),
                 })),
-                dtype: ValueType::Health, // TODO: Add proper StopGeneration type
+                dtype: ValueType::StopGeneration {
+                    request_id: request_id_str,
+                },
             },
             _marker: std::marker::PhantomData,
         }
@@ -531,7 +534,7 @@ impl RequestValue {
         Value {
             inner: ValueInner {
                 data: ValueData::Request(Box::new(RequestType::GetParams)),
-                dtype: ValueType::SystemInfo, // TODO: Add proper GetParams type
+                dtype: ValueType::GetParams,
             },
             _marker: std::marker::PhantomData,
         }
@@ -545,9 +548,11 @@ impl RequestValue {
         Value {
             inner: ValueInner {
                 data: ValueData::Request(Box::new(RequestType::SetParams {
-                    params: params_json,
+                    params: params_json.clone(),
                 })),
-                dtype: ValueType::SystemInfo, // TODO: Add proper SetParams type
+                dtype: ValueType::SetParams {
+                    params: params_json,
+                },
             },
             _marker: std::marker::PhantomData,
         }
@@ -558,7 +563,7 @@ impl RequestValue {
         Value {
             inner: ValueInner {
                 data: ValueData::Request(Box::new(RequestType::GetStats)),
-                dtype: ValueType::SystemInfo, // TODO: Add proper GetStats type
+                dtype: ValueType::GetStats,
             },
             _marker: std::marker::PhantomData,
         }
@@ -569,7 +574,7 @@ impl RequestValue {
         Value {
             inner: ValueInner {
                 data: ValueData::Request(Box::new(RequestType::GetResources)),
-                dtype: ValueType::SystemInfo, // TODO: Add proper GetResources type
+                dtype: ValueType::GetResources,
             },
             _marker: std::marker::PhantomData,
         }
@@ -577,13 +582,18 @@ impl RequestValue {
 
     /// Create an estimate memory request.
     pub fn estimate_memory(model: impl Into<String>, quantization: Option<String>) -> Self {
+        let model_str = model.into();
+        let quantization_clone = quantization.clone();
         Value {
             inner: ValueInner {
                 data: ValueData::Request(Box::new(RequestType::EstimateMemory {
-                    model: model.into(),
-                    quantization,
+                    model: model_str.clone(),
+                    quantization: quantization_clone.clone(),
                 })),
-                dtype: ValueType::SystemInfo, // TODO: Add proper EstimateMemory type
+                dtype: ValueType::EstimateMemory {
+                    model: model_str,
+                    quantization: quantization_clone,
+                },
             },
             _marker: std::marker::PhantomData,
         }
@@ -591,14 +601,20 @@ impl RequestValue {
 
     /// Create a semantic search request.
     pub fn semantic_search(query: impl Into<String>, k: usize, filters: Option<serde_json::Value>) -> Self {
+        let query_str = query.into();
+        let filters_clone = filters.clone();
         Value {
             inner: ValueInner {
                 data: ValueData::Request(Box::new(RequestType::SemanticSearchQuery {
-                    query: query.into(),
+                    query: query_str.clone(),
                     k,
-                    filters,
+                    filters: filters_clone.clone(),
                 })),
-                dtype: ValueType::SystemInfo, // TODO: Add proper SemanticSearch type
+                dtype: ValueType::SemanticSearch {
+                    query: query_str,
+                    k,
+                    filters: filters_clone,
+                },
             },
             _marker: std::marker::PhantomData,
         }
@@ -606,14 +622,21 @@ impl RequestValue {
 
     /// Create a calculate similarity request.
     pub fn calculate_similarity(text1: impl Into<String>, text2: impl Into<String>, model: Option<String>) -> Self {
+        let text1_str = text1.into();
+        let text2_str = text2.into();
+        let model_clone = model.clone();
         Value {
             inner: ValueInner {
                 data: ValueData::Request(Box::new(RequestType::CalculateSimilarity {
-                    text1: text1.into(),
-                    text2: text2.into(),
-                    model,
+                    text1: text1_str.clone(),
+                    text2: text2_str.clone(),
+                    model: model_clone.clone(),
                 })),
-                dtype: ValueType::SystemInfo, // TODO: Add proper CalculateSimilarity type
+                dtype: ValueType::CalculateSimilarity {
+                    text1: text1_str,
+                    text2: text2_str,
+                    model: model_clone,
+                },
             },
             _marker: std::marker::PhantomData,
         }
@@ -621,14 +644,21 @@ impl RequestValue {
 
     /// Create an evaluate embeddings request.
     pub fn evaluate_embeddings(model: impl Into<String>, queries: Vec<String>, documents: Vec<String>) -> Self {
+        let model_str = model.into();
+        let queries_clone = queries.clone();
+        let documents_clone = documents.clone();
         Value {
             inner: ValueInner {
                 data: ValueData::Request(Box::new(RequestType::EvaluateEmbeddings {
-                    model: model.into(),
-                    queries,
-                    documents,
+                    model: model_str.clone(),
+                    queries: queries_clone.clone(),
+                    documents: documents_clone.clone(),
                 })),
-                dtype: ValueType::SystemInfo, // TODO: Add proper EvaluateEmbeddings type
+                dtype: ValueType::EvaluateEmbeddings {
+                    model: model_str,
+                    queries: queries_clone,
+                    documents: documents_clone,
+                },
             },
             _marker: std::marker::PhantomData,
         }
@@ -636,14 +666,20 @@ impl RequestValue {
 
     /// Create a cluster documents request.
     pub fn cluster_documents(documents: Vec<String>, n_clusters: usize, model: Option<String>) -> Self {
+        let documents_clone = documents.clone();
+        let model_clone = model.clone();
         Value {
             inner: ValueInner {
                 data: ValueData::Request(Box::new(RequestType::ClusterDocuments {
-                    documents,
+                    documents: documents_clone.clone(),
                     n_clusters,
-                    model,
+                    model: model_clone.clone(),
                 })),
-                dtype: ValueType::SystemInfo, // TODO: Add proper ClusterDocuments type
+                dtype: ValueType::ClusterDocuments {
+                    documents: documents_clone,
+                    n_clusters,
+                    model: model_clone,
+                },
             },
             _marker: std::marker::PhantomData,
         }
@@ -651,15 +687,23 @@ impl RequestValue {
 
     /// Create a recommend content request.
     pub fn recommend_content(query: impl Into<String>, candidates: Vec<String>, top_n: usize, model: Option<String>) -> Self {
+        let query_str = query.into();
+        let candidates_clone = candidates.clone();
+        let model_clone = model.clone();
         Value {
             inner: ValueInner {
                 data: ValueData::Request(Box::new(RequestType::RecommendContent {
-                    query: query.into(),
-                    candidates,
+                    query: query_str.clone(),
+                    candidates: candidates_clone.clone(),
                     top_n,
-                    model,
+                    model: model_clone.clone(),
                 })),
-                dtype: ValueType::SystemInfo, // TODO: Add proper RecommendContent type
+                dtype: ValueType::RecommendContent {
+                    query: query_str,
+                    candidates: candidates_clone,
+                    top_n,
+                    model: model_clone,
+                },
             },
             _marker: std::marker::PhantomData,
         }
@@ -732,6 +776,41 @@ impl RequestValue {
                 data: ValueData::Request(Box::new(RequestType::SelectModel {
                     model_id: model_id.into(),
                 })),
+                dtype: ValueType::SystemInfo,
+            },
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    // === HARDWARE DETECTION CONSTRUCTORS ===
+
+    /// Create a get hardware info request.
+    pub fn get_hardware_info() -> Self {
+        Value {
+            inner: ValueInner {
+                data: ValueData::Request(Box::new(RequestType::GetHardwareInfo)),
+                dtype: ValueType::SystemInfo,
+            },
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    /// Create a check model feasibility request.
+    pub fn check_model_feasibility(model_size_mb: u64) -> Self {
+        Value {
+            inner: ValueInner {
+                data: ValueData::Request(Box::new(RequestType::CheckModelFeasibility { model_size_mb })),
+                dtype: ValueType::SystemInfo,
+            },
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    /// Create a get recommended models request.
+    pub fn get_recommended_models() -> Self {
+        Value {
+            inner: ValueInner {
+                data: ValueData::Request(Box::new(RequestType::GetRecommendedModels)),
                 dtype: ValueType::SystemInfo,
             },
             _marker: std::marker::PhantomData,
@@ -816,17 +895,45 @@ impl RequestValue {
             RequestType::Health => ValueType::Health,
             RequestType::Rerank { model, .. } => ValueType::RerankRequest { model: model.clone() },
             RequestType::SaveMessage { .. } => ValueType::ChatHistory { session_id: None },
-            RequestType::StopGeneration { .. } => ValueType::Health,
-            RequestType::GetParams => ValueType::SystemInfo,
-            RequestType::SetParams { .. } => ValueType::SystemInfo,
-            RequestType::GetStats => ValueType::SystemInfo,
-            RequestType::GetResources => ValueType::SystemInfo,
-            RequestType::EstimateMemory { .. } => ValueType::SystemInfo,
-            RequestType::SemanticSearchQuery { .. } => ValueType::SystemInfo,
-            RequestType::CalculateSimilarity { .. } => ValueType::SystemInfo,
-            RequestType::EvaluateEmbeddings { .. } => ValueType::SystemInfo,
-            RequestType::ClusterDocuments { .. } => ValueType::SystemInfo,
-            RequestType::RecommendContent { .. } => ValueType::SystemInfo,
+            RequestType::StopGeneration { request_id } => ValueType::StopGeneration {
+                request_id: request_id.clone(),
+            },
+            RequestType::GetParams => ValueType::GetParams,
+            RequestType::SetParams { params } => ValueType::SetParams {
+                params: params.clone(),
+            },
+            RequestType::GetStats => ValueType::GetStats,
+            RequestType::GetResources => ValueType::GetResources,
+            RequestType::EstimateMemory { model, quantization } => ValueType::EstimateMemory {
+                model: model.clone(),
+                quantization: quantization.clone(),
+            },
+            RequestType::SemanticSearchQuery { query, k, filters } => ValueType::SemanticSearch {
+                query: query.clone(),
+                k: *k,
+                filters: filters.clone(),
+            },
+            RequestType::CalculateSimilarity { text1, text2, model } => ValueType::CalculateSimilarity {
+                text1: text1.clone(),
+                text2: text2.clone(),
+                model: model.clone(),
+            },
+            RequestType::EvaluateEmbeddings { model, queries, documents } => ValueType::EvaluateEmbeddings {
+                model: model.clone(),
+                queries: queries.clone(),
+                documents: documents.clone(),
+            },
+            RequestType::ClusterDocuments { documents, n_clusters, model } => ValueType::ClusterDocuments {
+                documents: documents.clone(),
+                n_clusters: *n_clusters,
+                model: model.clone(),
+            },
+            RequestType::RecommendContent { query, candidates, top_n, model } => ValueType::RecommendContent {
+                query: query.clone(),
+                candidates: candidates.clone(),
+                top_n: *top_n,
+                model: model.clone(),
+            },
             RequestType::PullModel { .. } => ValueType::SystemInfo,
             RequestType::DeleteModel { .. } => ValueType::SystemInfo,
             RequestType::GetRecipes => ValueType::SystemInfo,

@@ -5,7 +5,9 @@
 //! - Flexible `metadata` field for extensibility
 
 use crate::{EdgeId, EmbeddingId, NodeId};
+use crate::logging::LogEntry;
 use serde::{Deserialize, Serialize};
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 
 // --- Node Enum ---
 
@@ -36,7 +38,7 @@ use serde::{Deserialize, Serialize};
 /// let node = Node::Chat(chat);
 /// assert_eq!(node.id().as_str(), "chat_123");
 /// ```
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub enum Node {
     /// A conversation or chat session.
     Chat(Chat),
@@ -62,6 +64,8 @@ pub enum Node {
     ModelInfo(ModelInfo),
     /// Agent action outcome for learning and improvement.
     ActionOutcome(ActionOutcome),
+    /// A log entry from system components.
+    Log(LogEntry),
 }
 
 impl Node {
@@ -100,6 +104,7 @@ impl Node {
             Node::AudioTranscript(a) => &a.id,
             Node::ModelInfo(m) => &m.id,
             Node::ActionOutcome(a) => &a.id,
+            Node::Log(l) => &l.id,
         }
     }
 }
@@ -109,7 +114,7 @@ impl Node {
 /// A conversation or chat session.
 ///
 /// Represents a top-level container for messages and summaries.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct Chat {
     // --- Core, Indexed Fields ---
     /// Unique identifier for this chat.
@@ -132,15 +137,15 @@ pub struct Chat {
     pub embedding_id: Option<EmbeddingId>,
 
     // --- Flexible, Unindexed "Sidecar" Data ---
-    /// Application-specific metadata stored as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub metadata: serde_json::Value,
+    /// Application-specific metadata stored as JSON string.
+    #[serde(deserialize_with = "crate::json_metadata::from_str", serialize_with = "crate::json_metadata::to_str")]
+    pub metadata: String,
 }
 
 /// A message within a chat.
 ///
 /// Represents a single message from a user or assistant.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct Message {
     // --- Core, Indexed Fields ---
     /// Unique identifier for this message.
@@ -161,16 +166,16 @@ pub struct Message {
     pub embedding_id: Option<EmbeddingId>,
 
     // --- Flexible, Unindexed "Sidecar" Data ---
-    /// Application-specific metadata stored as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub metadata: serde_json::Value,
+    /// Application-specific metadata stored as JSON string.
+    #[serde(deserialize_with = "crate::json_metadata::from_str", serialize_with = "crate::json_metadata::to_str")]
+    pub metadata: String,
 }
 
 /// An extracted entity (person, project, concept, etc.).
 ///
 /// Entities are identified through Named Entity Recognition (NER)
 /// and linked across conversations.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct Entity {
     // --- Core, Indexed Fields ---
     /// Unique identifier for this entity.
@@ -185,16 +190,16 @@ pub struct Entity {
     pub embedding_id: Option<EmbeddingId>,
 
     // --- Flexible, Unindexed "Sidecar" Data ---
-    /// Application-specific metadata stored as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub metadata: serde_json::Value,
+    /// Application-specific metadata stored as JSON string.
+    #[serde(deserialize_with = "crate::json_metadata::from_str", serialize_with = "crate::json_metadata::to_str")]
+    pub metadata: String,
 }
 
 /// A summary of a conversation or section.
 ///
 /// Generated periodically by the Knowledge Weaver to consolidate
 /// information from multiple messages.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct Summary {
     // --- Core, Indexed Fields ---
     /// Unique identifier for this summary.
@@ -213,16 +218,16 @@ pub struct Summary {
     pub embedding_id: Option<EmbeddingId>,
 
     // --- Flexible, Unindexed "Sidecar" Data ---
-    /// Application-specific metadata stored as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub metadata: serde_json::Value,
+    /// Application-specific metadata stored as JSON string.
+    #[serde(deserialize_with = "crate::json_metadata::from_str", serialize_with = "crate::json_metadata::to_str")]
+    pub metadata: String,
 }
 
 /// An attached file or media.
 ///
 /// Represents files, images, audio, or other binary content
 /// associated with messages.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct Attachment {
     // --- Core, Indexed Fields ---
     /// Unique identifier for this attachment.
@@ -249,9 +254,9 @@ pub struct Attachment {
     pub embedding_id: Option<EmbeddingId>,
 
     // --- Flexible, Unindexed "Sidecar" Data ---
-    /// Application-specific metadata stored as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub metadata: serde_json::Value,
+    /// Application-specific metadata stored as JSON string.
+    #[serde(deserialize_with = "crate::json_metadata::from_str", serialize_with = "crate::json_metadata::to_str")]
+    pub metadata: String,
 }
 
 // --- Edge ---
@@ -277,7 +282,7 @@ pub struct Attachment {
 ///     metadata: json!({"confidence": 0.95}),
 /// };
 /// ```
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct Edge {
     /// Unique identifier for this edge.
     pub id: EdgeId,
@@ -290,8 +295,8 @@ pub struct Edge {
     /// Unix timestamp (milliseconds) when the edge was created.
     pub created_at: i64,
     /// Application-specific metadata stored as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub metadata: serde_json::Value,
+    #[serde(deserialize_with = "crate::json_metadata::from_value", serialize_with = "crate::json_metadata::to_value")]
+    pub metadata: String,
 }
 
 // --- Embedding ---
@@ -301,7 +306,7 @@ pub struct Edge {
 /// A web search query and its results.
 ///
 /// Tracks user searches for context and learning.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct WebSearch {
     /// Unique identifier for this web search.
     pub id: NodeId,
@@ -314,14 +319,14 @@ pub struct WebSearch {
     /// Optional reference to the query's embedding.
     pub embedding_id: Option<EmbeddingId>,
     /// Application-specific metadata stored as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub metadata: serde_json::Value,
+    #[serde(deserialize_with = "crate::json_metadata::from_value", serialize_with = "crate::json_metadata::to_value")]
+    pub metadata: String,
 }
 
 /// A scraped web page.
 ///
 /// Stores content from web pages visited or scraped by the user.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct ScrapedPage {
     /// Unique identifier for this scraped page.
     pub id: NodeId,
@@ -340,14 +345,14 @@ pub struct ScrapedPage {
     /// Storage path for full HTML or archived content.
     pub storage_path: String,
     /// Application-specific metadata stored as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub metadata: serde_json::Value,
+    #[serde(deserialize_with = "crate::json_metadata::from_value", serialize_with = "crate::json_metadata::to_value")]
+    pub metadata: String,
 }
 
 /// A user bookmark.
 ///
 /// Represents a saved URL with user annotations.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct Bookmark {
     /// Unique identifier for this bookmark.
     pub id: NodeId,
@@ -364,14 +369,14 @@ pub struct Bookmark {
     /// Optional reference to the bookmark's embedding.
     pub embedding_id: Option<EmbeddingId>,
     /// Application-specific metadata stored as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub metadata: serde_json::Value,
+    #[serde(deserialize_with = "crate::json_metadata::from_value", serialize_with = "crate::json_metadata::to_value")]
+    pub metadata: String,
 }
 
 /// Metadata extracted from an image.
 ///
 /// Stores OCR, object detection, and face recognition results.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct ImageMetadata {
     /// Unique identifier for this image metadata.
     pub id: NodeId,
@@ -386,14 +391,14 @@ pub struct ImageMetadata {
     /// Optional reference to the image's embedding (visual features).
     pub embedding_id: Option<EmbeddingId>,
     /// Application-specific metadata stored as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub metadata: serde_json::Value,
+    #[serde(deserialize_with = "crate::json_metadata::from_value", serialize_with = "crate::json_metadata::to_value")]
+    pub metadata: String,
 }
 
 /// Transcribed audio content.
 ///
 /// Stores transcriptions from audio files or voice messages.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct AudioTranscript {
     /// Unique identifier for this audio transcript.
     pub id: NodeId,
@@ -408,14 +413,14 @@ pub struct AudioTranscript {
     /// Optional reference to the transcript's embedding.
     pub embedding_id: Option<EmbeddingId>,
     /// Application-specific metadata stored as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub metadata: serde_json::Value,
+    #[serde(deserialize_with = "crate::json_metadata::from_value", serialize_with = "crate::json_metadata::to_value")]
+    pub metadata: String,
 }
 
 /// AI model information.
 ///
 /// Tracks loaded AI models for MIA's multi-model capabilities.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct ModelInfo {
     /// Unique identifier for this model.
     pub id: NodeId,
@@ -432,25 +437,25 @@ pub struct ModelInfo {
     /// Unix timestamp (milliseconds) when the model was last loaded.
     pub loaded_at: Option<i64>,
     /// Application-specific metadata stored as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub metadata: serde_json::Value,
+    #[serde(deserialize_with = "crate::json_metadata::from_value", serialize_with = "crate::json_metadata::to_value")]
+    pub metadata: String,
 }
 
 /// Agent action outcome for learning and improvement.
 ///
 /// Records the results of agent actions for experience-based learning.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct ActionOutcome {
     /// Unique identifier for this action outcome.
     pub id: NodeId,
     /// Type of action performed (e.g., "search", "scrape", "summarize").
     pub action_type: String,
     /// Arguments passed to the action as JSON.
-    #[serde(with = "crate::json_metadata")]
-    pub action_args: serde_json::Value,
+    #[serde(deserialize_with = "crate::json_metadata::from_value", serialize_with = "crate::json_metadata::to_value")]
+    pub action_args: String,
     /// Result of the action (success/failure and returned data).
-    #[serde(with = "crate::json_metadata")]
-    pub result: serde_json::Value,
+    #[serde(deserialize_with = "crate::json_metadata::from_value", serialize_with = "crate::json_metadata::to_value")]
+    pub result: String,
     /// Optional user feedback on the action.
     pub user_feedback: Option<UserFeedback>,
     /// Unix timestamp (milliseconds) when the action was performed.
@@ -462,7 +467,7 @@ pub struct ActionOutcome {
 /// User feedback on agent actions.
 ///
 /// Captures user approval, correction, or rejection of agent behavior.
-#[derive(Serialize, Deserialize, Debug, Clone, bincode::Encode, bincode::Decode)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct UserFeedback {
     /// Type of feedback provided.
     pub feedback_type: FeedbackType,
@@ -475,7 +480,7 @@ pub struct UserFeedback {
 }
 
 /// Types of user feedback.
-#[derive(Serialize, Deserialize, Debug, Clone, bincode::Encode, bincode::Decode)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub enum FeedbackType {
     /// User corrected the agent's action.
     Correction,
@@ -505,7 +510,7 @@ pub enum FeedbackType {
 ///
 /// assert_eq!(embedding.vector.len(), 3);
 /// ```
-#[derive(Serialize, Deserialize, Debug, Clone, bincode::Encode, bincode::Decode)]
+#[derive(Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct Embedding {
     /// Unique identifier for this embedding.
     pub id: EmbeddingId,

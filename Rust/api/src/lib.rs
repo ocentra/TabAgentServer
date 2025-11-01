@@ -143,14 +143,12 @@ pub async fn run_server_with_config(
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
     tracing::info!("🚀 TabAgent API server listening on http://{}", addr);
-    tracing::info!("🌐 Dashboard:     http://{}/", addr);
     if config.enable_swagger {
         tracing::info!("📘 Swagger UI:    http://{}/swagger-ui/", addr);
         tracing::info!("📗 RapiDoc:       http://{}/rapidoc/", addr);
         tracing::info!("📕 Redoc:         http://{}/redoc/", addr);
         tracing::info!("📄 OpenAPI Spec:  http://{}/api-doc/openapi.json", addr);
     }
-    tracing::info!("🎮 WebRTC Demo:   http://{}/demo/webrtc-demo.html", addr);
 
     // Axum 0.8 fix: Wrap trait object in concrete Clone type
     let wrapped_state = crate::traits::AppStateWrapper(state);

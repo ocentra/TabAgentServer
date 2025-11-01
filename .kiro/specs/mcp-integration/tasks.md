@@ -205,20 +205,40 @@
     - Clean up any temporary or development-only code
     - _Requirements: 6.1, 6.3, 5.4_
 
-- [ ] 10. Advanced MCP features and extensibility
-  - [ ] 10.1 Implement MCP resource providers
+- [ ] 10. Enhanced web dashboard with MCP integration
+  - [ ] 10.1 Create MCP-powered dashboard API endpoints
+    - Add WebSocket endpoint for real-time MCP tool data streaming
+    - Create dashboard-specific API routes that use MCP tools internally
+    - Implement server-sent events for live log streaming
+    - _Requirements: 2.1, 3.1_
+
+  - [ ] 10.2 Enhance existing dashboard with real-time features
+    - Replace static links with live data from MCP tools
+    - Add real-time logs viewer using MCP logs server
+    - Create live model management interface using MCP models server
+    - Add system monitoring dashboard using MCP system server
+    - _Requirements: 2.2, 3.2, 3.3_
+
+  - [ ] 10.3 Add database explorer to dashboard
+    - Create interactive database query interface using MCP database server
+    - Add node/edge visualization for knowledge graph exploration
+    - Implement search and filtering for stored conversations and documents
+    - _Requirements: 3.1, 3.2_
+
+- [ ] 11. Advanced MCP features and extensibility
+  - [ ] 11.1 Implement MCP resource providers
     - Add MCP resources for direct data access (logs, database content)
     - Implement streaming resources for large datasets
     - Create resource-based alternatives to tool-based access
     - _Requirements: 3.4, 3.5_
 
-  - [ ] 10.2 Add MCP prompt templates
+  - [ ] 11.2 Add MCP prompt templates
     - Create pre-defined prompt templates for common debugging scenarios
     - Implement context-aware prompts based on system state
     - Add prompt templates for log analysis and system troubleshooting
     - _Requirements: 2.5, 3.5_
 
-  - [ ] 10.3 Create MCP tool composition and workflows
+  - [ ] 11.3 Create MCP tool composition and workflows
     - Implement tool chaining for complex analysis workflows
     - Add workflow templates for common debugging patterns
     - Create automated analysis tools combining multiple MCP servers

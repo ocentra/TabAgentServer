@@ -5,6 +5,7 @@
 
 use crate::{WeaverContext, WeaverResult};
 use common::{NodeId, EdgeId, models::{Chat, Edge, Node, Summary}};
+use rkyv;
 
 /// Processes a chat update to potentially generate a summary.
 ///
@@ -16,12 +17,19 @@ pub async fn on_chat_updated(
     log::debug!("Summarizer: Processing chat {}", chat_id);
     
     // Load the chat node
-    let chat = match context.coordinator.conversations_active().get_node(chat_id)? {
-        Some(Node::Chat(c)) => c,
-        _ => {
-            log::warn!("Chat {} not found for summarization", chat_id);
-            return Ok(());
+    let chat = if let Some(node_ref) = context.coordinator.conversations_active().get_node_ref(chat_id)? {
+        let node = node_ref.deserialize()
+            .map_err(|e| WeaverError::Storage(e))?;
+        match node {
+            Node::Chat(c) => c,
+            _ => {
+                log::warn!("Chat {} not found for summarization", chat_id);
+                return Ok(());
+            }
         }
+    } else {
+        log::warn!("Chat {} not found for summarization", chat_id);
+        return Ok(());
     };
     
     // Get recent messages for the chat
@@ -42,7 +50,9 @@ pub async fn on_chat_updated(
     let summary_id = format!("sum_{}", uuid::Uuid::new_v4());
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .map_err(|e| WeaverError::Storage(common::DbError::InvalidOperation(
+            format!("System time error: {}", e)
+        )))?
         .as_millis() as i64;
     
     let summary = Summary {
@@ -81,9 +91,14 @@ async fn get_recent_messages(
         .take(50)
         .collect();
     
+    // Load messages
     for message_id in message_ids {
-        if let Some(Node::Message(msg)) = context.coordinator.conversations_active().get_node(message_id.as_str())? {
-            messages.push(msg.text_content);
+        if let Some(node_ref) = context.coordinator.conversations_active().get_node_ref(message_id.as_str())? {
+            let node = node_ref.deserialize()
+                .map_err(|e| WeaverError::Storage(e))?;
+            if let Node::Message(msg) = node {
+                messages.push(msg.text_content);
+            }
         }
     }
     
@@ -107,7 +122,9 @@ async fn create_summary_edge(
         edge_type: "CONTAINS_SUMMARY".to_string(),
         created_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .map_err(|e| WeaverError::Storage(common::DbError::InvalidOperation(
+                format!("System time error: {}", e)
+            )))?
             .as_millis() as i64,
         metadata: serde_json::json!({}),
     };

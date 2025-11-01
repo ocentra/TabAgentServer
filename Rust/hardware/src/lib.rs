@@ -31,6 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use sysinfo::System;
 
 mod cpu;
 mod gpu;
@@ -126,10 +127,22 @@ pub struct OsInfo {
 }
 
 impl OsInfo {
+    /// Detect operating system information including version.
+    ///
+    /// Uses `sysinfo` crate for cross-platform OS version detection.
+    ///
+    /// # Returns
+    ///
+    /// Returns `OsInfo` with OS name, version, and architecture.
     pub fn detect() -> Self {
+        let os_name = std::env::consts::OS.to_string();
+        let os_version = System::long_os_version()
+            .or_else(|| System::os_version())
+            .unwrap_or_else(|| "unknown".to_string());
+        
         Self {
-            name: std::env::consts::OS.to_string(),
-            version: "unknown".to_string(), // TODO: Get OS version
+            name: os_name,
+            version: os_version,
             arch: std::env::consts::ARCH.to_string(),
         }
     }
