@@ -1,20 +1,18 @@
-//! Integration tests for the IndexManager
+//! Integration tests for the IndexManager - TRUE ZERO-COPY!
 
 use indexing::IndexManager;
 use tempfile::TempDir;
-use serde_json::json;
 use common::{NodeId, EdgeId, EmbeddingId};
 use common::models::{Chat, Message, Edge, Embedding, Node};
 
 fn create_test_manager() -> (IndexManager, TempDir) {
     let temp_dir = TempDir::new().unwrap();
-    let db = sled::open(temp_dir.path()).unwrap();
-    let manager = IndexManager::new(&db).unwrap();
+    let manager = IndexManager::new(temp_dir.path()).unwrap();
     (manager, temp_dir)
 }
 
 #[test]
-fn test_index_chat_node() {
+fn test_index_chat_node_zero_copy() {
     let (manager, _temp) = create_test_manager();
     
     let chat = Node::Chat(Chat {
@@ -26,21 +24,22 @@ fn test_index_chat_node() {
         message_ids: vec![],
         summary_ids: vec![],
         embedding_id: None,
-        metadata: json!({}),
+        metadata: "{}".to_string(),
     });
     
     manager.index_node(&chat).unwrap();
     
-    let results = manager.get_nodes_by_property("node_type", "Chat").unwrap();
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0], NodeId::from("chat_001"));
+    // TRUE ZERO-COPY ACCESS!
+    let guard = manager.get_nodes_by_property("node_type", "Chat").unwrap().expect("Should have results");
+    assert_eq!(guard.len(), 1);
+    assert!(guard.contains_str("chat_001"));
     
-    let topic_results = manager.get_nodes_by_property("topic", "Testing").unwrap();
-    assert_eq!(topic_results.len(), 1);
+    let topic_guard = manager.get_nodes_by_property("topic", "Testing").unwrap().expect("Should have results");
+    assert_eq!(topic_guard.len(), 1);
 }
 
 #[test]
-fn test_index_message_node() {
+fn test_index_message_node_zero_copy() {
     let (manager, _temp) = create_test_manager();
     
     let message = Node::Message(Message {
@@ -51,18 +50,21 @@ fn test_index_message_node() {
         text_content: "Hello".to_string(),
         attachment_ids: vec![],
         embedding_id: None,
-        metadata: json!({}),
+        metadata: "{}".to_string(),
     });
     
     manager.index_node(&message).unwrap();
     
-    let results = manager.get_nodes_by_property("chat_id", "chat_123").unwrap();
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0], NodeId::from("msg_001"));
+    let guard = manager.get_nodes_by_property("chat_id", "chat_123").unwrap().expect("Should have results");
+    assert_eq!(guard.len(), 1);
+    
+    // Zero-copy string access!
+    let strs: Vec<&str> = guard.iter_strs().collect();
+    assert_eq!(strs[0], "msg_001");
 }
 
 #[test]
-fn test_index_edge() {
+fn test_index_edge_zero_copy() {
     let (manager, _temp) = create_test_manager();
     
     let edge = Edge {
@@ -71,14 +73,14 @@ fn test_index_edge() {
         to_node: NodeId::from("msg_456"),
         edge_type: "CONTAINS".to_string(),
         created_at: 1697500000000,
-        metadata: json!({}),
+        metadata: "{}".to_string(),
     };
     
     manager.index_edge(&edge).unwrap();
     
-    let outgoing = manager.get_outgoing_edges("chat_123").unwrap();
-    assert_eq!(outgoing.len(), 1);
-    assert_eq!(outgoing[0], EdgeId::from("edge_001"));
+    let guard = manager.get_outgoing_edges("chat_123").unwrap().expect("Should have results");
+    assert_eq!(guard.len(), 1);
+    assert!(guard.contains_str("edge_001"));
 }
 
 #[test]

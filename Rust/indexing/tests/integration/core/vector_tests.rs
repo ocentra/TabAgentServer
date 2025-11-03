@@ -1,6 +1,6 @@
 //! Tests for the VectorIndex implementation
 
-use indexing::vector::{VectorIndex, SearchResult};
+use indexing::vector::VectorIndex;
 use tempfile::TempDir;
 use common::EmbeddingId;
 

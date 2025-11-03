@@ -307,7 +307,7 @@ impl<'a> QueryManager<'a> {
                     }
                 };
 
-                // Fetch actual Edge objects and traverse - ZERO-COPY path
+                // Fetch actual Edge objects and traverse
                 for edge_id in edge_ids {
                     let edge = if let Some(guard) = self.coordinator.conversations_active().get_edge_guard(edge_id.as_str())? {
                         rkyv::from_bytes::<common::models::Edge, rkyv::rancor::Error>(guard.data())

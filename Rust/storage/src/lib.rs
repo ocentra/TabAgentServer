@@ -49,6 +49,7 @@
 pub mod config;
 pub mod registry;
 pub mod engine;
+pub mod zero_copy_ffi;
 mod storage_manager;
 
 // Domain-specific modules (will be moved to mia-storage crate)

@@ -332,3 +332,272 @@ crate::enforce_native_messaging_route!(ListModelsRoute);
 crate::enforce_native_messaging_route!(LoadModelRoute);
 crate::enforce_native_messaging_route!(UnloadModelRoute);
 crate::enforce_native_messaging_route!(ModelInfoRoute);
+
+// ==================== GET MODEL QUANTS ====================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetModelQuantsRequest {
+    pub repo_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetModelQuantsResponse {
+    pub quants: Vec<String>,
+}
+
+pub struct GetModelQuantsRoute;
+
+#[async_trait]
+impl NativeMessagingRoute for GetModelQuantsRoute {
+    type Request = GetModelQuantsRequest;
+    type Response = GetModelQuantsResponse;
+
+    fn metadata() -> RouteMetadata {
+        RouteMetadata {
+            route_id: "get_model_quants",
+            tags: &["Models", "Management"],
+            description: "Get available quantization variants for a model repository",
+            openai_compatible: false,
+            idempotent: true,
+            requires_auth: false,
+            rate_limit_tier: Some("standard"),
+            supports_streaming: false,
+            supports_binary: false,
+            max_payload_size: Some(64 * 1024),
+        }
+    }
+
+    async fn validate_request(req: &Self::Request) -> NativeMessagingResult<()> {
+        if req.repo_id.is_empty() {
+            return Err(NativeMessagingError::validation("repo_id", "cannot be empty"));
+        }
+        Ok(())
+    }
+
+    async fn handle<S>(req: Self::Request, state: &S) -> NativeMessagingResult<Self::Response>
+    where
+        S: AppStateProvider + Send + Sync,
+    {
+        let request_id = uuid::Uuid::new_v4();
+        tracing::info!(
+            request_id = %request_id,
+            route = "get_model_quants",
+            repo_id = %req.repo_id,
+            "Get model quants request"
+        );
+
+        let request = RequestValue::get_model_quants(&req.repo_id);
+        let response = state.handle_request(request).await
+            .map_err(|e| NativeMessagingError::Backend(e))?;
+
+        let (content, _, _) = response.as_chat()
+            .ok_or_else(|| NativeMessagingError::internal("Invalid response type"))?;
+        
+        let quants: Vec<String> = serde_json::from_str(content)
+            .map_err(|e| NativeMessagingError::internal(format!("Failed to parse quants: {}", e)))?;
+
+        Ok(GetModelQuantsResponse { quants })
+    }
+
+    fn test_cases() -> Vec<TestCase<Self::Request, Self::Response>> {
+        vec![
+            TestCase {
+                name: "get_quants_valid",
+                request: GetModelQuantsRequest {
+                    repo_id: "onnx-community/Phi-3.5-mini".to_string(),
+                },
+                expected_response: None,
+                expected_error: None,
+                assertions: vec![],
+            },
+        ]
+    }
+}
+
+// ==================== GET INFERENCE SETTINGS ====================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetInferenceSettingsRequest {
+    pub repo_id: String,
+    pub variant: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetInferenceSettingsResponse {
+    pub settings: tabagent_values::InferenceSettings,
+}
+
+pub struct GetInferenceSettingsRoute;
+
+#[async_trait]
+impl NativeMessagingRoute for GetInferenceSettingsRoute {
+    type Request = GetInferenceSettingsRequest;
+    type Response = GetInferenceSettingsResponse;
+
+    fn metadata() -> RouteMetadata {
+        RouteMetadata {
+            route_id: "get_inference_settings",
+            tags: &["Models", "Settings"],
+            description: "Get inference settings for a specific model variant",
+            openai_compatible: false,
+            idempotent: true,
+            requires_auth: false,
+            rate_limit_tier: Some("standard"),
+            supports_streaming: false,
+            supports_binary: false,
+            max_payload_size: Some(64 * 1024),
+        }
+    }
+
+    async fn validate_request(req: &Self::Request) -> NativeMessagingResult<()> {
+        if req.repo_id.is_empty() {
+            return Err(NativeMessagingError::validation("repo_id", "cannot be empty"));
+        }
+        if req.variant.is_empty() {
+            return Err(NativeMessagingError::validation("variant", "cannot be empty"));
+        }
+        Ok(())
+    }
+
+    async fn handle<S>(req: Self::Request, state: &S) -> NativeMessagingResult<Self::Response>
+    where
+        S: AppStateProvider + Send + Sync,
+    {
+        let request_id = uuid::Uuid::new_v4();
+        tracing::info!(
+            request_id = %request_id,
+            route = "get_inference_settings",
+            repo_id = %req.repo_id,
+            variant = %req.variant,
+            "Get inference settings request"
+        );
+
+        let request = RequestValue::get_inference_settings(&req.repo_id, &req.variant);
+        let response = state.handle_request(request).await
+            .map_err(|e| NativeMessagingError::Backend(e))?;
+
+        let (content, _, _) = response.as_chat()
+            .ok_or_else(|| NativeMessagingError::internal("Invalid response type"))?;
+        
+        let settings: tabagent_values::InferenceSettings = serde_json::from_str(content)
+            .map_err(|e| NativeMessagingError::internal(format!("Failed to parse settings: {}", e)))?;
+
+        Ok(GetInferenceSettingsResponse { settings })
+    }
+
+    fn test_cases() -> Vec<TestCase<Self::Request, Self::Response>> {
+        vec![
+            TestCase {
+                name: "get_settings_valid",
+                request: GetInferenceSettingsRequest {
+                    repo_id: "onnx-community/Phi-3.5-mini".to_string(),
+                    variant: "fp16".to_string(),
+                },
+                expected_response: None,
+                expected_error: None,
+                assertions: vec![],
+            },
+        ]
+    }
+}
+
+// ==================== SAVE INFERENCE SETTINGS ====================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveInferenceSettingsRequest {
+    pub repo_id: String,
+    pub variant: String,
+    pub settings: tabagent_values::InferenceSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveInferenceSettingsResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+pub struct SaveInferenceSettingsRoute;
+
+#[async_trait]
+impl NativeMessagingRoute for SaveInferenceSettingsRoute {
+    type Request = SaveInferenceSettingsRequest;
+    type Response = SaveInferenceSettingsResponse;
+
+    fn metadata() -> RouteMetadata {
+        RouteMetadata {
+            route_id: "save_inference_settings",
+            tags: &["Models", "Settings"],
+            description: "Save user-customized inference settings for a model variant",
+            openai_compatible: false,
+            idempotent: true,
+            requires_auth: false,
+            rate_limit_tier: Some("management"),
+            supports_streaming: false,
+            supports_binary: false,
+            max_payload_size: Some(128 * 1024),
+        }
+    }
+
+    async fn validate_request(req: &Self::Request) -> NativeMessagingResult<()> {
+        if req.repo_id.is_empty() {
+            return Err(NativeMessagingError::validation("repo_id", "cannot be empty"));
+        }
+        if req.variant.is_empty() {
+            return Err(NativeMessagingError::validation("variant", "cannot be empty"));
+        }
+        if req.settings.temperature < 0.0 || req.settings.temperature > 2.0 {
+            return Err(NativeMessagingError::validation("temperature", "must be between 0.0 and 2.0"));
+        }
+        if req.settings.top_p < 0.0 || req.settings.top_p > 1.0 {
+            return Err(NativeMessagingError::validation("top_p", "must be between 0.0 and 1.0"));
+        }
+        Ok(())
+    }
+
+    async fn handle<S>(req: Self::Request, state: &S) -> NativeMessagingResult<Self::Response>
+    where
+        S: AppStateProvider + Send + Sync,
+    {
+        let request_id = uuid::Uuid::new_v4();
+        tracing::info!(
+            request_id = %request_id,
+            route = "save_inference_settings",
+            repo_id = %req.repo_id,
+            variant = %req.variant,
+            "Save inference settings request"
+        );
+
+        let request = RequestValue::save_inference_settings(
+            &req.repo_id,
+            &req.variant,
+            req.settings.clone(),
+        );
+        let _response = state.handle_request(request).await
+            .map_err(|e| NativeMessagingError::Backend(e))?;
+
+        Ok(SaveInferenceSettingsResponse {
+            success: true,
+            message: format!("Settings saved for {}:{}", req.repo_id, req.variant),
+        })
+    }
+
+    fn test_cases() -> Vec<TestCase<Self::Request, Self::Response>> {
+        vec![
+            TestCase {
+                name: "save_settings_valid",
+                request: SaveInferenceSettingsRequest {
+                    repo_id: "onnx-community/Phi-3.5-mini".to_string(),
+                    variant: "fp16".to_string(),
+                    settings: tabagent_values::InferenceSettings::default(),
+                },
+                expected_response: None,
+                expected_error: None,
+                assertions: vec![],
+            },
+        ]
+    }
+}
+
+crate::enforce_native_messaging_route!(GetModelQuantsRoute);
+crate::enforce_native_messaging_route!(GetInferenceSettingsRoute);
+crate::enforce_native_messaging_route!(SaveInferenceSettingsRoute);

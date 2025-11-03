@@ -203,35 +203,35 @@ impl DatabaseService for DatabaseServer {
     ) -> Result<Response<ToolResultResponse>, Status> {
         let req = request.into_inner();
         
-        // Query tool results based on filters
+        // Query tool results based on filters - ZERO-COPY PATH!
         let storage = self.coordinator.tool_results();
         let results: Vec<ToolResult> = storage
-            .iter()
+            .iter_nodes_ref()  // ✅ Zero-copy iterator!
             .filter_map(|result| result.ok())
-            .filter_map(|(_key, value)| {
-                let node = rkyv::from_bytes::<Node, rkyv::rancor::Error>(&value).ok()?;
-                // Filter based on tool_name and time range
-                match node {
-                    Node::WebSearch(search) => {
+            .filter_map(|(_key, node_ref)| {
+                // TRUE ZERO-COPY: Access archived fields directly from mmap!
+                let archived = node_ref.archived();
+                match archived {
+                    rkyv::Archived::<Node>::WebSearch(search) => {
                         if !req.tool_name.is_empty() && req.tool_name != "web_search" {
                             return None;
                         }
                         Some(ToolResult {
-                            id: search.id.to_string(),
+                            id: search.id.0.as_str().to_string(),  // ✅ Zero-copy field access
                             tool_name: "web_search".to_string(),
-                            result: search.query,
-                            timestamp: search.timestamp,
+                            result: search.query.as_str().to_string(),  // ✅ Zero-copy field access
+                            timestamp: search.timestamp.into(),
                         })
                     }
-                    Node::ScrapedPage(page) => {
+                    rkyv::Archived::<Node>::ScrapedPage(page) => {
                         if !req.tool_name.is_empty() && req.tool_name != "scrape_page" {
                             return None;
                         }
                         Some(ToolResult {
-                            id: page.id.to_string(),
+                            id: page.id.0.as_str().to_string(),  // ✅ Zero-copy field access
                             tool_name: "scrape_page".to_string(),
-                            result: page.url,
-                            timestamp: page.scraped_at,
+                            result: page.url.as_str().to_string(),  // ✅ Zero-copy field access
+                            timestamp: page.scraped_at.into(),
                         })
                     }
                     _ => None,

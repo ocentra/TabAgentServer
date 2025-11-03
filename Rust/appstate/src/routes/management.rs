@@ -1,6 +1,6 @@
 //! Extended model management handlers.
 
-use anyhow::Result;
+use anyhow::{Result, Context};
 use tabagent_values::{ResponseValue, TokenUsage};
 
 use crate::AppState;
@@ -76,12 +76,42 @@ pub async fn handle_select_model(_state: &AppState, model_id: &str) -> Result<Re
 
 /// Handle pull model request.
 pub async fn handle_pull_model(
-    _state: &AppState,
+    state: &AppState,
     model: &str,
     quantization: Option<&str>,
 ) -> Result<ResponseValue> {
     tracing::info!("Pull model request: {} (quant: {:?})", model, quantization);
-    anyhow::bail!("Model pulling requires download workflow implementation")
+    
+    // 1. Scan repo to discover variants (if not already scanned)
+    let manifest = state.cache.scan_repo(model).await
+        .context("Failed to scan repository")?;
+    
+    // 2. Download specific quant (or default if None)
+    let quant_to_download = quantization.unwrap_or_else(|| {
+        // Use first available quant if no specific quant requested
+        manifest.quants.keys().next()
+            .map(|k| k.as_str())
+            .unwrap_or("default")
+    });
+    
+    if let Some(quant_info) = manifest.quants.get(quant_to_download) {
+        // Download all files for this quant variant
+        for file in &quant_info.files {
+            tracing::debug!("Downloading file: {}", file);
+            state.cache.download_file(model, file, None).await
+                .with_context(|| format!("Failed to download file: {}", file))?;
+        }
+        
+        Ok(ResponseValue::chat(
+            "downloaded",
+            "system",
+            format!("Model {} (variant: {}) downloaded successfully", model, quant_to_download),
+            TokenUsage::zero(),
+        ))
+    } else {
+        anyhow::bail!("Quantization variant '{}' not found for model '{}'. Available: {:?}", 
+                     quant_to_download, model, manifest.quants.keys().collect::<Vec<_>>())
+    }
 }
 
 /// Handle delete model request.

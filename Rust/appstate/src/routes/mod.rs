@@ -28,6 +28,9 @@ pub use models::{
     handle_unload as handle_unload_model,
     handle_list as handle_list_models,
     handle_info as handle_model_info,
+    handle_get_quants,
+    handle_get_inference_settings,
+    handle_save_inference_settings,
 };
 
 pub use system::{

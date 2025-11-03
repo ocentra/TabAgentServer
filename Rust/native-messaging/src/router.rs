@@ -157,6 +157,9 @@ impl MessageRouter {
         self.register_route::<crate::routes::models::LoadModelRoute>();
         self.register_route::<crate::routes::models::UnloadModelRoute>();
         self.register_route::<crate::routes::models::ModelInfoRoute>();
+        self.register_route::<crate::routes::models::GetModelQuantsRoute>();
+        self.register_route::<crate::routes::models::GetInferenceSettingsRoute>();
+        self.register_route::<crate::routes::models::SaveInferenceSettingsRoute>();
         self.register_route::<crate::routes::rag::RagRoute>();
         self.register_route::<crate::routes::rerank::RerankRoute>();
         self.register_route::<crate::routes::sessions::GetHistoryRoute>();

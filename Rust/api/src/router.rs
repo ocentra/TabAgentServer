@@ -42,6 +42,9 @@ pub fn configure_routes(
     router = routes::models::LoadModelRoute::register(router);
     router = routes::models::UnloadModelRoute::register(router);
     router = routes::models::ModelInfoRoute::register(router);
+    router = routes::models::GetModelQuantsRoute::register(router);
+    router = routes::models::GetInferenceSettingsRoute::register(router);
+    router = routes::models::SaveInferenceSettingsRoute::register(router);
     router = routes::sessions::GetHistoryRoute::register(router);
     router = routes::sessions::SaveMessageRoute::register(router);
     router = routes::rag::RagRoute::register(router);

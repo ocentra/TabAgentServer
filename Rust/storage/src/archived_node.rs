@@ -123,9 +123,10 @@ impl<G: ReadGuard> ArchivedNodeRef<G> {
     }
     
     /// Deserialize to owned type
+    /// 
+    /// Uses rkyv::deserialize() on the archived reference for faster deserialization
     pub fn deserialize(&self) -> DbResult<Node> {
-        // Use from_bytes with the guard's data
-        rkyv::from_bytes::<Node, rkyv::rancor::Error>(self._guard.data())
+        rkyv::deserialize::<Node, rkyv::rancor::Error>(self.archived)
             .map_err(|e| common::DbError::Serialization(e.to_string()))
     }
 }
@@ -174,9 +175,10 @@ impl<G: ReadGuard> ArchivedEdgeRef<G> {
     }
     
     /// Deserialize to owned type (ALLOCATES)
+    /// 
+    /// Uses rkyv::deserialize() on the archived reference for faster deserialization
     pub fn deserialize(&self) -> DbResult<common::models::Edge> {
-        // Use from_bytes with the guard's data
-        rkyv::from_bytes::<common::models::Edge, rkyv::rancor::Error>(self._guard.data())
+        rkyv::deserialize::<common::models::Edge, rkyv::rancor::Error>(self.archived)
             .map_err(|e| common::DbError::Serialization(e.to_string()))
     }
 }
@@ -220,9 +222,10 @@ impl<G: ReadGuard> ArchivedEmbeddingRef<G> {
     }
     
     /// Deserialize to owned type (ALLOCATES)
+    /// 
+    /// Uses rkyv::deserialize() on the archived reference for faster deserialization
     pub fn deserialize(&self) -> DbResult<common::models::Embedding> {
-        // Use from_bytes with the guard's data
-        rkyv::from_bytes::<common::models::Embedding, rkyv::rancor::Error>(self._guard.data())
+        rkyv::deserialize::<common::models::Embedding, rkyv::rancor::Error>(self.archived)
             .map_err(|e| common::DbError::Serialization(e.to_string()))
     }
 }

@@ -19,6 +19,7 @@ use crate::{
     conversations::ConversationManager, embeddings::EmbeddingManager,
     experience::ExperienceManager, knowledge::KnowledgeManager, summaries::SummaryManager,
     tool_results::ToolResultManager, traits::*, DatabaseType, DefaultStorageManager, TemperatureTier,
+    registry::StorageRegistry, config::DbConfig,
 };
 use common::{models::*, DbResult};
 use std::collections::HashMap;
@@ -50,6 +51,10 @@ pub struct DatabaseCoordinator {
     // ========== SYSTEM LOGS DATABASE ==========
     /// Logs: System logs from all components
     pub logs: Arc<DefaultStorageManager>,
+    
+    // ========== STORAGE REGISTRY ==========
+    /// Centralized registry of ALL databases for introspection
+    pub registry: Arc<StorageRegistry>,
 }
 
 // Implement DirectAccessOperations for safe public access to storage managers
@@ -91,11 +96,34 @@ impl DatabaseCoordinator {
         Self::with_base_path(None)
     }
 
+    /// Initialize ALL databases using the provided registry
+    ///
+    /// This method registers all database instances with the central registry,
+    /// enabling system-wide introspection and centralized management.
+    pub fn with_registry(registry: Arc<StorageRegistry>) -> DbResult<Self> {
+        Self::with_registry_and_base_path(registry, None)
+    }
+
     /// Initialize ALL databases at a custom base path (for testing)
     ///
     /// This method allows specifying a custom base path for all databases,
     /// which is useful for testing to avoid file locking conflicts.
     pub fn with_base_path(base_path: Option<std::path::PathBuf>) -> DbResult<Self> {
+        // Create a temporary registry for backwards compatibility
+        let base = base_path.clone().unwrap_or_else(|| {
+            std::env::var("TABAGENT_DB_PATH")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| std::path::PathBuf::from("./data"))
+        });
+        let registry = Arc::new(StorageRegistry::new(base));
+        Self::with_registry_and_base_path(registry, base_path)
+    }
+
+    /// Initialize ALL databases with registry and optional custom base path
+    pub fn with_registry_and_base_path(
+        registry: Arc<StorageRegistry>,
+        base_path: Option<std::path::PathBuf>,
+    ) -> DbResult<Self> {
         // Helper function to open a database with optional custom base path
         let open_db = |db_type: DatabaseType,
                        tier: Option<TemperatureTier>|
@@ -194,6 +222,83 @@ impl DatabaseCoordinator {
             summaries: Arc::new(RwLock::new(HashMap::new())),
         };
 
+        let meta = Arc::new(open_db_no_index(DatabaseType::Meta, None)?);
+        let logs = Arc::new(open_db_no_index(DatabaseType::Logs, None)?);
+
+        // Register all databases with the central registry for introspection
+        // This allows external tools/dashboard to discover what DBs exist
+        registry.add_storage(
+            "conversations_active",
+            DbConfig::new(
+                conversation_manager.conversations_active.db_path()
+                    .ok_or_else(|| common::DbError::InvalidOperation("No DB path".to_string()))?
+            ),
+        ).map_err(|e| common::DbError::InvalidOperation(e.to_string()))?;
+
+        registry.add_storage(
+            "knowledge_active",
+            DbConfig::new(
+                knowledge_manager.knowledge_active.db_path()
+                    .ok_or_else(|| common::DbError::InvalidOperation("No DB path".to_string()))?
+            ),
+        ).map_err(|e| common::DbError::InvalidOperation(e.to_string()))?;
+
+        registry.add_storage(
+            "knowledge_stable",
+            DbConfig::new(
+                knowledge_manager.knowledge_stable.db_path()
+                    .ok_or_else(|| common::DbError::InvalidOperation("No DB path".to_string()))?
+            ),
+        ).map_err(|e| common::DbError::InvalidOperation(e.to_string()))?;
+
+        registry.add_storage(
+            "knowledge_inferred",
+            DbConfig::new(
+                knowledge_manager.knowledge_inferred.db_path()
+                    .ok_or_else(|| common::DbError::InvalidOperation("No DB path".to_string()))?
+            ),
+        ).map_err(|e| common::DbError::InvalidOperation(e.to_string()))?;
+
+        registry.add_storage(
+            "embeddings_active",
+            DbConfig::new(
+                embedding_manager.embeddings_active.db_path()
+                    .ok_or_else(|| common::DbError::InvalidOperation("No DB path".to_string()))?
+            ),
+        ).map_err(|e| common::DbError::InvalidOperation(e.to_string()))?;
+
+        registry.add_storage(
+            "tool_results",
+            DbConfig::new(
+                tool_result_manager.tool_results.db_path()
+                    .ok_or_else(|| common::DbError::InvalidOperation("No DB path".to_string()))?
+            ),
+        ).map_err(|e| common::DbError::InvalidOperation(e.to_string()))?;
+
+        registry.add_storage(
+            "experience",
+            DbConfig::new(
+                experience_manager.experience.db_path()
+                    .ok_or_else(|| common::DbError::InvalidOperation("No DB path".to_string()))?
+            ),
+        ).map_err(|e| common::DbError::InvalidOperation(e.to_string()))?;
+
+        registry.add_storage(
+            "meta",
+            DbConfig::new(
+                meta.db_path()
+                    .ok_or_else(|| common::DbError::InvalidOperation("No DB path".to_string()))?
+            ),
+        ).map_err(|e| common::DbError::InvalidOperation(e.to_string()))?;
+
+        registry.add_storage(
+            "logs",
+            DbConfig::new(
+                logs.db_path()
+                    .ok_or_else(|| common::DbError::InvalidOperation("No DB path".to_string()))?
+            ),
+        ).map_err(|e| common::DbError::InvalidOperation(e.to_string()))?;
+
         Ok(Self {
             conversation_manager,
             knowledge_manager,
@@ -201,8 +306,9 @@ impl DatabaseCoordinator {
             tool_result_manager,
             experience_manager,
             summary_manager,
-            meta: Arc::new(open_db_no_index(DatabaseType::Meta, None)?),
-            logs: Arc::new(open_db_no_index(DatabaseType::Logs, None)?),
+            meta,
+            logs,
+            registry,
         })
     }
 

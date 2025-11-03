@@ -22,7 +22,8 @@ async fn download_test_model() -> Result<(PathBuf, PathBuf), Box<dyn std::error:
     let temp_dir = tempdir()?;
     let cache_dir = temp_dir.path().to_path_buf();
     
-    let cache = ModelCache::new(&cache_dir)?;
+    let registry = std::sync::Arc::new(storage::StorageRegistry::new(&cache_dir));
+    let cache = ModelCache::new(registry, &cache_dir)?;
     
     // Download GGUF model
     eprintln!("Downloading test model: {}/{}", TEST_GGUF_REPO, TEST_GGUF_FILE);

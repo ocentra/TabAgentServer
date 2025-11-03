@@ -41,7 +41,8 @@ async fn test_smollm2_360m_generation() {
     
     // Download model files using model-cache with unique temp directory
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let cache = ModelCache::new(temp_dir.path()).expect("Failed to create model cache");
+    let registry = std::sync::Arc::new(storage::StorageRegistry::new(temp_dir.path()));
+    let cache = ModelCache::new(registry, temp_dir.path()).expect("Failed to create model cache");
     
     println!("Downloading SmolLM2-360M model files...");
     cache.download_file(repo_id, model_file, None).await
@@ -146,7 +147,8 @@ async fn test_smollm2_1_7b_generation() {
     
     // Download model files using model-cache with unique temp directory
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let cache = ModelCache::new(temp_dir.path()).expect("Failed to create model cache");
+    let registry = std::sync::Arc::new(storage::StorageRegistry::new(temp_dir.path()));
+    let cache = ModelCache::new(registry, temp_dir.path()).expect("Failed to create model cache");
     
     println!("Downloading SmolLM2-1.7B model files (this may take a while)...");
     
@@ -223,7 +225,8 @@ async fn test_settings_impact() {
     
     // Download model files using model-cache with unique temp directory
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let cache = ModelCache::new(temp_dir.path()).expect("Failed to create model cache");
+    let registry = std::sync::Arc::new(storage::StorageRegistry::new(temp_dir.path()));
+    let cache = ModelCache::new(registry, temp_dir.path()).expect("Failed to create model cache");
     
     // Download model files
     println!("Downloading SmolLM2-360M model files for settings test...");

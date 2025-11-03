@@ -19,7 +19,8 @@ async fn download_test_model(repo_id: &str, file_path: &str, cache_dir: &PathBuf
     use tabagent_model_cache::ModelCache;
     
     // Initialize cache
-    let cache = ModelCache::new(cache_dir.to_str().unwrap())?;
+    let registry = std::sync::Arc::new(storage::StorageRegistry::new(cache_dir));
+    let cache = ModelCache::new(registry, cache_dir)?;
     
     // Download file (returns path to cached file)
     cache.download_file(repo_id, file_path, None).await?;

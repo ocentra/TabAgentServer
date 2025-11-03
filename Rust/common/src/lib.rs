@@ -35,7 +35,6 @@ pub mod models;
 pub mod platform;
 pub mod actions;
 pub mod errors;
-pub mod inference_settings;
 pub mod hardware_constants;
 pub mod backend;
 pub mod grpc;
@@ -48,7 +47,6 @@ pub use ml_client::MlClient;
 pub use python_process_manager::PythonProcessManager;
 
 // Re-export commonly used types
-pub use inference_settings::InferenceSettings;
 pub use hardware_constants as hw_const;
 pub use backend::{AppStateProvider, AppStateWrapper};
 
@@ -60,8 +58,8 @@ pub use backend::{AppStateProvider, AppStateWrapper};
 /// 
 /// **Type Safety**: Using newtype pattern instead of alias prevents accidental mixing
 /// of NodeId with EdgeId or EmbeddingId at compile time.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-#[rkyv(derive(Hash, PartialEq, Eq))] // Derive Hash/PartialEq/Eq for ArchivedNodeId
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(derive(Hash, PartialEq, Eq, PartialOrd, Ord))] // Derive Hash/PartialEq/Eq/Ord for ArchivedNodeId
 pub struct NodeId(pub String);
 
 impl NodeId {
@@ -111,8 +109,8 @@ impl From<&str> for NodeId {
 /// Edges represent typed relationships like "CONTAINS_MESSAGE", "MENTIONS", etc.
 /// 
 /// **Type Safety**: Using newtype pattern prevents mixing with NodeId or EmbeddingId.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-#[rkyv(derive(Hash, PartialEq, Eq))] // Derive Hash/PartialEq/Eq for ArchivedEdgeId
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(derive(Hash, PartialEq, Eq, PartialOrd, Ord))] // Derive Hash/PartialEq/Eq/Ord for ArchivedEdgeId
 pub struct EdgeId(pub String);
 
 impl EdgeId {

@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 common = { path = "../common" }
 storage = { path = "../storage" }
+tabagent-values = { path = "../values" }
 libmdbx = { workspace = true }
 rkyv = { workspace = true }
 serde = { workspace = true }

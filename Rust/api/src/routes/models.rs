@@ -599,6 +599,387 @@ crate::enforce_route_handler!(ModelInfoRoute);
 // Implement RegisterableRoute with Axum 0.8 compatible handler
 crate::impl_registerable_route!(ModelInfoRoute);
 
+// ==================== GET MODEL QUANTS ====================
+
+/// Get model quants request.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct GetModelQuantsRequest {
+    /// Repository ID (e.g., "onnx-community/Phi-3.5-mini")
+    pub repo_id: String,
+}
+
+/// Get model quants response.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+pub struct GetModelQuantsResponse {
+    /// Available quantization variants
+    pub quants: Vec<String>,
+}
+
+/// Get available quantization variants for a model (for UI dropdown).
+pub struct GetModelQuantsRoute;
+
+#[async_trait]
+impl RouteHandler for GetModelQuantsRoute {
+    type Request = GetModelQuantsRequest;
+    type Response = GetModelQuantsResponse;
+
+    fn metadata() -> RouteMetadata {
+        RouteMetadata {
+            path: "/v1/models/{repo_id}/quants",
+            method: Method::GET,
+            tags: &["Models"],
+            description: "Get available quantization variants for a model repository",
+            openai_compatible: false,
+            idempotent: true,
+            requires_auth: false,
+            rate_limit_tier: None,
+        }
+    }
+
+    async fn validate_request(req: &Self::Request) -> ApiResult<()> {
+        NotEmpty.validate(&req.repo_id)?;
+        Ok(())
+    }
+
+    async fn handle<S>(req: Self::Request, state: &S) -> ApiResult<Self::Response>
+    where
+        S: AppStateProvider + Send + Sync,
+    {
+        let request_id = uuid::Uuid::new_v4();
+        tracing::info!(
+            request_id = %request_id,
+            repo_id = %req.repo_id,
+            "Get model quants request received"
+        );
+
+        let request = RequestValue::get_model_quants(&req.repo_id);
+        
+        tracing::debug!(request_id = %request_id, "Dispatching to handler");
+        let response = state.handle_request(request).await
+            .map_err(|e| {
+                tracing::error!(
+                    request_id = %request_id,
+                    repo_id = %req.repo_id,
+                    error = %e,
+                    "Get model quants failed"
+                );
+                e
+            })?;
+
+        tracing::info!(
+            request_id = %request_id,
+            repo_id = %req.repo_id,
+            "Model quants retrieved successfully"
+        );
+
+        // Parse the quants from response
+        let (content, _, _) = response.as_chat()
+            .ok_or_else(|| ApiError::Internal("Invalid response type".to_string()))?;
+        
+        let quants: Vec<String> = serde_json::from_str(content)
+            .map_err(|e| ApiError::Internal(format!("Failed to parse quants: {}", e)))?;
+
+        Ok(GetModelQuantsResponse { quants })
+    }
+
+    fn test_cases() -> Vec<TestCase<Self::Request, Self::Response>> {
+        vec![
+            TestCase {
+                name: "get_quants_valid_repo",
+                request: GetModelQuantsRequest {
+                    repo_id: "onnx-community/Phi-3.5-mini".to_string(),
+                },
+                expected_response: None,
+                expected_error: None,
+                assertions: vec![],
+            },
+        ]
+    }
+}
+
+crate::enforce_route_handler!(GetModelQuantsRoute);
+
+// Custom RegisterableRoute for path parameter extraction
+impl crate::route_trait::RegisterableRoute for GetModelQuantsRoute {
+    fn register(
+        router: axum::Router<crate::traits::AppStateWrapper>
+    ) -> axum::Router<crate::traits::AppStateWrapper> {
+        async fn handler(
+            axum::extract::State(state): axum::extract::State<crate::traits::AppStateWrapper>,
+            axum::extract::Path(repo_id): axum::extract::Path<String>,
+        ) -> Result<axum::Json<GetModelQuantsResponse>, ApiError> {
+            let req = GetModelQuantsRequest { repo_id };
+            GetModelQuantsRoute::validate_request(&req).await?;
+            let response = GetModelQuantsRoute::handle(req, &state).await?;
+            Ok(axum::Json(response))
+        }
+        
+        router.route("/v1/models/:repo_id/quants", axum::routing::get(handler))
+    }
+}
+
+// ==================== GET INFERENCE SETTINGS ====================
+
+/// Get inference settings request.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct GetInferenceSettingsRequest {
+    /// Repository ID
+    pub repo_id: String,
+    /// Variant name (e.g., "fp16", "int8", "q4")
+    pub variant: String,
+}
+
+/// Get inference settings response.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+pub struct GetInferenceSettingsResponse {
+    /// Inference settings for the variant
+    pub settings: tabagent_values::InferenceSettings,
+}
+
+/// Get inference settings for a model variant.
+pub struct GetInferenceSettingsRoute;
+
+#[async_trait]
+impl RouteHandler for GetInferenceSettingsRoute {
+    type Request = GetInferenceSettingsRequest;
+    type Response = GetInferenceSettingsResponse;
+
+    fn metadata() -> RouteMetadata {
+        RouteMetadata {
+            path: "/v1/models/{repo_id}/{variant}/settings",
+            method: Method::GET,
+            tags: &["Models"],
+            description: "Get inference settings for a specific model variant",
+            openai_compatible: false,
+            idempotent: true,
+            requires_auth: false,
+            rate_limit_tier: None,
+        }
+    }
+
+    async fn validate_request(req: &Self::Request) -> ApiResult<()> {
+        NotEmpty.validate(&req.repo_id)?;
+        NotEmpty.validate(&req.variant)?;
+        Ok(())
+    }
+
+    async fn handle<S>(req: Self::Request, state: &S) -> ApiResult<Self::Response>
+    where
+        S: AppStateProvider + Send + Sync,
+    {
+        let request_id = uuid::Uuid::new_v4();
+        tracing::info!(
+            request_id = %request_id,
+            repo_id = %req.repo_id,
+            variant = %req.variant,
+            "Get inference settings request received"
+        );
+
+        let request = RequestValue::get_inference_settings(&req.repo_id, &req.variant);
+        
+        tracing::debug!(request_id = %request_id, "Dispatching to handler");
+        let response = state.handle_request(request).await
+            .map_err(|e| {
+                tracing::error!(
+                    request_id = %request_id,
+                    repo_id = %req.repo_id,
+                    variant = %req.variant,
+                    error = %e,
+                    "Get inference settings failed"
+                );
+                e
+            })?;
+
+        tracing::info!(
+            request_id = %request_id,
+            repo_id = %req.repo_id,
+            variant = %req.variant,
+            "Inference settings retrieved successfully"
+        );
+
+        // Parse settings from response
+        let (content, _, _) = response.as_chat()
+            .ok_or_else(|| ApiError::Internal("Invalid response type".to_string()))?;
+        
+        let settings: tabagent_values::InferenceSettings = serde_json::from_str(content)
+            .map_err(|e| ApiError::Internal(format!("Failed to parse settings: {}", e)))?;
+
+        Ok(GetInferenceSettingsResponse { settings })
+    }
+
+    fn test_cases() -> Vec<TestCase<Self::Request, Self::Response>> {
+        vec![
+            TestCase {
+                name: "get_settings_valid",
+                request: GetInferenceSettingsRequest {
+                    repo_id: "onnx-community/Phi-3.5-mini".to_string(),
+                    variant: "fp16".to_string(),
+                },
+                expected_response: None,
+                expected_error: None,
+                assertions: vec![],
+            },
+        ]
+    }
+}
+
+crate::enforce_route_handler!(GetInferenceSettingsRoute);
+
+// Custom RegisterableRoute for path parameter extraction
+impl crate::route_trait::RegisterableRoute for GetInferenceSettingsRoute {
+    fn register(
+        router: axum::Router<crate::traits::AppStateWrapper>
+    ) -> axum::Router<crate::traits::AppStateWrapper> {
+        async fn handler(
+            axum::extract::State(state): axum::extract::State<crate::traits::AppStateWrapper>,
+            axum::extract::Path((repo_id, variant)): axum::extract::Path<(String, String)>,
+        ) -> Result<axum::Json<GetInferenceSettingsResponse>, ApiError> {
+            let req = GetInferenceSettingsRequest { repo_id, variant };
+            GetInferenceSettingsRoute::validate_request(&req).await?;
+            let response = GetInferenceSettingsRoute::handle(req, &state).await?;
+            Ok(axum::Json(response))
+        }
+        
+        router.route("/v1/models/:repo_id/:variant/settings", axum::routing::get(handler))
+    }
+}
+
+// ==================== SAVE INFERENCE SETTINGS ====================
+
+/// Save inference settings request.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SaveInferenceSettingsRequest {
+    /// Repository ID
+    pub repo_id: String,
+    /// Variant name
+    pub variant: String,
+    /// Inference settings to save
+    pub settings: tabagent_values::InferenceSettings,
+}
+
+/// Save inference settings response.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+pub struct SaveInferenceSettingsResponse {
+    /// Success message
+    pub message: String,
+}
+
+/// Save user-customized inference settings for a model variant.
+pub struct SaveInferenceSettingsRoute;
+
+#[async_trait]
+impl RouteHandler for SaveInferenceSettingsRoute {
+    type Request = SaveInferenceSettingsRequest;
+    type Response = SaveInferenceSettingsResponse;
+
+    fn metadata() -> RouteMetadata {
+        RouteMetadata {
+            path: "/v1/models/{repo_id}/{variant}/settings",
+            method: Method::PUT,
+            tags: &["Models"],
+            description: "Save user-customized inference settings for a model variant",
+            openai_compatible: false,
+            idempotent: true, // PUT is idempotent
+            requires_auth: false,
+            rate_limit_tier: Some("management"),
+        }
+    }
+
+    async fn validate_request(req: &Self::Request) -> ApiResult<()> {
+        NotEmpty.validate(&req.repo_id)?;
+        NotEmpty.validate(&req.variant)?;
+        // Validate settings ranges
+        if req.settings.temperature < 0.0 || req.settings.temperature > 2.0 {
+            return Err(ApiError::BadRequest("temperature must be between 0.0 and 2.0".into()));
+        }
+        if req.settings.top_p < 0.0 || req.settings.top_p > 1.0 {
+            return Err(ApiError::BadRequest("top_p must be between 0.0 and 1.0".into()));
+        }
+        Ok(())
+    }
+
+    async fn handle<S>(req: Self::Request, state: &S) -> ApiResult<Self::Response>
+    where
+        S: AppStateProvider + Send + Sync,
+    {
+        let request_id = uuid::Uuid::new_v4();
+        tracing::info!(
+            request_id = %request_id,
+            repo_id = %req.repo_id,
+            variant = %req.variant,
+            "Save inference settings request received"
+        );
+
+        let request = RequestValue::save_inference_settings(
+            &req.repo_id,
+            &req.variant,
+            req.settings.clone(),
+        );
+        
+        tracing::debug!(request_id = %request_id, "Dispatching to handler");
+        let _response = state.handle_request(request).await
+            .map_err(|e| {
+                tracing::error!(
+                    request_id = %request_id,
+                    repo_id = %req.repo_id,
+                    variant = %req.variant,
+                    error = %e,
+                    "Save inference settings failed"
+                );
+                e
+            })?;
+
+        tracing::info!(
+            request_id = %request_id,
+            repo_id = %req.repo_id,
+            variant = %req.variant,
+            "Inference settings saved successfully"
+        );
+
+        Ok(SaveInferenceSettingsResponse {
+            message: format!("Settings saved for {}:{}", req.repo_id, req.variant),
+        })
+    }
+
+    fn test_cases() -> Vec<TestCase<Self::Request, Self::Response>> {
+        vec![
+            TestCase {
+                name: "save_settings_valid",
+                request: SaveInferenceSettingsRequest {
+                    repo_id: "onnx-community/Phi-3.5-mini".to_string(),
+                    variant: "fp16".to_string(),
+                    settings: tabagent_values::InferenceSettings::default(),
+                },
+                expected_response: None,
+                expected_error: None,
+                assertions: vec![],
+            },
+        ]
+    }
+}
+
+crate::enforce_route_handler!(SaveInferenceSettingsRoute);
+
+// Custom RegisterableRoute for path parameter + JSON body
+impl crate::route_trait::RegisterableRoute for SaveInferenceSettingsRoute {
+    fn register(
+        router: axum::Router<crate::traits::AppStateWrapper>
+    ) -> axum::Router<crate::traits::AppStateWrapper> {
+        async fn handler(
+            axum::extract::State(state): axum::extract::State<crate::traits::AppStateWrapper>,
+            axum::extract::Path((repo_id, variant)): axum::extract::Path<(String, String)>,
+            axum::Json(settings): axum::Json<tabagent_values::InferenceSettings>,
+        ) -> Result<axum::Json<SaveInferenceSettingsResponse>, ApiError> {
+            let req = SaveInferenceSettingsRequest { repo_id, variant, settings };
+            SaveInferenceSettingsRoute::validate_request(&req).await?;
+            let response = SaveInferenceSettingsRoute::handle(req, &state).await?;
+            Ok(axum::Json(response))
+        }
+        
+        router.route("/v1/models/:repo_id/:variant/settings", axum::routing::put(handler))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

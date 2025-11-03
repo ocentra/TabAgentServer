@@ -3,7 +3,10 @@ use crate::manifest::ManifestEntry;
 use crate::schema::QuantStatus;
 use crate::storage::ChunkStorage;
 use crate::download::{ModelDownloader, ProgressCallback};
-use storage::engine::{MdbxEngine, StorageEngine};
+use storage::engine::{MdbxEngine, StorageEngine, ReadGuard};
+use storage::registry::StorageRegistry;
+use storage::config::DbConfig;
+use tabagent_values::InferenceSettings;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -15,22 +18,33 @@ pub struct ModelCache {
 }
 
 impl ModelCache {
-    /// Create a new model cache at the specified path
-    pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self> {
-        let path_str = db_path.as_ref().to_str()
-            .ok_or_else(|| ModelCacheError::Storage("Invalid UTF-8 in path".to_string()))?;
+    /// Create a new model cache using the central storage registry
+    ///
+    /// Registers "model_cache_chunks" and "model_cache_manifests" databases
+    pub fn new(registry: Arc<StorageRegistry>, base_path: &Path) -> Result<Self> {
+        // Ensure base directory exists
+        std::fs::create_dir_all(base_path)
+            .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
         
-        // Create storage for chunks
-        let storage = Arc::new(ChunkStorage::new(path_str)?);
+        // Register chunks database
+        let chunks_path = base_path.join("chunks");
+        let chunks_path_str = chunks_path.to_str()
+            .ok_or_else(|| ModelCacheError::Storage("Invalid UTF-8 in chunks path".to_string()))?;
+        let storage = Arc::new(ChunkStorage::new(&registry, "model_cache_chunks", chunks_path_str)?);
         
-        // Create separate engine for manifests
-        let manifest_path = db_path.as_ref().join("manifests");
+        // Register manifests database (stores ManifestEntry with embedded settings)
+        let manifest_path = base_path.join("manifests");
         std::fs::create_dir_all(&manifest_path)
             .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
         let manifest_path_str = manifest_path.to_str()
-            .ok_or_else(|| ModelCacheError::Storage("Invalid UTF-8 in path".to_string()))?;
-        let manifest_engine = Arc::new(MdbxEngine::open(manifest_path_str)
-            .map_err(|e| ModelCacheError::Storage(e.to_string()))?);
+            .ok_or_else(|| ModelCacheError::Storage("Invalid UTF-8 in manifest path".to_string()))?;
+        
+        let config = DbConfig::new(manifest_path_str);
+        registry.add_storage("model_cache_manifests", config)
+            .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
+        
+        let manifest_engine = registry.get_storage("model_cache_manifests")
+            .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
         
         let downloader = Arc::new(ModelDownloader::new());
         
@@ -47,7 +61,10 @@ impl ModelCache {
         
         if let Some(guard) = self.manifest_engine.get("metadata", key.as_bytes())
             .map_err(|e| ModelCacheError::Storage(e.to_string()))? {
-            let entry = rkyv::from_bytes::<ManifestEntry, rkyv::rancor::Error>(&guard.data)
+            // ZERO-COPY: Only deserialize when we need owned data
+            let archived = guard.archived::<ManifestEntry>()
+                .map_err(|e| ModelCacheError::Serialization(e))?;
+            let entry = rkyv::deserialize::<ManifestEntry, rkyv::rancor::Error>(archived)
                 .map_err(|e| ModelCacheError::Serialization(e.to_string()))?;
             return Ok(Some(entry));
         }
@@ -130,12 +147,25 @@ impl ModelCache {
             });
         }
         
+        // Auto-create default inference settings for EACH variant
+        for variant_name in manifest.quants.keys() {
+            // Check if settings already exist
+            if !manifest.settings.contains_key(variant_name) {
+                // Create defaults based on model type
+                let default_settings = InferenceSettings::for_model(repo_id);
+                manifest.settings.insert(variant_name.clone(), default_settings);
+                log::debug!("Created default settings for {}:{}", repo_id, variant_name);
+            }
+        }
+        
+        // Save manifest (includes quants + settings)
         self.save_manifest(&manifest).await?;
         
         // Flush after creating new manifest
         self.flush().await?;
         
-        log::info!("✅ Scanned and persisted {} - found {} variants", repo_id, manifest.quants.len());
+        log::info!("✅ Scanned and persisted {} - found {} variants with default settings", 
+                   repo_id, manifest.quants.len());
         
         Ok(manifest)
     }
@@ -345,16 +375,83 @@ impl ModelCache {
     }
     
     /// Get storage statistics
+    /// Get available quantization variants for a repo (for UI dropdown)
+    pub async fn get_available_quants(&self, repo_id: &str) -> Result<Vec<String>> {
+        let manifest = self.get_manifest(repo_id).await?
+            .ok_or_else(|| ModelCacheError::Manifest(format!(
+                "Repo '{}' not scanned. Call scan_repo() first.", repo_id
+            )))?;
+        
+        Ok(manifest.quants.keys().cloned().collect())
+    }
+    
+    /// Get inference settings for a specific model variant
+    /// 
+    /// Returns user-customized settings if they exist, otherwise default settings
+    pub async fn get_inference_settings(&self, repo_id: &str, variant: &str) -> Result<InferenceSettings> {
+        let manifest = self.get_manifest(repo_id).await?
+            .ok_or_else(|| ModelCacheError::Manifest(format!(
+                "Repo '{}' not scanned. Call scan_repo() first.", repo_id
+            )))?;
+        
+        // Return settings from manifest, or create defaults if missing
+        Ok(manifest.settings.get(variant)
+            .cloned()
+            .unwrap_or_else(|| InferenceSettings::for_model(repo_id)))
+    }
+    
+    /// Save user-customized inference settings for a specific model variant
+    pub async fn save_inference_settings(
+        &self, 
+        repo_id: &str, 
+        variant: &str, 
+        settings: &InferenceSettings
+    ) -> Result<()> {
+        let mut manifest = self.get_manifest(repo_id).await?
+            .ok_or_else(|| ModelCacheError::Manifest(format!(
+                "Repo '{}' not scanned. Call scan_repo() first.", repo_id
+            )))?;
+        
+        // Update settings in manifest
+        manifest.settings.insert(variant.to_string(), settings.clone());
+        manifest.updated_at = chrono::Utc::now().timestamp_millis();
+        
+        // Save updated manifest
+        self.save_manifest(&manifest).await?;
+        self.flush().await?;
+        
+        Ok(())
+    }
+    
+    /// Delete inference settings for a specific model variant (revert to defaults)
+    pub async fn delete_inference_settings(&self, repo_id: &str, variant: &str) -> Result<()> {
+        let mut manifest = self.get_manifest(repo_id).await?
+            .ok_or_else(|| ModelCacheError::Manifest(format!(
+                "Repo '{}' not scanned. Call scan_repo() first.", repo_id
+            )))?;
+        
+        // Remove custom settings (will fall back to defaults)
+        manifest.settings.remove(variant);
+        manifest.updated_at = chrono::Utc::now().timestamp_millis();
+        
+        // Save updated manifest
+        self.save_manifest(&manifest).await?;
+        self.flush().await?;
+        
+        Ok(())
+    }
+    
     pub async fn get_stats(&self) -> Result<CacheStats> {
         let mut total_repos = 0;
         let mut total_size = 0u64;
         
         for item in self.manifest_engine.scan_prefix("metadata", b"manifest:") {
             let (_key, guard) = item.map_err(|e| ModelCacheError::Storage(e.to_string()))?;
-            let entry = rkyv::from_bytes::<ManifestEntry, rkyv::rancor::Error>(&guard.data)
-                .map_err(|e| ModelCacheError::Serialization(e.to_string()))?;
+            // ZERO-COPY: Access archived string field directly!
+            let archived = guard.archived::<ManifestEntry>()
+                .map_err(|e| ModelCacheError::Serialization(e))?;
             total_repos += 1;
-            total_size += self.storage.get_repo_size(&entry.repo_id)?;
+            total_size += self.storage.get_repo_size(archived.repo_id.as_str())?;
         }
         
         Ok(CacheStats {
@@ -484,7 +581,8 @@ mod tests {
     #[tokio::test]
     async fn test_create_cache() {
         let temp_dir = TempDir::new().unwrap();
-        let cache = ModelCache::new(temp_dir.path()).unwrap();
+        let registry = Arc::new(StorageRegistry::new(temp_dir.path()));
+        let cache = ModelCache::new(registry, temp_dir.path()).unwrap();
         
         let stats = cache.get_stats().await.unwrap();
         assert_eq!(stats.total_repos, 0);

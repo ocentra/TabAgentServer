@@ -42,6 +42,7 @@ pub mod request;
 pub mod response;
 pub mod model_data;
 pub mod markers;
+pub mod inference_settings;
 
 // Re-exports for convenience
 pub use error::{ValueError, ValueResult, BackendError, BackendResult};
@@ -50,6 +51,7 @@ pub use request::{RequestValue, RequestType, Message, MessageRole, EmbeddingInpu
 pub use response::{ResponseValue, ResponseType, TokenUsage, FinishReason, HealthStatus, ModelInfo};
 pub use model_data::{ModelValue, ModelDataType, TensorData};
 pub use markers::{ValueTypeMarker, DynValueTypeMarker};
+pub use inference_settings::InferenceSettings;
 
 use std::fmt;
 

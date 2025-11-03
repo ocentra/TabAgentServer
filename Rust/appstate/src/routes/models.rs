@@ -175,3 +175,60 @@ pub async fn handle_info(
     ))
 }
 
+/// Handle get available quants request (for UI dropdown).
+pub async fn handle_get_quants(
+    state: &AppState,
+    repo_id: &str,
+) -> Result<ResponseValue> {
+    tracing::debug!("Get quants for: {}", repo_id);
+    
+    let quants = state.cache.get_available_quants(repo_id).await
+        .context("Failed to get available quants")?;
+    
+    Ok(ResponseValue::chat(
+        "quants",
+        "system",
+        serde_json::to_string(&quants)?,
+        TokenUsage::zero(),
+    ))
+}
+
+/// Handle get inference settings request.
+pub async fn handle_get_inference_settings(
+    state: &AppState,
+    repo_id: &str,
+    variant: &str,
+) -> Result<ResponseValue> {
+    tracing::debug!("Get settings for: {}:{}", repo_id, variant);
+    
+    let settings = state.cache.get_inference_settings(repo_id, variant).await
+        .context("Failed to get inference settings")?;
+    
+    Ok(ResponseValue::chat(
+        "settings",
+        "system",
+        serde_json::to_string(&settings)?,
+        TokenUsage::zero(),
+    ))
+}
+
+/// Handle save inference settings request.
+pub async fn handle_save_inference_settings(
+    state: &AppState,
+    repo_id: &str,
+    variant: &str,
+    settings: &tabagent_values::InferenceSettings,
+) -> Result<ResponseValue> {
+    tracing::info!("Save settings for: {}:{}", repo_id, variant);
+    
+    state.cache.save_inference_settings(repo_id, variant, settings).await
+        .context("Failed to save inference settings")?;
+    
+    Ok(ResponseValue::chat(
+        "settings_saved",
+        "system",
+        format!("Settings saved for {}:{}", repo_id, variant),
+        TokenUsage::zero(),
+    ))
+}
+

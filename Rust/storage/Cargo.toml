@@ -19,6 +19,9 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
+mdbx-sys = { workspace = true }
+crc32fast = { workspace = true }
+crc32c = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

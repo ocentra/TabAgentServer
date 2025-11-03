@@ -1,5 +1,7 @@
 use crate::error::{ModelCacheError, Result};
-use storage::engine::{MdbxEngine, StorageEngine};
+use storage::engine::{MdbxEngine, StorageEngine, ReadGuard};
+use storage::registry::StorageRegistry;
+use storage::config::DbConfig;
 use std::sync::Arc;
 
 const CHUNK_SIZE: usize = 100 * 1024 * 1024; // 100MB chunks (matching extension logic)
@@ -37,14 +39,20 @@ pub struct ChunkManifest {
 pub type StorageProgressCallback = Box<dyn Fn(u64, u64, usize, usize) + Send + Sync>;
 
 impl ChunkStorage {
-    /// Create a new ChunkStorage using libmdbx
-    pub fn new(db_path: &str) -> Result<Self> {
-        let engine = MdbxEngine::open(db_path)
+    /// Create a new ChunkStorage using the central storage registry
+    ///
+    /// Registers the "model_cache_chunks" database with the registry
+    pub fn new(registry: &StorageRegistry, db_name: &str, db_path: &str) -> Result<Self> {
+        // Register the chunks database
+        let config = DbConfig::new(db_path);
+        registry.add_storage(db_name, config)
             .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
         
-        Ok(Self {
-            engine: Arc::new(engine),
-        })
+        // Get the registered engine
+        let engine = registry.get_storage(db_name)
+            .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
+        
+        Ok(Self { engine })
     }
     
     /// Store a file in chunks
@@ -255,25 +263,27 @@ impl ChunkStorage {
     
     /// Retrieve a file from chunks
     pub fn get_file(&self, repo_id: &str, file_path: &str) -> Result<Option<Vec<u8>>> {
-        // Get metadata first
+        // Get metadata first - ZERO-COPY!
         let meta_key = format!("meta:{}:{}", repo_id, file_path);
-        let meta_bytes = match self.engine.get("metadata", meta_key.as_bytes()).map_err(|e| ModelCacheError::Storage(e.to_string()))? {
-            Some(guard) => guard.data,
+        let guard = match self.engine.get("metadata", meta_key.as_bytes()).map_err(|e| ModelCacheError::Storage(e.to_string()))? {
+            Some(g) => g,
             None => return Ok(None),
         };
         
-        let metadata = rkyv::from_bytes::<FileMetadata, rkyv::rancor::Error>(&meta_bytes)
-            .map_err(|e| ModelCacheError::Serialization(e.to_string()))?;
+        let archived = guard.archived::<FileMetadata>()
+            .map_err(|e| ModelCacheError::Serialization(e))?;
         
-        // Reconstruct file from chunks
-        let mut file_data = Vec::with_capacity(metadata.total_size as usize);
+        // Reconstruct file from chunks (access archived fields directly!)
+        let chunk_count = u32::from(archived.chunk_count) as usize;
+        let total_size = u64::from(archived.total_size);
+        let mut file_data = Vec::with_capacity(total_size as usize);
         
-        for i in 0..metadata.chunk_count {
+        for i in 0..chunk_count {
             let chunk_key = format!("file:{}:{}:chunk:{}", repo_id, file_path, i);
             let chunk_guard = self.engine.get("chunks", chunk_key.as_bytes()).map_err(|e| ModelCacheError::Storage(e.to_string()))?
                 .ok_or_else(|| ModelCacheError::Download(format!("Missing chunk {} for file {}", i, file_path)))?;
             
-            file_data.extend_from_slice(&chunk_guard.data);
+            file_data.extend_from_slice(chunk_guard.data());
         }
         
         Ok(Some(file_data))
@@ -287,15 +297,15 @@ impl ChunkStorage {
     pub fn get_file_as_temp_path(&self, repo_id: &str, file_path: &str) -> Result<Option<std::path::PathBuf>> {
         use std::io::Write;
         
-        // Get metadata first
+        // Get metadata first - ZERO-COPY!
         let meta_key = format!("meta:{}:{}", repo_id, file_path);
-        let meta_bytes = match self.engine.get("metadata", meta_key.as_bytes()).map_err(|e| ModelCacheError::Storage(e.to_string()))? {
-            Some(guard) => guard.data,
+        let guard = match self.engine.get("metadata", meta_key.as_bytes()).map_err(|e| ModelCacheError::Storage(e.to_string()))? {
+            Some(g) => g,
             None => return Ok(None),
         };
         
-        let metadata = rkyv::from_bytes::<FileMetadata, rkyv::rancor::Error>(&meta_bytes)
-            .map_err(|e| ModelCacheError::Serialization(e.to_string()))?;
+        let archived = guard.archived::<FileMetadata>()
+            .map_err(|e| ModelCacheError::Serialization(e))?;
         
         // Create temp file with proper extension
         let file_name = file_path.split('/').last().unwrap_or("model");
@@ -310,13 +320,14 @@ impl ChunkStorage {
         
         // Write chunks to temp file
         let mut temp_file = std::fs::File::create(&temp_file_path)?;
+        let chunk_count = u32::from(archived.chunk_count) as usize;
         
-        for i in 0..metadata.chunk_count {
+        for i in 0..chunk_count {
             let chunk_key = format!("file:{}:{}:chunk:{}", repo_id, file_path, i);
             let chunk_guard = self.engine.get("chunks", chunk_key.as_bytes()).map_err(|e| ModelCacheError::Storage(e.to_string()))?
                 .ok_or_else(|| ModelCacheError::Download(format!("Missing chunk {} for file {}", i, file_path)))?;
             
-            temp_file.write_all(&chunk_guard.data)?;
+            temp_file.write_all(chunk_guard.data())?;
         }
         
         temp_file.flush()?;
@@ -327,12 +338,15 @@ impl ChunkStorage {
     /// Get file metadata
     pub fn get_metadata(&self, repo_id: &str, file_path: &str) -> Result<Option<FileMetadata>> {
         let meta_key = format!("meta:{}:{}", repo_id, file_path);
-        let meta_bytes = match self.engine.get("metadata", meta_key.as_bytes()).map_err(|e| ModelCacheError::Storage(e.to_string()))? {
-            Some(guard) => guard.data,
+        let guard = match self.engine.get("metadata", meta_key.as_bytes()).map_err(|e| ModelCacheError::Storage(e.to_string()))? {
+            Some(g) => g,
             None => return Ok(None),
         };
         
-        let metadata = rkyv::from_bytes::<FileMetadata, rkyv::rancor::Error>(&meta_bytes)
+        // ZERO-COPY: Only deserialize when we need owned data
+        let archived = guard.archived::<FileMetadata>()
+            .map_err(|e| ModelCacheError::Serialization(e))?;
+        let metadata = rkyv::deserialize::<FileMetadata, rkyv::rancor::Error>(archived)
             .map_err(|e| ModelCacheError::Serialization(e.to_string()))?;
         Ok(Some(metadata))
     }
@@ -347,14 +361,15 @@ impl ChunkStorage {
     
     /// Delete a file and its chunks
     pub fn delete_file(&self, repo_id: &str, file_path: &str) -> Result<()> {
-        // Get metadata to know how many chunks to delete
+        // Get metadata to know how many chunks to delete - ZERO-COPY!
         let meta_key = format!("meta:{}:{}", repo_id, file_path);
         if let Some(guard) = self.engine.get("metadata", meta_key.as_bytes()).map_err(|e| ModelCacheError::Storage(e.to_string()))? {
-            let metadata = rkyv::from_bytes::<FileMetadata, rkyv::rancor::Error>(&guard.data)
-            .map_err(|e| ModelCacheError::Serialization(e.to_string()))?;
+            let archived = guard.archived::<FileMetadata>()
+                .map_err(|e| ModelCacheError::Serialization(e))?;
             
-            // Delete all chunks
-            for i in 0..metadata.chunk_count {
+            // Delete all chunks (access archived fields directly!)
+            let chunk_count = u32::from(archived.chunk_count) as usize;
+            for i in 0..chunk_count {
                 let chunk_key = format!("file:{}:{}:chunk:{}", repo_id, file_path, i);
                 self.engine.remove("chunks", chunk_key.as_bytes())
                     .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
@@ -377,9 +392,10 @@ impl ChunkStorage {
         
         for item in self.engine.scan_prefix("metadata", prefix.as_bytes()) {
             let (_key, guard) = item.map_err(|e| ModelCacheError::Storage(e.to_string()))?;
-            let metadata = rkyv::from_bytes::<FileMetadata, rkyv::rancor::Error>(&guard.data)
-                .map_err(|e| ModelCacheError::Serialization(e.to_string()))?;
-            files.push(metadata.file_path);
+            // ZERO-COPY: Access archived string field directly!
+            let archived = guard.archived::<FileMetadata>()
+                .map_err(|e| ModelCacheError::Serialization(e))?;
+            files.push(archived.file_path.as_str().to_string());
         }
         
         Ok(files)
@@ -392,9 +408,10 @@ impl ChunkStorage {
         
         for item in self.engine.scan_prefix("metadata", prefix.as_bytes()) {
             let (_key, guard) = item.map_err(|e| ModelCacheError::Storage(e.to_string()))?;
-            let metadata = rkyv::from_bytes::<FileMetadata, rkyv::rancor::Error>(&guard.data)
-                .map_err(|e| ModelCacheError::Serialization(e.to_string()))?;
-            total += metadata.total_size;
+            // ZERO-COPY: Access archived numeric field directly!
+            let archived = guard.archived::<FileMetadata>()
+                .map_err(|e| ModelCacheError::Serialization(e))?;
+            total += u64::from(archived.total_size);
         }
         
         Ok(total)
@@ -422,21 +439,21 @@ impl ChunkStorage {
         repo_id: &'a str,
         file_path: &'a str,
     ) -> Result<Option<FileChunkIterator<'a>>> {
-        // Get metadata first
+        // Get metadata first - ZERO-COPY!
         let meta_key = format!("meta:{}:{}", repo_id, file_path);
-        let meta_bytes = match self.engine.get("metadata", meta_key.as_bytes()).map_err(|e| ModelCacheError::Storage(e.to_string()))? {
-            Some(guard) => guard.data,
+        let guard = match self.engine.get("metadata", meta_key.as_bytes()).map_err(|e| ModelCacheError::Storage(e.to_string()))? {
+            Some(g) => g,
             None => return Ok(None),
         };
         
-        let metadata = rkyv::from_bytes::<FileMetadata, rkyv::rancor::Error>(&meta_bytes)
-            .map_err(|e| ModelCacheError::Serialization(e.to_string()))?;
+        let archived = guard.archived::<FileMetadata>()
+            .map_err(|e| ModelCacheError::Serialization(e))?;
         
         Ok(Some(FileChunkIterator {
             storage: self,
             repo_id: repo_id.to_string(),
             file_path: file_path.to_string(),
-            chunk_count: metadata.chunk_count,
+            chunk_count: u32::from(archived.chunk_count) as usize,
             current_chunk: 0,
         }))
     }
@@ -469,7 +486,7 @@ impl<'a> Iterator for FileChunkIterator<'a> {
         let result = self.storage.engine.get("chunks", chunk_key.as_bytes())
             .map_err(|e| ModelCacheError::Storage(e.to_string()))
             .and_then(|opt| {
-                opt.map(|guard| guard.data)
+                opt.map(|guard| guard.data().to_vec())
                     .ok_or_else(|| ModelCacheError::Download(format!(
                         "Missing chunk {} for file {}",
                         self.current_chunk,

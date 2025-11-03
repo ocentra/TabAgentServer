@@ -433,3 +433,309 @@ impl DataChannelRoute for ModelInfoRoute {
 }
 
 crate::enforce_data_channel_route!(ModelInfoRoute);
+
+// ==================== GET MODEL QUANTS ====================
+
+/// Get model quants request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetModelQuantsRequest {
+    /// Repository ID (e.g., "onnx-community/Phi-3.5-mini")
+    pub repo_id: String,
+}
+
+/// Get model quants response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetModelQuantsResponse {
+    /// Available quantization variants
+    pub quants: Vec<String>,
+}
+
+/// Get available quantization variants route handler.
+pub struct GetModelQuantsRoute;
+
+#[async_trait]
+impl DataChannelRoute for GetModelQuantsRoute {
+    type Request = GetModelQuantsRequest;
+    type Response = GetModelQuantsResponse;
+
+    fn metadata() -> RouteMetadata {
+        RouteMetadata {
+            route_id: "get_model_quants",
+            tags: &["Models", "Management"],
+            description: "Get available quantization variants for a model repository",
+            supports_streaming: false,
+            supports_binary: false,
+            requires_auth: false,
+            rate_limit_tier: Some("standard"),
+            max_payload_size: None,
+            media_type: None,
+        }
+    }
+
+    async fn validate_request(req: &Self::Request) -> WebRtcResult<()> {
+        if req.repo_id.is_empty() {
+            return Err(WebRtcError::ValidationError { 
+                field: "repo_id".to_string(), 
+                message: "cannot be empty".to_string() 
+            });
+        }
+        Ok(())
+    }
+
+    async fn handle<H>(req: Self::Request, handler: &H) -> WebRtcResult<Self::Response>
+    where
+        H: RequestHandler + Send + Sync,
+    {
+        let request_id = uuid::Uuid::new_v4();
+        tracing::info!(
+            request_id = %request_id,
+            route = "get_model_quants",
+            repo_id = %req.repo_id,
+            "WebRTC get model quants request"
+        );
+
+        let request = RequestValue::get_model_quants(&req.repo_id);
+        let response = handler.handle_request(request).await
+            .map_err(|e| WebRtcError::from(e))?;
+
+        let (content, _, _) = response.as_chat()
+            .ok_or_else(|| WebRtcError::InternalError("Invalid response type".to_string()))?;
+        
+        let quants: Vec<String> = serde_json::from_str(content)
+            .map_err(|e| WebRtcError::InternalError(format!("Failed to parse quants: {}", e)))?;
+
+        Ok(GetModelQuantsResponse { quants })
+    }
+
+    fn test_cases() -> Vec<TestCase<Self::Request, Self::Response>> {
+        vec![
+            TestCase {
+                name: "get_quants_valid",
+                request: GetModelQuantsRequest {
+                    repo_id: "onnx-community/Phi-3.5-mini".to_string(),
+                },
+                expected_response: None,
+                expected_error: None,
+                assertions: vec![],
+            },
+        ]
+    }
+}
+
+// ==================== GET INFERENCE SETTINGS ====================
+
+/// Get inference settings request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetInferenceSettingsRequest {
+    /// Repository ID
+    pub repo_id: String,
+    /// Variant name (e.g., "fp16", "int8", "q4")
+    pub variant: String,
+}
+
+/// Get inference settings response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetInferenceSettingsResponse {
+    /// Inference settings for the variant
+    pub settings: tabagent_values::InferenceSettings,
+}
+
+/// Get inference settings route handler.
+pub struct GetInferenceSettingsRoute;
+
+#[async_trait]
+impl DataChannelRoute for GetInferenceSettingsRoute {
+    type Request = GetInferenceSettingsRequest;
+    type Response = GetInferenceSettingsResponse;
+
+    fn metadata() -> RouteMetadata {
+        RouteMetadata {
+            route_id: "get_inference_settings",
+            tags: &["Models", "Settings"],
+            description: "Get inference settings for a specific model variant",
+            supports_streaming: false,
+            supports_binary: false,
+            requires_auth: false,
+            rate_limit_tier: Some("standard"),
+            max_payload_size: None,
+            media_type: None,
+        }
+    }
+
+    async fn validate_request(req: &Self::Request) -> WebRtcResult<()> {
+        if req.repo_id.is_empty() {
+            return Err(WebRtcError::ValidationError { 
+                field: "repo_id".to_string(), 
+                message: "cannot be empty".to_string() 
+            });
+        }
+        if req.variant.is_empty() {
+            return Err(WebRtcError::ValidationError { 
+                field: "variant".to_string(), 
+                message: "cannot be empty".to_string() 
+            });
+        }
+        Ok(())
+    }
+
+    async fn handle<H>(req: Self::Request, handler: &H) -> WebRtcResult<Self::Response>
+    where
+        H: RequestHandler + Send + Sync,
+    {
+        let request_id = uuid::Uuid::new_v4();
+        tracing::info!(
+            request_id = %request_id,
+            route = "get_inference_settings",
+            repo_id = %req.repo_id,
+            variant = %req.variant,
+            "WebRTC get inference settings request"
+        );
+
+        let request = RequestValue::get_inference_settings(&req.repo_id, &req.variant);
+        let response = handler.handle_request(request).await
+            .map_err(|e| WebRtcError::from(e))?;
+
+        let (content, _, _) = response.as_chat()
+            .ok_or_else(|| WebRtcError::InternalError("Invalid response type".to_string()))?;
+        
+        let settings: tabagent_values::InferenceSettings = serde_json::from_str(content)
+            .map_err(|e| WebRtcError::InternalError(format!("Failed to parse settings: {}", e)))?;
+
+        Ok(GetInferenceSettingsResponse { settings })
+    }
+
+    fn test_cases() -> Vec<TestCase<Self::Request, Self::Response>> {
+        vec![
+            TestCase {
+                name: "get_settings_valid",
+                request: GetInferenceSettingsRequest {
+                    repo_id: "onnx-community/Phi-3.5-mini".to_string(),
+                    variant: "fp16".to_string(),
+                },
+                expected_response: None,
+                expected_error: None,
+                assertions: vec![],
+            },
+        ]
+    }
+}
+
+// ==================== SAVE INFERENCE SETTINGS ====================
+
+/// Save inference settings request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveInferenceSettingsRequest {
+    /// Repository ID
+    pub repo_id: String,
+    /// Variant name
+    pub variant: String,
+    /// Inference settings to save
+    pub settings: tabagent_values::InferenceSettings,
+}
+
+/// Save inference settings response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveInferenceSettingsResponse {
+    /// Success status
+    pub success: bool,
+    /// Status message
+    pub message: String,
+}
+
+/// Save inference settings route handler.
+pub struct SaveInferenceSettingsRoute;
+
+#[async_trait]
+impl DataChannelRoute for SaveInferenceSettingsRoute {
+    type Request = SaveInferenceSettingsRequest;
+    type Response = SaveInferenceSettingsResponse;
+
+    fn metadata() -> RouteMetadata {
+        RouteMetadata {
+            route_id: "save_inference_settings",
+            tags: &["Models", "Settings"],
+            description: "Save user-customized inference settings for a model variant",
+            supports_streaming: false,
+            supports_binary: false,
+            requires_auth: false,
+            rate_limit_tier: Some("management"),
+            max_payload_size: Some(128 * 1024),
+            media_type: None,
+        }
+    }
+
+    async fn validate_request(req: &Self::Request) -> WebRtcResult<()> {
+        if req.repo_id.is_empty() {
+            return Err(WebRtcError::ValidationError { 
+                field: "repo_id".to_string(), 
+                message: "cannot be empty".to_string() 
+            });
+        }
+        if req.variant.is_empty() {
+            return Err(WebRtcError::ValidationError { 
+                field: "variant".to_string(), 
+                message: "cannot be empty".to_string() 
+            });
+        }
+        if req.settings.temperature < 0.0 || req.settings.temperature > 2.0 {
+            return Err(WebRtcError::ValidationError { 
+                field: "temperature".to_string(), 
+                message: "must be between 0.0 and 2.0".to_string() 
+            });
+        }
+        if req.settings.top_p < 0.0 || req.settings.top_p > 1.0 {
+            return Err(WebRtcError::ValidationError { 
+                field: "top_p".to_string(), 
+                message: "must be between 0.0 and 1.0".to_string() 
+            });
+        }
+        Ok(())
+    }
+
+    async fn handle<H>(req: Self::Request, handler: &H) -> WebRtcResult<Self::Response>
+    where
+        H: RequestHandler + Send + Sync,
+    {
+        let request_id = uuid::Uuid::new_v4();
+        tracing::info!(
+            request_id = %request_id,
+            route = "save_inference_settings",
+            repo_id = %req.repo_id,
+            variant = %req.variant,
+            "WebRTC save inference settings request"
+        );
+
+        let request = RequestValue::save_inference_settings(
+            &req.repo_id,
+            &req.variant,
+            req.settings.clone(),
+        );
+        let _response = handler.handle_request(request).await
+            .map_err(|e| WebRtcError::from(e))?;
+
+        Ok(SaveInferenceSettingsResponse {
+            success: true,
+            message: format!("Settings saved for {}:{}", req.repo_id, req.variant),
+        })
+    }
+
+    fn test_cases() -> Vec<TestCase<Self::Request, Self::Response>> {
+        vec![
+            TestCase {
+                name: "save_settings_valid",
+                request: SaveInferenceSettingsRequest {
+                    repo_id: "onnx-community/Phi-3.5-mini".to_string(),
+                    variant: "fp16".to_string(),
+                    settings: tabagent_values::InferenceSettings::default(),
+                },
+                expected_response: None,
+                expected_error: None,
+                assertions: vec![],
+            },
+        ]
+    }
+}
+
+crate::enforce_data_channel_route!(GetModelQuantsRoute);
+crate::enforce_data_channel_route!(GetInferenceSettingsRoute);
+crate::enforce_data_channel_route!(SaveInferenceSettingsRoute);

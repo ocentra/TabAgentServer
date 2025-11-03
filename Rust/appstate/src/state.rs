@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 
 // Infrastructure crate imports
-use storage::DatabaseCoordinator;
+use storage::{DatabaseCoordinator, StorageRegistry};
 use tabagent_model_cache::ModelCache;
 use tabagent_onnx_loader::OnnxSession;
 use gguf_loader::Context as GgufContext;
@@ -88,13 +88,20 @@ impl AppState {
     pub async fn new(config: AppStateConfig) -> Result<Self> {
         tracing::info!("Initializing AppState...");
 
-        // Initialize database client (in-process mode by default)
+        // ========== CREATE SINGLE STORAGE REGISTRY ==========
+        // This is the SINGLE source of truth for ALL databases (graph DBs + model cache DBs)
         let db_path = config.db_path.clone();
-        let db_coordinator = DatabaseCoordinator::with_base_path(Some(db_path.clone()))
-            .context("Failed to initialize database")?;
+        let registry = Arc::new(StorageRegistry::new(db_path.clone()));
+        tracing::info!("Storage registry created at: {:?}", db_path);
+
+        // Initialize database coordinator (registers conversations, knowledge, embeddings, etc.)
+        let db_coordinator = DatabaseCoordinator::with_registry_and_base_path(
+            Arc::clone(&registry),
+            Some(db_path.clone())
+        ).context("Failed to initialize database coordinator")?;
         
         let db_client = storage::DatabaseClient::InProcess(Arc::new(db_coordinator));
-        tracing::info!("Database client initialized (in-process) at: {:?}", db_path);
+        tracing::info!("Database coordinator initialized");
 
         // Initialize ML client (attempts connection to Python ML service)
         let ml_endpoint = std::env::var("ML_ENDPOINT")
@@ -111,14 +118,15 @@ impl AppState {
             }
         };
 
-        // Initialize model cache
-        let cache_path = config.model_cache_path.to_str()
-            .ok_or_else(|| anyhow::anyhow!("Invalid cache path"))?;
-        
-        let cache = ModelCache::new(cache_path)
+        // Initialize model cache (registers model_cache_chunks + model_cache_manifests)
+        let cache = ModelCache::new(Arc::clone(&registry), &config.model_cache_path)
             .context("Failed to initialize model cache")?;
         
-        tracing::info!("Model cache initialized at: {}", cache_path);
+        tracing::info!("Model cache initialized at: {:?}", config.model_cache_path);
+        
+        // Log all registered databases for introspection
+        let all_dbs = registry.list_storages();
+        tracing::info!("Registered databases: {:?}", all_dbs);
 
         // Detect hardware
         let hardware = detect_system()
@@ -356,6 +364,15 @@ impl AppStateProvider for AppState {
             }
             RequestType::DeleteModel { model_id } => {
                 crate::routes::handle_delete_model(self, model_id).await
+            }
+            RequestType::GetModelQuants { repo_id } => {
+                crate::routes::handle_get_quants(self, repo_id).await
+            }
+            RequestType::GetInferenceSettings { repo_id, variant } => {
+                crate::routes::handle_get_inference_settings(self, repo_id, variant).await
+            }
+            RequestType::SaveInferenceSettings { repo_id, variant, settings } => {
+                crate::routes::handle_save_inference_settings(self, repo_id, variant, settings).await
             }
             RequestType::GetRecipes => {
                 crate::routes::handle_get_recipes(self).await

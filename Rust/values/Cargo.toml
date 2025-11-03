@@ -9,6 +9,7 @@ description = "Unified value system for TabAgent - type-safe request/response/da
 # Serialization (RAG: Type-safe JSON/binary handling)
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+rkyv = { workspace = true }
 
 # Error handling (RAG: thiserror for library crates)
 thiserror = { workspace = true }

@@ -1,4 +1,5 @@
 use crate::schema::QuantStatus;
+use tabagent_values::InferenceSettings;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -18,6 +19,7 @@ pub struct ManifestEntry {
     pub repo_id: String,
     pub task: Option<String>, // e.g., "text-generation", "feature-extraction"
     pub quants: HashMap<String, QuantInfo>, // quant_key -> info
+    pub settings: HashMap<String, InferenceSettings>, // variant -> inference settings
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -29,6 +31,7 @@ impl ManifestEntry {
             repo_id,
             task,
             quants: HashMap::new(),
+            settings: HashMap::new(),
             created_at: now,
             updated_at: now,
         }

@@ -1,0 +1,4 @@
+    Updating crates.io index
+error: no matching package named `api` found
+location searched: E:\Desktop\TabAgent\TabAgentServer\Rust\api
+required by package `tabagent-desktop v0.1.0 (E:\Desktop\TabAgent\TabAgentServer\src-tauri)`

@@ -299,20 +299,23 @@ impl<E: StorageEngine> StorageManager<E> {
             ));
         }
 
-        match self.engine.remove("nodes", id.as_bytes()).map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))? {
-            Some(bytes) => {
-                // Deserialize to update indexes
-                let node = rkyv::from_bytes::<common::models::Node, rkyv::rancor::Error>(&bytes[..])
-                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
+        // Get node first for zero-copy deserialization
+        let node = if let Some(node_ref) = self.get_node_ref(id)? {
+            node_ref.deserialize()?
+        } else {
+            return Ok(None);
+        };
 
-                if let Some(ref idx) = self.index_manager {
-                    idx.unindex_node(&node)?;
-                }
+        // Now remove it
+        self.engine.remove("nodes", id.as_bytes())
+            .map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))?;
 
-                Ok(Some(node))
-            }
-            None => Ok(None),
+        // Update indexes
+        if let Some(ref idx) = self.index_manager {
+            idx.unindex_node(&node)?;
         }
+
+        Ok(Some(node))
     }
 
     // --- Edge Operations ---
@@ -452,19 +455,23 @@ impl<E: StorageEngine> StorageManager<E> {
             ));
         }
 
-        match self.engine.remove("edges", id.as_bytes()).map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))? {
-            Some(bytes) => {
-                let edge = rkyv::from_bytes::<common::models::Edge, rkyv::rancor::Error>(&bytes[..])
-                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
+        // Get edge first for zero-copy deserialization
+        let edge = if let Some(edge_ref) = self.get_edge_ref(id)? {
+            edge_ref.deserialize()?
+        } else {
+            return Ok(None);
+        };
 
-                if let Some(ref idx) = self.index_manager {
-                    idx.unindex_edge(&edge)?;
-                }
+        // Now remove it
+        self.engine.remove("edges", id.as_bytes())
+            .map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))?;
 
-                Ok(Some(edge))
-            }
-            None => Ok(None),
+        // Update indexes
+        if let Some(ref idx) = self.index_manager {
+            idx.unindex_edge(&edge)?;
         }
+
+        Ok(Some(edge))
     }
 
     // --- Embedding Operations ---
@@ -553,21 +560,31 @@ impl<E: StorageEngine> StorageManager<E> {
         &self,
         node_id: &str,
     ) -> DbResult<Option<common::models::Embedding>> {
-        if let Some(guard) = self.get_node_guard(node_id)? {
-            let node = rkyv::from_bytes::<common::models::Node, rkyv::rancor::Error>(guard.data())
-                .map_err(|e| common::DbError::Serialization(e.to_string()))?;
+        if let Some(node_ref) = self.get_node_ref(node_id)? {
+            // TRUE ZERO-COPY: Access archived fields directly without deserializing!
+            let archived = node_ref.archived();
 
-            let embedding_id = match node {
-                common::models::Node::Message(m) => m.embedding_id,
-                common::models::Node::Summary(s) => s.embedding_id,
-                common::models::Node::Entity(e) => e.embedding_id,
-                common::models::Node::ScrapedPage(p) => p.embedding_id,
-                common::models::Node::WebSearch(w) => w.embedding_id,
+            let embedding_id_str = match archived {
+                rkyv::Archived::<common::models::Node>::Message(m) => {
+                    m.embedding_id.as_ref().map(|id| id.0.as_str())
+                },
+                rkyv::Archived::<common::models::Node>::Summary(s) => {
+                    s.embedding_id.as_ref().map(|id| id.0.as_str())
+                },
+                rkyv::Archived::<common::models::Node>::Entity(e) => {
+                    e.embedding_id.as_ref().map(|id| id.0.as_str())
+                },
+                rkyv::Archived::<common::models::Node>::ScrapedPage(p) => {
+                    p.embedding_id.as_ref().map(|id| id.0.as_str())
+                },
+                rkyv::Archived::<common::models::Node>::WebSearch(w) => {
+                    w.embedding_id.as_ref().map(|id| id.0.as_str())
+                },
                 _ => None,
             };
 
-            match embedding_id {
-                Some(id) => self.get_embedding(id.as_str()),
+            match embedding_id_str {
+                Some(id) => self.get_embedding(id),
                 None => Ok(None),
             }
         } else {
@@ -652,19 +669,23 @@ impl<E: StorageEngine> StorageManager<E> {
             ));
         }
 
-        match self.engine.remove("embeddings", id.as_bytes()).map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))? {
-            Some(bytes) => {
-                let embedding = rkyv::from_bytes::<common::models::Embedding, rkyv::rancor::Error>(&bytes[..])
-                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
+        // Get embedding first for zero-copy deserialization
+        let embedding = if let Some(emb_ref) = self.get_embedding_ref(id)? {
+            emb_ref.deserialize()?
+        } else {
+            return Ok(None);
+        };
 
-                if let Some(ref idx) = self.index_manager {
-                    idx.unindex_embedding(embedding.id.as_str())?;
-                }
+        // Now remove it
+        self.engine.remove("embeddings", id.as_bytes())
+            .map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))?;
 
-                Ok(Some(embedding))
-            }
-            None => Ok(None),
+        // Update indexes
+        if let Some(ref idx) = self.index_manager {
+            idx.unindex_embedding(embedding.id.as_str())?;
         }
+
+        Ok(Some(embedding))
     }
 
     // --- Utility Methods ---
@@ -719,6 +740,31 @@ impl<E: StorageEngine> StorageManager<E> {
         })
     }
     
+    /// Iterate over all nodes with zero-copy references.
+    /// 
+    /// Returns an iterator over all nodes using ArchivedNodeRef for true zero-copy access.
+    /// This is the FAST path - use this instead of `iter()` when you need to access node fields!
+    /// 
+    /// # Returns
+    /// 
+    /// An iterator over `(key, ArchivedNodeRef)` pairs for all nodes in the database.
+    /// 
+    /// # Example
+    /// 
+    /// ```no_run
+    /// # use storage::StorageManager;
+    /// # let storage = StorageManager::new("test_db")?;
+    /// for result in storage.iter_nodes_ref() {
+    ///     let (key, node_ref) = result?;
+    ///     let archived = node_ref.archived();
+    ///     // Access fields directly from mmap - zero-copy!
+    /// }
+    /// # Ok::<(), common::DbError>(())
+    /// ```
+    pub fn iter_nodes_ref<'a>(&'a self) -> impl Iterator<Item = common::DbResult<(Vec<u8>, ArchivedNodeRef<E::ReadGuard>)>> + 'a {
+        self.scan_prefix_nodes_ref(&[])
+    }
+    
     /// Iterate over all key-value pairs in the nodes tree.
     ///
     /// # Returns
@@ -747,3 +793,11 @@ impl<E: StorageEngine> StorageManager<E> {
 
 // Type alias for default engine
 pub type DefaultStorageManager = StorageManager<crate::engine::MdbxEngine>;
+
+// MdbxEngine-specific methods
+impl StorageManager<crate::engine::MdbxEngine> {
+    /// Get the database path (for registry introspection)
+    pub fn db_path(&self) -> Option<String> {
+        self.engine.db_path()
+    }
+}

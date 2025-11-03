@@ -36,7 +36,7 @@ fn test_storage_manager_concurrent_access() -> DbResult<()> {
     for i in 0..5 {
         let storage_clone = Arc::clone(&storage);
         let handle = thread::spawn(move || -> DbResult<Option<Chat>> {
-            use storage::engine::{ReadGuard, MdbxEngine};
+            use storage::engine::ReadGuard;
             // Each thread tries to read the chat - ZERO-COPY path
             if let Some(guard) = storage_clone.get_node_guard("concurrent_chat")? {
                 let data_slice: &[u8] = ReadGuard::data(&guard);
@@ -109,7 +109,7 @@ fn test_concurrent_writes() -> DbResult<()> {
     }
 
     // Verify all chats were inserted - ZERO-COPY path
-    use storage::engine::{ReadGuard, MdbxEngine};
+    use storage::engine::ReadGuard;
     for i in 0..5 {
         let chat_id = format!("concurrent_chat_{}", i);
         if let Some(guard) = storage.get_node_guard(&chat_id)? {

@@ -272,7 +272,7 @@ fn test_storage_with_indexing() {
         .expect("Failed to insert chat");
 
     // ZERO-COPY path
-    use storage::engine::{ReadGuard, MdbxEngine};
+    use storage::engine::ReadGuard;
     let retrieved: Option<Node> = if let Some(guard) = storage.get_node_guard(chat_id.as_str()).expect("Failed to get node guard") {
         let data_slice: &[u8] = ReadGuard::data(&guard);
         let data_vec: Vec<u8> = data_slice.to_vec();

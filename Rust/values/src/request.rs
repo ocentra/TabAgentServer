@@ -179,6 +179,24 @@ pub enum RequestType {
         model_id: String,
     },
 
+    /// Get available quantization variants for a model (for UI dropdown).
+    GetModelQuants {
+        repo_id: String,
+    },
+
+    /// Get inference settings for a specific model variant.
+    GetInferenceSettings {
+        repo_id: String,
+        variant: String,
+    },
+
+    /// Save user-customized inference settings for a model variant.
+    SaveInferenceSettings {
+        repo_id: String,
+        variant: String,
+        settings: crate::inference_settings::InferenceSettings,
+    },
+
     /// Get hardware recipes.
     GetRecipes,
 
@@ -736,6 +754,52 @@ impl RequestValue {
         }
     }
 
+    /// Create a get model quants request (for UI dropdown).
+    pub fn get_model_quants(repo_id: impl Into<String>) -> Self {
+        Value {
+            inner: ValueInner {
+                data: ValueData::Request(Box::new(RequestType::GetModelQuants {
+                    repo_id: repo_id.into(),
+                })),
+                dtype: ValueType::SystemInfo,
+            },
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    /// Create a get inference settings request.
+    pub fn get_inference_settings(repo_id: impl Into<String>, variant: impl Into<String>) -> Self {
+        Value {
+            inner: ValueInner {
+                data: ValueData::Request(Box::new(RequestType::GetInferenceSettings {
+                    repo_id: repo_id.into(),
+                    variant: variant.into(),
+                })),
+                dtype: ValueType::SystemInfo,
+            },
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    /// Create a save inference settings request.
+    pub fn save_inference_settings(
+        repo_id: impl Into<String>,
+        variant: impl Into<String>,
+        settings: crate::inference_settings::InferenceSettings,
+    ) -> Self {
+        Value {
+            inner: ValueInner {
+                data: ValueData::Request(Box::new(RequestType::SaveInferenceSettings {
+                    repo_id: repo_id.into(),
+                    variant: variant.into(),
+                    settings,
+                })),
+                dtype: ValueType::SystemInfo,
+            },
+            _marker: std::marker::PhantomData,
+        }
+    }
+
     /// Create a get recipes request.
     pub fn get_recipes() -> Self {
         Value {
@@ -936,6 +1000,9 @@ impl RequestValue {
             },
             RequestType::PullModel { .. } => ValueType::SystemInfo,
             RequestType::DeleteModel { .. } => ValueType::SystemInfo,
+            RequestType::GetModelQuants { .. } => ValueType::SystemInfo,
+            RequestType::GetInferenceSettings { .. } => ValueType::SystemInfo,
+            RequestType::SaveInferenceSettings { .. } => ValueType::SystemInfo,
             RequestType::GetRecipes => ValueType::SystemInfo,
             RequestType::GetEmbeddingModels => ValueType::SystemInfo,
             RequestType::GetLoadedModels => ValueType::SystemInfo,
