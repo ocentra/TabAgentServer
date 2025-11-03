@@ -17,19 +17,20 @@ tokio = { workspace = true }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
+rkyv = { workspace = true }
 
 # Error handling
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 
 # Logging
-log = "0.4"
+log = { workspace = true }
 
 # Utilities
-uuid = { version = "1.6", features = ["v4"] }
-async-trait = "0.1"
-num_cpus = "1.16"
+uuid = { workspace = true }
+async-trait = { workspace = true }
+num_cpus = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.8"
-env_logger = "0.11"
+tempfile = { workspace = true }
+env_logger = { workspace = true }

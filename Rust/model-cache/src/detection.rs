@@ -54,7 +54,7 @@ pub struct ModelInfo {
     /// Model architecture (e.g., "florence2", "janus", "whisper", "clip")
     /// Used to route to specialized pipelines that need architecture-specific preprocessing
     pub architecture: Option<String>,
-    /// Extension-compatible manifest (for ONNX models)
+    /// Manifest for ONNX models
     pub manifest: Option<ManifestEntry>,
 }
 

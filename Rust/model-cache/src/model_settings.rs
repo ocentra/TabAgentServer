@@ -20,7 +20,9 @@ impl ModelSettingsStore {
     pub fn get(&self, repo_id: &str, variant: &str) -> Result<Option<InferenceSettings>> {
         let key = format!("{}:{}", repo_id, variant);
         if let Some(bytes) = self.tree.get(key.as_bytes())? {
-            let (settings, _): (InferenceSettings, usize) = bincode::decode_from_slice(&bytes, bincode::config::standard())?;
+            // Zero-copy deserialization with rkyv (0.8: add error type)
+            let settings = rkyv::from_bytes::<InferenceSettings, rkyv::rancor::Error>(&bytes)
+                .map_err(|e| crate::error::ModelCacheError::Serialization(e.to_string()))?;
             Ok(Some(settings))
         } else {
             Ok(None)
@@ -43,8 +45,10 @@ impl ModelSettingsStore {
     /// Save settings for a model
     pub fn save(&self, repo_id: &str, variant: &str, settings: &InferenceSettings) -> Result<()> {
         let key = format!("{}:{}", repo_id, variant);
-        let bytes = bincode::encode_to_vec(settings, bincode::config::standard())?;
-        self.tree.insert(key.as_bytes(), bytes)?;
+        // Zero-copy serialization with rkyv
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(settings)
+            .map_err(|e| crate::error::ModelCacheError::Serialization(e.to_string()))?;
+        self.tree.insert(key.as_bytes(), bytes.to_vec())?;
         self.tree.flush()?;
         Ok(())
     }

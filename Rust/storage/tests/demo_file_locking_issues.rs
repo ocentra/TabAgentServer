@@ -26,7 +26,7 @@ fn test_without_proper_isolation_problem() {
     if let Err(e) = storage1_result {
         panic!("First storage manager creation failed unexpectedly: {}", e);
     }
-    let storage1 = storage1_result.unwrap();
+    let storage1: StorageManager<storage::engine::MdbxEngine> = storage1_result.unwrap();
 
     // Insert some data
     let chat1 = Chat {
@@ -38,7 +38,7 @@ fn test_without_proper_isolation_problem() {
         message_ids: vec![],
         summary_ids: vec![],
         embedding_id: None,
-        metadata: json!({}),
+        metadata: json!({}).to_string(),
     };
 
     if let Err(e) = storage1.insert_node(&Node::Chat(chat1)) {
@@ -48,7 +48,7 @@ fn test_without_proper_isolation_problem() {
     // Now try to create another StorageManager pointing to the same database
     // This should fail due to file locking
     println!("🔧 DEMONSTRATION: Creating second StorageManager with same default path...");
-    let storage2_result = StorageManager::with_default_path("test_db");
+    let storage2_result: Result<StorageManager<storage::engine::MdbxEngine>, _> = StorageManager::with_default_path("test_db");
 
     // Check if we got the expected file locking error
     match storage2_result {
@@ -95,7 +95,7 @@ fn test_coordinator_without_isolation_problem() {
         message_ids: vec![],
         summary_ids: vec![],
         embedding_id: None,
-        metadata: json!({}),
+        metadata: json!({}).to_string(),
     };
 
     if let Err(e) = coordinator1.insert_chat(chat1) {
@@ -144,7 +144,7 @@ fn test_concurrent_access_without_isolation() -> DbResult<()> {
             move || -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 // Each thread creates its own StorageManager but with the same name
                 // This simulates what would happen if multiple tests ran concurrently
-                let storage = StorageManager::with_default_path("concurrent_test_db")?;
+                let storage: StorageManager<storage::engine::MdbxEngine> = StorageManager::with_default_path("concurrent_test_db")?;
 
                 let chat = Chat {
                     id: NodeId::new(format!("concurrent_chat_{}", i)),
@@ -155,7 +155,7 @@ fn test_concurrent_access_without_isolation() -> DbResult<()> {
                     message_ids: vec![],
                     summary_ids: vec![],
                     embedding_id: None,
-                    metadata: json!({}),
+                    metadata: json!({}).to_string(),
                 };
 
                 storage.insert_node(&Node::Chat(chat))?;

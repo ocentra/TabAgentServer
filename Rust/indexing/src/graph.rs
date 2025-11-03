@@ -22,26 +22,24 @@
 use common::{DbError, DbResult, EdgeId};
 use std::collections::HashSet;
 use common::models::Edge;
-use libmdbx::{Environment, NoWriteMap, Database, Transaction as MdbxTxn};
-use dashmap::DashMap;
+use libmdbx::{Database, NoWriteMap, TableFlags};
 use std::sync::Arc;
+use std::borrow::Cow;
 
 /// Graph index for fast relationship traversal.
 pub struct GraphIndex {
-    env: Arc<Environment<NoWriteMap>>,
-    outgoing_db: Database,
-    incoming_db: Database,
-    _databases: Arc<DashMap<String, Database>>,
+    db: Arc<Database<NoWriteMap>>,
+    outgoing_table: String,
+    incoming_table: String,
 }
 
 impl GraphIndex {
-    /// Creates a new graph index using the given libmdbx environment and databases.
-    pub fn new(env: Arc<Environment<NoWriteMap>>, outgoing_db: Database, incoming_db: Database, databases: Arc<DashMap<String, Database>>) -> Self {
+    /// Creates a new graph index using the given libmdbx database and table names.
+    pub fn new(db: Arc<Database<NoWriteMap>>, outgoing_table: String, incoming_table: String) -> Self {
         Self {
-            env,
-            outgoing_db,
-            incoming_db,
-            _databases: databases,
+            db,
+            outgoing_table,
+            incoming_table,
         }
     }
     
@@ -118,9 +116,8 @@ impl GraphIndex {
         // Get existing set or create new
         let mut edge_set: HashSet<EdgeId> = self.get_raw(is_outgoing, key.as_bytes())?
             .map(|bytes| {
-                let archived = rkyv::check_archived_root::<HashSet<EdgeId>>(&bytes)
-                    .map_err(|e| DbError::Serialization(format!("rkyv check error: {}", e)))?;
-                archived.deserialize(&mut rkyv::Infallible)
+                // rkyv 0.8: Use from_bytes (with error type)
+                rkyv::from_bytes::<HashSet<EdgeId>, rkyv::rancor::Error>(&bytes)
                     .map_err(|e| DbError::Serialization(format!("rkyv deserialize error: {}", e)))
             })
             .transpose()?
@@ -129,10 +126,10 @@ impl GraphIndex {
         // Add edge ID
         edge_set.insert(EdgeId::from(edge_id));
         
-        // Store back with rkyv
-        let bytes = rkyv::to_bytes::<_, 256>(&edge_set)
+        // Store back with rkyv (0.8: specify error type, returns AlignedVec)
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&edge_set)
             .map_err(|e| DbError::Serialization(format!("rkyv serialize error: {}", e)))?;
-        self.set_raw(is_outgoing, key.as_bytes(), bytes)?;
+        self.set_raw(is_outgoing, key.as_bytes(), bytes.to_vec())?;
         
         Ok(())
     }
@@ -145,9 +142,8 @@ impl GraphIndex {
         };
         
         if let Some(bytes) = self.get_raw(is_outgoing, key.as_bytes())? {
-            let archived = rkyv::check_archived_root::<HashSet<EdgeId>>(&bytes)
-                .map_err(|e| DbError::Serialization(format!("rkyv check error: {}", e)))?;
-            let mut edge_set = archived.deserialize(&mut rkyv::Infallible)
+            // rkyv 0.8: Use from_bytes (with error type)
+            let mut edge_set = rkyv::from_bytes::<HashSet<EdgeId>, rkyv::rancor::Error>(&bytes)
                 .map_err(|e| DbError::Serialization(format!("rkyv deserialize error: {}", e)))?;
             
             edge_set.remove(&EdgeId::from(edge_id));
@@ -155,9 +151,10 @@ impl GraphIndex {
             if edge_set.is_empty() {
                 self.remove_raw(is_outgoing, key.as_bytes())?;
             } else {
-                let bytes = rkyv::to_bytes::<_, 256>(&edge_set)
+                // rkyv 0.8: specify error type, returns AlignedVec
+                let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&edge_set)
                     .map_err(|e| DbError::Serialization(format!("rkyv serialize error: {}", e)))?;
-                self.set_raw(is_outgoing, key.as_bytes(), bytes)?;
+                self.set_raw(is_outgoing, key.as_bytes(), bytes.to_vec())?;
             }
         }
         
@@ -173,9 +170,8 @@ impl GraphIndex {
         
         let edge_set: HashSet<EdgeId> = self.get_raw(is_outgoing, key.as_bytes())?
             .map(|bytes| {
-                let archived = rkyv::check_archived_root::<HashSet<EdgeId>>(&bytes)
-                    .map_err(|e| DbError::Serialization(format!("rkyv check error: {}", e)))?;
-                archived.deserialize(&mut rkyv::Infallible)
+                // rkyv 0.8: Use from_bytes (with error type)
+                rkyv::from_bytes::<HashSet<EdgeId>, rkyv::rancor::Error>(&bytes)
                     .map_err(|e| DbError::Serialization(format!("rkyv deserialize error: {}", e)))
             })
             .transpose()?
@@ -184,13 +180,17 @@ impl GraphIndex {
         Ok(edge_set.into_iter().collect())
     }
     
-    // Internal raw operations using libmdbx
+    // Internal raw operations using libmdbx 0.6.3 API
     fn get_raw(&self, is_outgoing: bool, key: &[u8]) -> Result<Option<Vec<u8>>, DbError> {
-        let db = if is_outgoing { &self.outgoing_db } else { &self.incoming_db };
-        let txn = self.env.begin_ro_txn()
+        let table_name = if is_outgoing { &self.outgoing_table } else { &self.incoming_table };
+        
+        let txn = self.db.begin_ro_txn()
             .map_err(|e| DbError::InvalidOperation(format!("libmdbx ro txn error: {}", e)))?;
         
-        match txn.get(db, key) {
+        let table = txn.open_table(Some(table_name))
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx open table error: {}", e)))?;
+        
+        match txn.get::<Cow<'_, [u8]>>(&table, key) {
             Ok(Some(data)) => Ok(Some(data.to_vec())),
             Ok(None) => Ok(None),
             Err(e) => Err(DbError::InvalidOperation(format!("libmdbx get error: {}", e))),
@@ -198,11 +198,15 @@ impl GraphIndex {
     }
     
     fn set_raw(&self, is_outgoing: bool, key: &[u8], value: Vec<u8>) -> Result<(), DbError> {
-        let db = if is_outgoing { &self.outgoing_db } else { &self.incoming_db };
-        let mut txn = self.env.begin_rw_txn()
+        let table_name = if is_outgoing { &self.outgoing_table } else { &self.incoming_table };
+        
+        let txn = self.db.begin_rw_txn()
             .map_err(|e| DbError::InvalidOperation(format!("libmdbx rw txn error: {}", e)))?;
         
-        txn.put(db, key, &value, libmdbx::WriteFlags::empty())
+        let table = txn.create_table(Some(table_name), TableFlags::empty())
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx create table error: {}", e)))?;
+        
+        txn.put(&table, key, &value, libmdbx::WriteFlags::empty())
             .map_err(|e| DbError::InvalidOperation(format!("libmdbx put error: {}", e)))?;
         
         txn.commit()
@@ -212,15 +216,19 @@ impl GraphIndex {
     }
     
     fn remove_raw(&self, is_outgoing: bool, key: &[u8]) -> Result<bool, DbError> {
-        let db = if is_outgoing { &self.outgoing_db } else { &self.incoming_db };
-        let mut txn = self.env.begin_rw_txn()
+        let table_name = if is_outgoing { &self.outgoing_table } else { &self.incoming_table };
+        
+        let txn = self.db.begin_rw_txn()
             .map_err(|e| DbError::InvalidOperation(format!("libmdbx rw txn error: {}", e)))?;
         
-        let existed = txn.get(db, key)
+        let table = txn.create_table(Some(table_name), TableFlags::empty())
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx create table error: {}", e)))?;
+        
+        let existed = txn.get::<Cow<'_, [u8]>>(&table, key)
             .map_err(|e| DbError::InvalidOperation(format!("libmdbx get error: {}", e)))?
             .is_some();
         
-        txn.del(db, key, None)
+        txn.del(&table, key, None)
             .map_err(|e| DbError::InvalidOperation(format!("libmdbx del error: {}", e)))?;
         
         txn.commit()
@@ -239,22 +247,20 @@ mod tests {
     
     fn create_test_index() -> (GraphIndex, TempDir) {
         let temp_dir = TempDir::new().unwrap();
-        let env = Environment::<NoWriteMap>::new()
-            .set_max_dbs(8)
-            .set_geometry(libmdbx::Geometry {
-                size: Some(0..(1024 * 1024 * 1024)),
-                growth_step: Some(1024 * 1024 * 1024),
-                shrink_threshold: None,
-                page_size: None,
-            })
-            .open(temp_dir.path())
-            .unwrap();
         
-        let outgoing_db = env.create_db(Some("test_graph_out"), libmdbx::DatabaseFlags::empty()).unwrap();
-        let incoming_db = env.create_db(Some("test_graph_in"), libmdbx::DatabaseFlags::empty()).unwrap();
-        let databases = Arc::new(DashMap::new());
+        // libmdbx 0.6.3: Use Database::open_with_options
+        let mut options = libmdbx::DatabaseOptions::default();
+        options.max_tables = Some(10);
         
-        (GraphIndex::new(Arc::new(env), outgoing_db, incoming_db, databases), temp_dir)
+        let db = Database::<NoWriteMap>::open_with_options(temp_dir.path(), options).unwrap();
+        
+        // Create the tables
+        let txn = db.begin_rw_txn().unwrap();
+        let _ = txn.create_table(Some("test_graph_out"), TableFlags::empty()).unwrap();
+        let _ = txn.create_table(Some("test_graph_in"), TableFlags::empty()).unwrap();
+        txn.commit().unwrap();
+        
+        (GraphIndex::new(Arc::new(db), "test_graph_out".to_string(), "test_graph_in".to_string()), temp_dir)
     }
     
     fn create_test_edge(id: &str, from: &str, to: &str) -> Edge {

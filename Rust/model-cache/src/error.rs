@@ -2,8 +2,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ModelCacheError {
-    #[error("Sled database error: {0}")]
-    Sled(#[from] sled::Error),
+    #[error("Storage error: {0}")]
+    Storage(String),
     
     #[error("Serialization error: {0}")]
     Serialization(String),
@@ -29,24 +29,9 @@ pub enum ModelCacheError {
     #[error("Invalid model URL: {0}")]
     InvalidUrl(String),
     
-    #[error("Storage error: {0}")]
-    Storage(String),
-    
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 }
 
 pub type Result<T> = std::result::Result<T, ModelCacheError>;
-
-impl From<bincode::error::EncodeError> for ModelCacheError {
-    fn from(err: bincode::error::EncodeError) -> Self {
-        ModelCacheError::Serialization(err.to_string())
-    }
-}
-
-impl From<bincode::error::DecodeError> for ModelCacheError {
-    fn from(err: bincode::error::DecodeError) -> Self {
-        ModelCacheError::Serialization(err.to_string())
-    }
-}
 

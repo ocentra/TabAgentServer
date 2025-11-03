@@ -9,12 +9,12 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 rkyv = { workspace = true }
 rkyv_derive = { workspace = true }
-time = { version = "0.3", features = ["macros"] }
-rand = "0.9.2"
+time = { workspace = true }
+rand = { workspace = true }
 async-trait = { workspace = true }
 tabagent-values = { path = "../values" }
 anyhow = { workspace = true }
-http = "1.0"
+http = { workspace = true }
 tonic = { workspace = true }
 prost = { workspace = true }
 tokio-stream = { workspace = true }
@@ -27,6 +27,6 @@ chrono = { workspace = true }
 tonic-prost-build = "0.14" 
 
 [dev-dependencies]
-tempfile = "3.8"
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["rt", "macros"] }
 anyhow = { workspace = true }

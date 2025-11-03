@@ -14,13 +14,29 @@ Unified inference infrastructure powering the [TabAgent browser extension](https
 
 ## Architecture
 
+### Desktop Application (Tauri-based)
+
 ```
-TabAgent Server
-├── Rust/           → Core inference infrastructure (WebRTC, gRPC, Database, API)
-├── PythonML/       → ML services (MediaPipe, Transformers, LiteRT) via gRPC
-├── External/       → Third-party integrations (BitNet, MediaPipe source)
-└── Scripts/        → Build and setup automation
+TabAgent Desktop (.exe/.app/deb)
+│
+├── src-tauri/        → Tauri Rust backend
+│   ├── Embedded web server (localhost:3000)
+│   │   ├── / → Dashboard (React)
+│   │   ├── /workflows → Agent Builder (Vue 3)
+│   │   └── /api/* → REST API
+│   │
+│   └── Native messaging → Chrome Extension
+│
+├── dashboard/        → React UI (system monitoring & management)
+├── agent-builder/    → Vue 3 UI (visual workflow editor)
+│
+├── Rust/            → Core inference (WebRTC, gRPC, Database, API)
+├── PythonML/        → ML services (MediaPipe, Transformers, LiteRT)
+├── External/        → Third-party integrations (BitNet, MediaPipe)
+└── Scripts/         → Build automation
 ```
+
+**User Experience**: Double-click `.exe` → Dashboard opens → No Docker, no terminals, no setup!
 
 ---
 
@@ -79,29 +95,37 @@ TabAgent Server
 ### Prerequisites
 - **Rust**: 1.75+ (`rustup`)
 - **Python**: 3.10+ with pip
-- **Node.js**: 18+ (for extension, optional)
+- **Node.js**: 18+ with npm 9+
 - **GPU**: NVIDIA/AMD/Intel (optional, auto-detected)
 
 ### Setup
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/yourusername/TabAgent
+# 1. Clone repository with submodules
+git clone --recurse-submodules https://github.com/ocentra/TabAgent
 cd TabAgent/TabAgentServer
 
-# 2. Install Python dependencies
+# If you already cloned, init submodules:
+git submodule update --init --recursive
+
+# 2. Install dependencies
+npm install
+
+# 3. Install Python dependencies
 cd PythonML
 pip install -r requirements.txt
 python -m grpc_tools.protoc -I../Rust/protos --python_out=generated --grpc_python_out=generated ../Rust/protos/*.proto
 cd ..
 
-# 3. Build Rust server
-cd Rust
-cargo build --release
-
-# 4. Run server (starts both Rust + Python)
-cargo run --bin tabagent-server -- --mode all
+# 4. Run development environment (auto-starts everything!)
+npm run dev
 ```
+
+This starts:
+- Rust backend (port 3000)
+- Dashboard dev server (port 5173)
+- Agent Builder dev server (port 5175)
+- Python ML service (gRPC port 50051, auto-spawned)
 
 Server starts on:
 - **HTTP API**: http://localhost:3000
@@ -117,7 +141,108 @@ pytest tests/test_mediapipe.py -v
 
 ---
 
+## Desktop App (Dashboard + Agent Builder)
+
+### For End Users
+1. Download `TabAgent.exe` (Windows) / `TabAgent.app` (macOS) / `tabagent-desktop.deb` (Linux)
+2. Double-click to run
+3. Desktop app opens showing Dashboard at `localhost:3000`
+4. Navigate to `/workflows` for Agent Builder
+
+**No installation, no setup, no Docker - just works!**
+
+### For Developers
+
+#### Install Dependencies
+```bash
+# Root + Tauri
+npm install
+
+# Dashboard (React)
+cd dashboard && npm install && cd ..
+
+# Agent Builder (Vue 3)
+cd agent-builder && npm install && cd ..
+```
+
+#### Development Mode (Hot Reload)
+```bash
+npm run dev
+```
+
+**What Happens:**
+1. Smart port allocation (kills stale processes, finds available ports)
+2. Starts Rust backend (default: port 3000, fallback: 3001-3003)
+3. Starts Dashboard dev server (default: port 5173, fallback: 5174-5176)
+4. Starts Agent Builder dev server (default: port 5175, fallback: 5177-5179)
+5. All components auto-connect via dynamic proxies
+
+**Features:**
+- ✅ Single instance enforcement (can't run twice)
+- ✅ Auto-kills stale TabAgent processes
+- ✅ Smart fallback if ports busy
+- ✅ Friendly error if external app conflicts
+- ✅ Hot reload on all frontends
+
+#### Build Production Binary
+```bash
+npm run build
+```
+Creates:
+- **Windows**: `src-tauri/target/release/bundle/msi/TabAgent Desktop.msi`
+- **macOS**: `src-tauri/target/release/bundle/dmg/TabAgent Desktop.dmg`
+- **Linux**: `src-tauri/target/release/bundle/deb/tabagent-desktop.deb`
+
+#### Platform Requirements
+- **Windows**: Visual Studio C++ Build Tools
+- **macOS**: Xcode Command Line Tools
+- **Linux**: webkit2gtk, libappindicator
+
+---
+
 ## Project Structure
+
+### `src-tauri/` - Desktop App (Tauri)
+Rust-based desktop application wrapper.
+
+**Entry Point**: `src/main.rs` - Tauri app + embedded web server
+**Serves**: Dashboard (/) and Agent Builder (/workflows) on port 3000
+**Output**: `.exe` (Windows), `.app` (macOS), `.deb` (Linux)
+
+---
+
+### `dashboard/` - System Dashboard (React + TypeScript)
+Modern React dashboard for system monitoring and management.
+
+**Features**:
+- Model management (install, configure, monitor)
+- Database explorer with knowledge graph visualization
+- Real-time system metrics and resource monitoring
+- API testing interface
+- WebRTC demos
+
+**Routes**: `/`, `/models`, `/database`, `/knowledge`, `/settings`
+**Dev**: `npm run dev` → port 5173
+**Build**: `npm run build` → `dist/`
+
+---
+
+### `agent-builder/` - Workflow Editor (Vue 3 + TypeScript)
+n8n-inspired visual workflow editor for building AI agent workflows.
+
+**Features**:
+- Drag & drop node-based editor with Vue Flow
+- Resizable/collapsible panels
+- Dark theme by default
+- D-shaped trigger nodes, status indicators, smart edge routing
+- Node library with categories
+- Properties panel for node configuration
+
+**Routes**: `/workflows`, `/workflows/new`, `/workflows/:id`
+**Dev**: `npm run dev` → port 5175
+**Build**: `npm run build` → `dist/`
+
+---
 
 ### [`PythonML/`](PythonML/README.md) - ML Services
 Python ML stack running as gRPC subprocess managed by Rust.
@@ -156,20 +281,30 @@ High-performance inference orchestration and system integration.
 ## Communication Flow
 
 ```
-Chrome Extension
-    ↓ (Native Messaging / WebRTC)
-Rust Server (port 3000/8002)
-    ↓ (gRPC - localhost:50051)
-Python ML Service
-    ↓ (MediaPipe / Transformers / LiteRT)
-Hardware (CPU/GPU/NPU)
+User
+  ↓ (double-clicks .exe)
+Tauri Desktop App
+  ├─→ Dashboard (React) @ localhost:3000/
+  └─→ Agent Builder (Vue 3) @ localhost:3000/workflows
+      ↓
+  Embedded Rust Server (port 3000)
+      ├─→ HTTP API (/api/*)
+      ├─→ WebSocket (/ws)
+      └─→ Native Messaging → Chrome Extension
+          ↓
+      (gRPC - localhost:50051)
+          ↓
+  Python ML Service
+      ↓
+  Hardware (CPU/GPU/NPU)
 ```
 
 **Key Points**:
-- Rust is the orchestrator and "brain"
-- Python is a stateless ML slave
-- gRPC enables language-agnostic communication
-- Rust can run locally or call remote Python
+- **Tauri** wraps everything in native desktop app
+- **Rust** is the orchestrator and "brain"
+- **Python** is stateless ML service (gRPC slave)
+- **UIs** are decoupled (can swap independently, unlike n8n!)
+- **Single port** (3000) for simplicity
 
 ---
 
@@ -212,6 +347,50 @@ Hardware (CPU/GPU/NPU)
 
 ## Development
 
+### HuggingFace Token Setup (For Gated Models)
+
+**For Development (Local Testing):**
+
+1. Copy environment template:
+   ```bash
+   cp ENV_TEMPLATE.txt .env
+   ```
+
+2. Edit `.env` and add your token:
+   ```bash
+   HUGGINGFACE_TOKEN=hf_xxxxx
+   ```
+   Get token from: https://huggingface.co/settings/tokens
+
+**For Production (UI Flow):**
+
+Users enter token via UI → stored securely in OS keyring:
+- Windows: Credential Manager
+- macOS: Keychain
+- Linux: Secret Service
+
+**API Endpoints:**
+```bash
+# Store token
+POST /v1/hf/token
+{"token": "hf_xxxxx"}
+
+# Check status
+GET /v1/hf/token/status
+
+# Clear token
+DELETE /v1/hf/token
+```
+
+**How It Works:**
+1. Extension/Dashboard requests gated model
+2. If no token → UI prompts for HF token
+3. Token stored securely via API
+4. Rust downloads model using token
+5. Python accesses via Rust cache (no direct HF access)
+
+---
+
 ### Running Tests
 
 ```bash
@@ -224,6 +403,7 @@ cd Rust
 cargo test --workspace
 
 # Integration tests
+cd Rust
 cargo test --test '*' -- --test-threads=1
 ```
 
@@ -346,3 +526,16 @@ See individual module READMEs for contribution guidelines:
 - Windows: `%APPDATA%/TabAgent/models/`
 - Linux: `~/.local/share/TabAgent/models/`
 - macOS: `~/Library/Application Support/TabAgent/models/`
+
+### Windows Build Requirements
+
+For building on Windows, you need `libclang.dll`:
+
+```powershell
+# Auto-detect and set LIBCLANG_PATH
+.\setup_libclang.ps1
+```
+
+Or install:
+- Visual Studio 2022 with "Desktop development with C++"
+- LLVM from https://github.com/llvm/llvm-project/releases

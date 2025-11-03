@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Information about a specific quantization variant
-#[derive(Debug, Clone, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct QuantInfo {
     pub status: QuantStatus,
     pub files: Vec<String>,
@@ -13,7 +13,7 @@ pub struct QuantInfo {
 }
 
 /// Manifest entry for a model repository
-#[derive(Debug, Clone, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct ManifestEntry {
     pub repo_id: String,
     pub task: Option<String>, // e.g., "text-generation", "feature-extraction"

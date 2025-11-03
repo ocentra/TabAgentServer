@@ -13,9 +13,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
-thiserror = "2.0"
+thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+rkyv = { workspace = true }
 
 # Internal crates
 common = { path = "../common" }
@@ -24,16 +25,16 @@ tabagent-values = { path = "../values" }
 appstate = { path = "../appstate" }
 
 # HTTP server
-axum = "0.8"
-tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
 
 # Collections
 dashmap = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3"
-criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+tempfile = { workspace = true }
+criterion = { workspace = true }
 
 [[bench]]
 name = "log_performance"

@@ -3,21 +3,24 @@
   "version": "0.1.0",
   "description": "TabAgent Desktop - AI Workflow Platform for everyone",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "tauri dev",
-    "dev:all": "concurrently \"npm run dev:dashboard\" \"npm run dev:builder\" \"npm run dev:server\"",
-    "dev:dashboard": "cd dashboard && npm run dev",
-    "dev:builder": "cd agent-builder && npm run dev",
-    "dev:server": "echo 'Server dev mode - integrate your Rust server here'",
+    "dev": "tsx scripts/dev-start.ts",
+    "dev:tauri": "tauri dev",
     "build": "npm run build:all && tauri build",
     "build:all": "npm run build:dashboard && npm run build:builder",
     "build:dashboard": "cd dashboard && npm run build",
     "build:builder": "cd agent-builder && npm run build",
-    "tauri": "tauri"
+    "build:release": "tsx scripts/build-release.ts",
+    "tauri": "tauri",
+    "check-ports": "tsx scripts/port-manager.ts"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
-    "concurrently": "^8.2.2"
+    "@types/node": "^20.0.0",
+    "concurrently": "^8.2.2",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
   },
   "engines": {
     "node": ">=18.0.0",

@@ -15,7 +15,7 @@ use common::grpc::database::{
     ToolResult, ToolResultRequest, ToolResultResponse, StoreToolResultRequest,
     StatusResponse,
 };
-use common::{NodeId, EmbeddingId};
+use common::NodeId;
 use common::models::Node;
 
 /// gRPC server wrapping DatabaseCoordinator
@@ -49,7 +49,7 @@ impl DatabaseService for DatabaseServer {
         let conversations: Vec<Conversation> = storage
             .scan_prefix_nodes_ref(session_prefix.as_bytes())
             .filter_map(|result| result.ok())
-            .filter_map(|(key, node_ref)| {
+            .filter_map(|(_key, node_ref)| {
                 // Use zero-copy accessors for ALL fields
                 if let (
                     Some(text),
@@ -96,7 +96,7 @@ impl DatabaseService for DatabaseServer {
             text_content: conv.content,
             attachment_ids: vec![],
             embedding_id: None,
-            metadata: serde_json::json!({}),
+            metadata: serde_json::json!({}).to_string(),
         };
         
         // Store using conversation operations
@@ -148,7 +148,7 @@ impl DatabaseService for DatabaseServer {
             label: knowledge.content,
             entity_type: knowledge.source,
             embedding_id: None,
-            metadata: serde_json::json!({}),
+            metadata: serde_json::json!({}).to_string(),
         };
         
         // Store using knowledge operations
@@ -174,8 +174,8 @@ impl DatabaseService for DatabaseServer {
             .iter()
             .filter_map(|result| result.ok())
             .take(req.limit as usize)
-            .filter_map(|(key, value)| {
-                let _archived = rkyv::check_archived_root::<Node>(&value).ok()?;
+            .filter_map(|(_key, value)| {
+                let _archived = rkyv::access::<rkyv::Archived<Node>, rkyv::rancor::Error>(&value).ok()?;
                 // Note: There's no Embedding variant in Node enum currently
                 // This would need to be added to common/models.rs if we want to support it
                 // For now, return None
@@ -208,9 +208,8 @@ impl DatabaseService for DatabaseServer {
         let results: Vec<ToolResult> = storage
             .iter()
             .filter_map(|result| result.ok())
-            .filter_map(|(key, value)| {
-                let archived = rkyv::check_archived_root::<Node>(&value).ok()?;
-                let node = archived.deserialize(&mut rkyv::Infallible).ok()?;
+            .filter_map(|(_key, value)| {
+                let node = rkyv::from_bytes::<Node, rkyv::rancor::Error>(&value).ok()?;
                 // Filter based on tool_name and time range
                 match node {
                     Node::WebSearch(search) => {
@@ -260,7 +259,7 @@ impl DatabaseService for DatabaseServer {
             timestamp: tool_result.timestamp,
             results_urls: vec![],
             embedding_id: None,
-            metadata: serde_json::json!({}),
+            metadata: serde_json::json!({}).to_string(),
         };
         
         // Store using tool result operations

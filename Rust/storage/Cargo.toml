@@ -21,8 +21,8 @@ tracing = { workspace = true }
 anyhow = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.8"
-uuid = { version = "1.6", features = ["v4"] }
+tempfile = { workspace = true }
+uuid = { workspace = true }
 
 [[bench]]
 name = "zero_copy_performance"

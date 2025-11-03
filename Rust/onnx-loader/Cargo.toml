@@ -18,8 +18,8 @@ tabagent-tokenization = { path = "../tokenization" }
 tabagent-execution-providers = { path = "../execution-providers" }
 
 # ONNX Runtime (matching References/ort)
-ort = { version = "=2.0.0-rc.10", default-features = true, features = ["half", "cuda", "tensorrt", "directml", "openvino", "coreml"] }
-ndarray = { version = "0.16", default-features = false }
+ort = { workspace = true }
+ndarray = { workspace = true, default-features = false }
 
 # Error handling
 thiserror = { workspace = true }
@@ -33,11 +33,20 @@ serde_json = { workspace = true }
 log = { workspace = true }
 
 # Random number generation (for sampling)
-rand = "0.9.2"
+rand = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tabagent-model-cache = { path = "../model-cache" }
-env_logger = "0.11"
+env_logger = { workspace = true }
 
+[features]
+default = []
+# Hardware acceleration features (match ort crate features)
+cuda = []
+tensorrt = []
+directml = []
+coreml = []
+rocm = []
+openvino = []

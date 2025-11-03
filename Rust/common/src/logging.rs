@@ -41,6 +41,23 @@ impl From<&str> for LogSource {
     }
 }
 
+impl std::fmt::Display for LogSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Extension => write!(f, "extension"),
+            Self::NativeMessaging => write!(f, "nativemessaging"),
+            Self::GrpcServer => write!(f, "grpcserver"),
+            Self::WebRtc => write!(f, "webrtc"),
+            Self::ModelExecution => write!(f, "modelexecution"),
+            Self::Storage => write!(f, "storage"),
+            Self::Pipeline => write!(f, "pipeline"),
+            Self::Indexing => write!(f, "indexing"),
+            Self::Query => write!(f, "query"),
+            Self::Unknown => write!(f, "unknown"),
+        }
+    }
+}
+
 /// Log level
 #[derive(Debug, Clone, Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "lowercase")]

@@ -120,7 +120,7 @@ impl NativeMessagingRoute for VideoStreamRoute {
         Ok(())
     }
 
-    async fn handle<S>(req: Self::Request, state: &S) -> NativeMessagingResult<Self::Response>
+    async fn handle<S>(req: Self::Request, _state: &S) -> NativeMessagingResult<Self::Response>
     where
         S: AppStateProvider + Send + Sync,
     {

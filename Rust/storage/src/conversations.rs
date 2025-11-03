@@ -3,7 +3,7 @@
 //! This module provides implementations for conversation-related operations
 //! including messages and chats across different temperature tiers.
 
-use crate::{traits::ConversationOperations, DefaultStorageManager, TemperatureTier};
+use crate::{traits::ConversationOperations, DefaultStorageManager, TemperatureTier, StorageManager};
 use common::{models::*, platform::get_quarter_from_timestamp, DbResult};
 use std::sync::{Arc, RwLock};
 
@@ -175,7 +175,7 @@ impl ConversationOperations for ConversationManager {
                     let recent_storage = if let Some(recent) = self.get_or_load_conversations_recent()? {
                         recent
                     } else {
-                        let recent_db = StorageManager::open_typed_with_indexing(
+                        let recent_db = crate::DefaultStorageManager::open_typed_with_indexing(
                             crate::DatabaseType::Conversations,
                             Some(TemperatureTier::Recent),
                         )?;
@@ -204,14 +204,14 @@ impl ConversationOperations for ConversationManager {
 
         if recent_guard.is_none() {
             // Lazy load recent tier
-            match StorageManager::open_typed_with_indexing(
+            match crate::DefaultStorageManager::open_typed_with_indexing(
                 crate::DatabaseType::Conversations,
                 Some(TemperatureTier::Recent),
             ) {
                 Ok(storage) => *recent_guard = Some(storage),
                 Err(e) => {
                     // If recent doesn't exist yet, that's OK
-                    if !matches!(e, common::DbError::Sled(_)) {
+                    if !matches!(e, common::DbError::InvalidOperation(_)) {
                         return Err(e);
                     }
                 }
@@ -230,7 +230,7 @@ impl ConversationOperations for ConversationManager {
 
         if !archives.contains_key(quarter) {
             // Implement archive loading with quarter-specific paths
-            match StorageManager::open_typed(
+            match crate::DefaultStorageManager::open_typed(
                 crate::DatabaseType::Conversations,
                 Some(TemperatureTier::Archive),
             ) {
@@ -250,12 +250,12 @@ impl ConversationOperations for ConversationManager {
                     })?;
 
                     // Reopen storage with the quarter-specific path
-                    let quarter_storage = StorageManager::new(path_str)?;
+                    let quarter_storage = crate::DefaultStorageManager::new(path_str)?;
                     archives.insert(quarter.to_string(), quarter_storage);
                 }
                 Err(e) => {
                     // If archive doesn't exist yet, that's OK for lazy loading
-                    if !matches!(e, common::DbError::Sled(_)) {
+                    if !matches!(e, common::DbError::InvalidOperation(_)) {
                         return Err(e);
                     }
                 }

@@ -2,6 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
+// Dynamic port configuration from environment
+const VITE_PORT = parseInt(process.env.VITE_PORT || '5173')
+const RUST_PORT = parseInt(process.env.VITE_RUST_PORT || process.env.TABAGENT_RUST_PORT || '3000')
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -23,13 +27,15 @@ export default defineConfig({
     },
   },
   server: {
+    port: VITE_PORT,
+    strictPort: false, // Allow fallback ports
     proxy: {
       '/v1': {
-        target: 'http://localhost:3000',
+        target: `http://localhost:${RUST_PORT}`,
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:3000',
+        target: `ws://localhost:${RUST_PORT}`,
         ws: true,
       },
     },

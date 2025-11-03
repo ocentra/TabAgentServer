@@ -61,7 +61,8 @@ pub use backend::{AppStateProvider, AppStateWrapper};
 /// **Type Safety**: Using newtype pattern instead of alias prevents accidental mixing
 /// of NodeId with EdgeId or EmbeddingId at compile time.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-pub struct NodeId(String);
+#[rkyv(derive(Hash, PartialEq, Eq))] // Derive Hash/PartialEq/Eq for ArchivedNodeId
+pub struct NodeId(pub String);
 
 impl NodeId {
     /// Create a new NodeId from a string
@@ -111,7 +112,8 @@ impl From<&str> for NodeId {
 /// 
 /// **Type Safety**: Using newtype pattern prevents mixing with NodeId or EmbeddingId.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-pub struct EdgeId(String);
+#[rkyv(derive(Hash, PartialEq, Eq))] // Derive Hash/PartialEq/Eq for ArchivedEdgeId
+pub struct EdgeId(pub String);
 
 impl EdgeId {
     /// Create a new EdgeId from a string
@@ -154,7 +156,8 @@ impl From<&str> for EdgeId {
 /// 
 /// **Type Safety**: Using newtype pattern prevents mixing with NodeId or EdgeId.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-pub struct EmbeddingId(String);
+#[rkyv(derive(Hash, PartialEq, Eq))] // Derive Hash/PartialEq/Eq for ArchivedEmbeddingId
+pub struct EmbeddingId(pub String);
 
 impl EmbeddingId {
     /// Create a new EmbeddingId from a string

@@ -1,5 +1,4 @@
 use crate::error::{ModelCacheError, Result};
-use futures::StreamExt;
 use reqwest::Client;
 use std::sync::Arc;
 
@@ -102,19 +101,15 @@ impl ModelDownloader {
         
         let total_size = response.content_length().unwrap_or(0);
         
-        let mut downloaded = 0u64;
         let mut buffer = Vec::with_capacity(total_size as usize);
         
-        let mut stream = response.bytes_stream();
+        // Read all bytes at once (simpler for now)
+        let bytes = response.bytes().await?;
+        buffer.extend_from_slice(&bytes);
+        let downloaded = bytes.len() as u64;
         
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk?;
-            buffer.extend_from_slice(&chunk);
-            downloaded += chunk.len() as u64;
-            
-            if let Some(ref callback) = progress_callback {
-                callback(downloaded, total_size);
-            }
+        if let Some(ref callback) = progress_callback {
+            callback(downloaded, total_size);
         }
         
         log::info!("Downloaded {} ({} bytes)", file_path, downloaded);

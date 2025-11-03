@@ -10,7 +10,6 @@ use crate::{
 };
 use common::DbResult;
 use std::sync::Arc;
-use rkyv::{Deserialize, Archive};
 
 /// Manages all direct interactions with storage engines for CRUD operations.
 ///
@@ -51,9 +50,12 @@ impl<E: StorageEngine> StorageManager<E> {
     pub fn new(path: &str) -> DbResult<Self> {
         let engine = E::open(path)?;
         
-        engine.open_tree("nodes")?;
-        engine.open_tree("edges")?;
-        engine.open_tree("embeddings")?;
+        engine.open_tree("nodes")
+            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to open nodes tree: {}", e)))?;
+        engine.open_tree("edges")
+            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to open edges tree: {}", e)))?;
+        engine.open_tree("embeddings")
+            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to open embeddings tree: {}", e)))?;
 
         Ok(Self {
             engine,
@@ -119,9 +121,12 @@ impl<E: StorageEngine> StorageManager<E> {
     pub fn with_indexing(path: &str) -> DbResult<Self> {
         let engine = E::open(path)?;
         
-        engine.open_tree("nodes")?;
-        engine.open_tree("edges")?;
-        engine.open_tree("embeddings")?;
+        engine.open_tree("nodes")
+            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to open nodes tree: {}", e)))?;
+        engine.open_tree("edges")
+            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to open edges tree: {}", e)))?;
+        engine.open_tree("embeddings")
+            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to open embeddings tree: {}", e)))?;
 
         let index_manager = indexing::IndexManager::new(path)?;
 
@@ -250,7 +255,7 @@ impl<E: StorageEngine> StorageManager<E> {
         }
 
         // Serialize with rkyv
-        let bytes = rkyv::to_bytes::<_, 256>(node)
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(node)
             .map_err(|e| common::DbError::Serialization(e.to_string()))?;
         
         self.engine.insert("nodes", id.as_str().as_bytes(), bytes.as_slice().to_vec())
@@ -297,10 +302,7 @@ impl<E: StorageEngine> StorageManager<E> {
         match self.engine.remove("nodes", id.as_bytes()).map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))? {
             Some(bytes) => {
                 // Deserialize to update indexes
-                let archived = rkyv::check_archived_root::<common::models::Node>(&bytes[..])
-                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
-                
-                let node = archived.deserialize(&mut rkyv::Infallible)
+                let node = rkyv::from_bytes::<common::models::Node, rkyv::rancor::Error>(&bytes[..])
                     .map_err(|e| common::DbError::Serialization(e.to_string()))?;
 
                 if let Some(ref idx) = self.index_manager {
@@ -407,7 +409,7 @@ impl<E: StorageEngine> StorageManager<E> {
             ));
         }
 
-        let bytes = rkyv::to_bytes::<_, 256>(edge)
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(edge)
             .map_err(|e| common::DbError::Serialization(e.to_string()))?;
         
         self.engine.insert("edges", edge.id.as_str().as_bytes(), bytes.as_slice().to_vec())
@@ -452,10 +454,7 @@ impl<E: StorageEngine> StorageManager<E> {
 
         match self.engine.remove("edges", id.as_bytes()).map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))? {
             Some(bytes) => {
-                let archived = rkyv::check_archived_root::<common::models::Edge>(&bytes[..])
-                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
-                
-                let edge = archived.deserialize(&mut rkyv::Infallible)
+                let edge = rkyv::from_bytes::<common::models::Edge, rkyv::rancor::Error>(&bytes[..])
                     .map_err(|e| common::DbError::Serialization(e.to_string()))?;
 
                 if let Some(ref idx) = self.index_manager {
@@ -555,10 +554,7 @@ impl<E: StorageEngine> StorageManager<E> {
         node_id: &str,
     ) -> DbResult<Option<common::models::Embedding>> {
         if let Some(guard) = self.get_node_guard(node_id)? {
-            let archived = rkyv::check_archived_root::<common::models::Node>(guard.data())
-                .map_err(|e| common::DbError::Serialization(e.to_string()))?;
-            
-            let node = archived.deserialize(&mut rkyv::Infallible)
+            let node = rkyv::from_bytes::<common::models::Node, rkyv::rancor::Error>(guard.data())
                 .map_err(|e| common::DbError::Serialization(e.to_string()))?;
 
             let embedding_id = match node {
@@ -613,7 +609,7 @@ impl<E: StorageEngine> StorageManager<E> {
             ));
         }
 
-        let bytes = rkyv::to_bytes::<_, 256>(embedding)
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(embedding)
             .map_err(|e| common::DbError::Serialization(e.to_string()))?;
         
         self.engine.insert("embeddings", embedding.id.as_str().as_bytes(), bytes.as_slice().to_vec())
@@ -658,10 +654,7 @@ impl<E: StorageEngine> StorageManager<E> {
 
         match self.engine.remove("embeddings", id.as_bytes()).map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))? {
             Some(bytes) => {
-                let archived = rkyv::check_archived_root::<common::models::Embedding>(&bytes[..])
-                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
-                
-                let embedding = archived.deserialize(&mut rkyv::Infallible)
+                let embedding = rkyv::from_bytes::<common::models::Embedding, rkyv::rancor::Error>(&bytes[..])
                     .map_err(|e| common::DbError::Serialization(e.to_string()))?;
 
                 if let Some(ref idx) = self.index_manager {
@@ -708,14 +701,14 @@ impl<E: StorageEngine> StorageManager<E> {
     /// }
     /// # Ok::<(), storage::DbError>(())
     /// ```
-    pub fn scan_prefix(&self, prefix: &[u8]) -> impl Iterator<Item = common::DbResult<(Vec<u8>, Vec<u8>)>> {
+    pub fn scan_prefix<'a>(&'a self, prefix: &[u8]) -> impl Iterator<Item = common::DbResult<(Vec<u8>, Vec<u8>)>> + 'a {
         self.engine.scan_prefix("nodes", prefix).map(|result| {
             result.map(|(key, guard)| (key, guard.data().to_vec()))
                 .map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))
         })
     }
     
-    pub fn scan_prefix_nodes_ref(&self, prefix: &[u8]) -> impl Iterator<Item = common::DbResult<(Vec<u8>, ArchivedNodeRef<E::ReadGuard>)>> {
+    pub fn scan_prefix_nodes_ref<'a>(&'a self, prefix: &[u8]) -> impl Iterator<Item = common::DbResult<(Vec<u8>, ArchivedNodeRef<E::ReadGuard>)>> + 'a {
         self.engine.scan_prefix("nodes", prefix).map(|result| {
             result.map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))
                 .and_then(|(key, guard)| {
@@ -744,7 +737,7 @@ impl<E: StorageEngine> StorageManager<E> {
     /// }
     /// # Ok::<(), storage::DbError>(())
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item = common::DbResult<(Vec<u8>, Vec<u8>)>> {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = common::DbResult<(Vec<u8>, Vec<u8>)>> + 'a {
         self.engine.iter("nodes").map(|result| {
             result.map(|(key, guard)| (key, guard.data().to_vec()))
                 .map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))

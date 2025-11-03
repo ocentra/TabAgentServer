@@ -1,0 +1,21 @@
+[package]
+name = "libmdbx-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# FFI bindings for MDBX_RESERVE (guaranteed alignment)
+mdbx-sys = { workspace = true }
+# High-level wrapper (for comparison tests)
+libmdbx = { workspace = true }
+# Zero-copy serialization
+rkyv = { workspace = true }
+# CRC32 for data integrity (both for A/B testing)
+crc32fast = { workspace = true }
+crc32c = { workspace = true }
+# Error handling
+thiserror = { workspace = true }
+# Logging
+log = { workspace = true }
+# C interop
+libc = { workspace = true }

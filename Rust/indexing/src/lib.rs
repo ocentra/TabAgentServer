@@ -108,8 +108,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::thread;
 use serde::{Deserialize, Serialize};
-use libmdbx::{Environment, NoWriteMap, Database};
-use dashmap::DashMap;
+use libmdbx::{Database, DatabaseOptions, NoWriteMap, TableFlags};
 use std::path::Path;
 
 
@@ -450,32 +449,30 @@ impl IndexManager {
     ///
     /// Returns `DbError` if any index fails to initialize.
     pub fn new_with_hybrid(path: impl AsRef<Path>, with_hybrid: bool) -> DbResult<Self> {
-        // Create libmdbx environment
-        let env = Arc::new(Environment::<NoWriteMap>::new()
-            .set_max_dbs(16)
-            .set_geometry(libmdbx::Geometry {
-                size: Some(0..(1024 * 1024 * 1024 * 1024)), // 1TB max
-                growth_step: Some(1024 * 1024 * 1024), // 1GB grow step
-                shrink_threshold: None,
-                page_size: None,
-            })
-            .open(path.as_ref())
-            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to open libmdbx environment: {}", e)))?);
+        // Create libmdbx database (libmdbx 0.6.3 API)
+        let mut options = DatabaseOptions::default();
+        options.max_tables = Some(16);
         
-        // Create databases for indexes
-        let databases = Arc::new(DashMap::new());
+        let db = Arc::new(Database::<NoWriteMap>::open_with_options(path.as_ref(), options)
+            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to open libmdbx database: {}", e)))?);
         
-        let structural_db = env.create_db(Some("structural_index"), libmdbx::DatabaseFlags::empty())
-            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to create structural_index db: {}", e)))?;
-        databases.insert("structural_index".to_string(), structural_db);
-        
-        let outgoing_db = env.create_db(Some("graph_outgoing"), libmdbx::DatabaseFlags::empty())
-            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to create graph_outgoing db: {}", e)))?;
-        databases.insert("graph_outgoing".to_string(), outgoing_db);
-        
-        let incoming_db = env.create_db(Some("graph_incoming"), libmdbx::DatabaseFlags::empty())
-            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to create graph_incoming db: {}", e)))?;
-        databases.insert("graph_incoming".to_string(), incoming_db);
+        // Create tables for indexes
+        {
+            let txn = db.begin_rw_txn()
+                .map_err(|e| common::DbError::InvalidOperation(format!("Failed to begin transaction: {}", e)))?;
+            
+            let _ = txn.create_table(Some("structural_index"), TableFlags::empty())
+                .map_err(|e| common::DbError::InvalidOperation(format!("Failed to create structural_index table: {}", e)))?;
+            
+            let _ = txn.create_table(Some("graph_outgoing"), TableFlags::empty())
+                .map_err(|e| common::DbError::InvalidOperation(format!("Failed to create graph_outgoing table: {}", e)))?;
+            
+            let _ = txn.create_table(Some("graph_incoming"), TableFlags::empty())
+                .map_err(|e| common::DbError::InvalidOperation(format!("Failed to create graph_incoming table: {}", e)))?;
+            
+            txn.commit()
+                .map_err(|e| common::DbError::InvalidOperation(format!("Failed to commit table creation: {}", e)))?;
+        }
         
         // Note: VectorIndex persists to disk
         // TODO: In production, derive path from db location. For now, use a temp path.
@@ -502,25 +499,18 @@ impl IndexManager {
             let graph_cache = Arc::new(GraphTraversalCache::new(500, 500, 200)); // BFS, DFS, shortest path caches
             
             // Initialize warm layer caches
-            let graph_outgoing = databases.get("graph_outgoing")
-                .ok_or_else(|| common::DbError::InvalidOperation("graph_outgoing database not found".to_string()))?;
-            let graph_incoming = databases.get("graph_incoming")
-                .ok_or_else(|| common::DbError::InvalidOperation("graph_incoming database not found".to_string()))?;
-            
             let graph_arc = Arc::new(GraphIndex::new(
-                Arc::clone(&env),
-                graph_outgoing.clone(),
-                graph_incoming.clone(),
-                Arc::clone(&databases)
+                Arc::clone(&db),
+                "graph_outgoing".to_string(),
+                "graph_incoming".to_string()
             ));
             let vector_arc = Arc::new(std::sync::RwLock::new(VectorIndex::new(&vector_path)?));
             
             let warm_graph_cache = Arc::new(WarmGraphCache::new(
                 Arc::new(std::sync::RwLock::new(GraphIndex::new(
-                    Arc::clone(&env),
-                    graph_outgoing.clone(),
-                    graph_incoming.clone(),
-                    Arc::clone(&databases)
+                    Arc::clone(&db),
+                    "graph_outgoing".to_string(),
+                    "graph_incoming".to_string()
                 ))),
                 WarmGraphCacheConfig::default()
             ));
@@ -535,24 +525,15 @@ impl IndexManager {
             (None, None, None, None)
         };
         
-        let structural_db = databases.get("structural_index")
-            .ok_or_else(|| common::DbError::InvalidOperation("structural_index database not found".to_string()))?;
-        let graph_outgoing = databases.get("graph_outgoing")
-            .ok_or_else(|| common::DbError::InvalidOperation("graph_outgoing database not found".to_string()))?;
-        let graph_incoming = databases.get("graph_incoming")
-            .ok_or_else(|| common::DbError::InvalidOperation("graph_incoming database not found".to_string()))?;
-        
         Ok(Self {
             structural: Arc::new(StructuralIndex::new(
-                Arc::clone(&env),
-                structural_db.clone(),
-                Arc::clone(&databases)
+                Arc::clone(&db),
+                "structural_index".to_string()
             )),
             graph: Arc::new(GraphIndex::new(
-                Arc::clone(&env),
-                graph_outgoing.clone(),
-                graph_incoming.clone(),
-                Arc::clone(&databases)
+                Arc::clone(&db),
+                "graph_outgoing".to_string(),
+                "graph_incoming".to_string()
             )),
             vector: Arc::new(Mutex::new(vector_index)),
             hot_graph,

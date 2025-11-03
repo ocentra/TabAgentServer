@@ -20,21 +20,20 @@
 
 use common::{DbError, DbResult, NodeId};
 use std::collections::HashSet;
-use libmdbx::{Environment, NoWriteMap, Database, Transaction as MdbxTxn};
-use dashmap::DashMap;
+use libmdbx::{Database, NoWriteMap, TableFlags};
 use std::sync::Arc;
+use std::borrow::Cow;
 
 /// Structural index for fast property-based queries.
 pub struct StructuralIndex {
-    env: Arc<Environment<NoWriteMap>>,
-    db: Database,
-    _databases: Arc<DashMap<String, Database>>, // Keep the databases map alive
+    db: Arc<Database<NoWriteMap>>,
+    table_name: String,
 }
 
 impl StructuralIndex {
-    /// Creates a new structural index using the given libmdbx environment and database.
-    pub fn new(env: Arc<Environment<NoWriteMap>>, db: Database, databases: Arc<DashMap<String, Database>>) -> Self {
-        Self { env, db, _databases: databases }
+    /// Creates a new structural index using the given libmdbx database and table name.
+    pub fn new(db: Arc<Database<NoWriteMap>>, table_name: String) -> Self {
+        Self { db, table_name }
     }
     
     /// Adds a node ID to an index for a specific property value.
@@ -44,9 +43,8 @@ impl StructuralIndex {
         // Get existing set or create new
         let mut id_set: HashSet<NodeId> = self.get_raw(key.as_bytes())?
             .map(|bytes| {
-                let archived = rkyv::check_archived_root::<HashSet<NodeId>>(&bytes)
-                    .map_err(|e| DbError::Serialization(format!("rkyv check error: {}", e)))?;
-                archived.deserialize(&mut rkyv::Infallible)
+                // rkyv 0.8: Use from_bytes (with error type)
+                rkyv::from_bytes::<HashSet<NodeId>, rkyv::rancor::Error>(&bytes)
                     .map_err(|e| DbError::Serialization(format!("rkyv deserialize error: {}", e)))
             })
             .transpose()?
@@ -55,10 +53,10 @@ impl StructuralIndex {
         // Add node ID
         id_set.insert(NodeId::from(node_id));
         
-        // Store back with rkyv
-        let bytes = rkyv::to_bytes::<_, 256>(&id_set)
+        // Store back with rkyv (0.8: specify error type, returns AlignedVec)
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&id_set)
             .map_err(|e| DbError::Serialization(format!("rkyv serialize error: {}", e)))?;
-        self.set_raw(key.as_bytes(), bytes)?;
+        self.set_raw(key.as_bytes(), bytes.to_vec())?;
         
         Ok(())
     }
@@ -69,9 +67,8 @@ impl StructuralIndex {
         
         // Get existing set
         if let Some(bytes) = self.get_raw(key.as_bytes())? {
-            let archived = rkyv::check_archived_root::<HashSet<NodeId>>(&bytes)
-                .map_err(|e| DbError::Serialization(format!("rkyv check error: {}", e)))?;
-            let mut id_set = archived.deserialize(&mut rkyv::Infallible)
+            // rkyv 0.8: Use from_bytes (with error type)
+            let mut id_set = rkyv::from_bytes::<HashSet<NodeId>, rkyv::rancor::Error>(&bytes)
                 .map_err(|e| DbError::Serialization(format!("rkyv deserialize error: {}", e)))?;
             
             // Remove node ID
@@ -81,10 +78,10 @@ impl StructuralIndex {
                 // Remove key if set is now empty
                 self.remove_raw(key.as_bytes())?;
             } else {
-                // Store back with rkyv
-                let bytes = rkyv::to_bytes::<_, 256>(&id_set)
+                // Store back with rkyv (0.8: specify error type, returns AlignedVec)
+                let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&id_set)
                     .map_err(|e| DbError::Serialization(format!("rkyv serialize error: {}", e)))?;
-                self.set_raw(key.as_bytes(), bytes)?;
+                self.set_raw(key.as_bytes(), bytes.to_vec())?;
             }
         }
         
@@ -97,9 +94,8 @@ impl StructuralIndex {
         
         let id_set: HashSet<NodeId> = self.get_raw(key.as_bytes())?
             .map(|bytes| {
-                let archived = rkyv::check_archived_root::<HashSet<NodeId>>(&bytes)
-                    .map_err(|e| DbError::Serialization(format!("rkyv check error: {}", e)))?;
-                archived.deserialize(&mut rkyv::Infallible)
+                // rkyv 0.8: Use from_bytes (with error type)
+                rkyv::from_bytes::<HashSet<NodeId>, rkyv::rancor::Error>(&bytes)
                     .map_err(|e| DbError::Serialization(format!("rkyv deserialize error: {}", e)))
             })
             .transpose()?
@@ -114,9 +110,8 @@ impl StructuralIndex {
         
         let id_set: HashSet<NodeId> = self.get_raw(key.as_bytes())?
             .map(|bytes| {
-                let archived = rkyv::check_archived_root::<HashSet<NodeId>>(&bytes)
-                    .map_err(|e| DbError::Serialization(format!("rkyv check error: {}", e)))?;
-                archived.deserialize(&mut rkyv::Infallible)
+                // rkyv 0.8: Use from_bytes (with error type)
+                rkyv::from_bytes::<HashSet<NodeId>, rkyv::rancor::Error>(&bytes)
                     .map_err(|e| DbError::Serialization(format!("rkyv deserialize error: {}", e)))
             })
             .transpose()?
@@ -139,12 +134,15 @@ impl StructuralIndex {
         Ok(removed)
     }
     
-    // Internal raw operations using libmdbx
+    // Internal raw operations using libmdbx 0.6.3 API
     fn get_raw(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DbError> {
-        let txn = self.env.begin_ro_txn()
+        let txn = self.db.begin_ro_txn()
             .map_err(|e| DbError::InvalidOperation(format!("libmdbx ro txn error: {}", e)))?;
         
-        match txn.get(&self.db, key) {
+        let table = txn.open_table(Some(&self.table_name))
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx open table error: {}", e)))?;
+        
+        match txn.get::<Cow<'_, [u8]>>(&table, key) {
             Ok(Some(data)) => Ok(Some(data.to_vec())),
             Ok(None) => Ok(None),
             Err(e) => Err(DbError::InvalidOperation(format!("libmdbx get error: {}", e))),
@@ -152,10 +150,13 @@ impl StructuralIndex {
     }
     
     fn set_raw(&self, key: &[u8], value: Vec<u8>) -> Result<(), DbError> {
-        let mut txn = self.env.begin_rw_txn()
+        let txn = self.db.begin_rw_txn()
             .map_err(|e| DbError::InvalidOperation(format!("libmdbx rw txn error: {}", e)))?;
         
-        txn.put(&self.db, key, &value, libmdbx::WriteFlags::empty())
+        let table = txn.create_table(Some(&self.table_name), TableFlags::empty())
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx create table error: {}", e)))?;
+        
+        txn.put(&table, key, &value, libmdbx::WriteFlags::empty())
             .map_err(|e| DbError::InvalidOperation(format!("libmdbx put error: {}", e)))?;
         
         txn.commit()
@@ -165,10 +166,13 @@ impl StructuralIndex {
     }
     
     fn remove_raw(&self, key: &[u8]) -> Result<(), DbError> {
-        let mut txn = self.env.begin_rw_txn()
+        let txn = self.db.begin_rw_txn()
             .map_err(|e| DbError::InvalidOperation(format!("libmdbx rw txn error: {}", e)))?;
         
-        txn.del(&self.db, key, None)
+        let table = txn.create_table(Some(&self.table_name), TableFlags::empty())
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx create table error: {}", e)))?;
+        
+        txn.del(&table, key, None)
             .map_err(|e| DbError::InvalidOperation(format!("libmdbx del error: {}", e)))?;
         
         txn.commit()
@@ -178,75 +182,34 @@ impl StructuralIndex {
     }
     
     fn scan_prefix(&self, prefix: &[u8]) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), DbError>>> {
-        let txn = match self.env.begin_ro_txn() {
-            Ok(txn) => txn,
-            Err(e) => return Box::new(std::iter::once(Err(DbError::InvalidOperation(format!("libmdbx ro txn error: {}", e))))),
-        };
-        
-        let mut cursor = match txn.cursor(&self.db) {
-            Ok(c) => c,
-            Err(e) => return Box::new(std::iter::once(Err(DbError::InvalidOperation(format!("libmdbx cursor error: {}", e))))),
-        };
-        
-        // Position cursor at prefix
-        let _ = cursor.lower_bound::<[u8]>(Some(prefix));
-        
-        struct ScanIterator {
-            _txn: libmdbx::Transaction<libmdbx::RO>,
-            cursor: libmdbx::Cursor<'static, libmdbx::RO>,
-            prefix: Vec<u8>,
-            started: bool,
+        // Simplified: collect all results upfront to avoid complex lifetime issues
+        match self.collect_prefix_results(prefix) {
+            Ok(results) => Box::new(results.into_iter().map(Ok)),
+            Err(e) => Box::new(std::iter::once(Err(e))),
         }
+    }
+    
+    fn collect_prefix_results(&self, prefix: &[u8]) -> Result<Vec<(Vec<u8>, Vec<u8>)>, DbError> {
+        let txn = self.db.begin_ro_txn()
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx ro txn error: {}", e)))?;
         
-        impl Iterator for ScanIterator {
-            type Item = Result<(Vec<u8>, Vec<u8>), DbError>;
-            
-            fn next(&mut self) -> Option<Self::Item> {
-                let result = if !self.started {
-                    self.started = true;
-                    // SAFETY: Transmute is safe here because:
-                    // 1. The cursor and cursor_ref both have the same memory layout (libmdbx::Cursor)
-                    // 2. The lifetime is constrained to this iterator scope - cursor_ref cannot outlive cursor
-                    // 3. The transaction (self.txn) is owned by the iterator, ensuring the cursor's underlying data remains valid
-                    // 4. This is a read-only cursor (RO), so no mutation safety concerns
-                    // 5. The cursor is created from a valid transaction that lives as long as the iterator
-                    unsafe {
-                        let cursor: &mut libmdbx::Cursor<'_, libmdbx::RO> = std::mem::transmute(&mut self.cursor);
-                        cursor.first()
-                    }
-                } else {
-                    // SAFETY: Transmute is safe here because:
-                    // 1. The cursor and cursor_ref both have the same memory layout (libmdbx::Cursor)
-                    // 2. The lifetime is constrained to this iterator scope - cursor_ref cannot outlive cursor
-                    // 3. The transaction (self.txn) is owned by the iterator, ensuring the cursor's underlying data remains valid
-                    // 4. This is a read-only cursor (RO), so no mutation safety concerns
-                    // 5. The cursor is created from a valid transaction that lives as long as the iterator
-                    unsafe {
-                        let cursor: &mut libmdbx::Cursor<'_, libmdbx::RO> = std::mem::transmute(&mut self.cursor);
-                        cursor.next()
-                    }
-                };
-                
-                match result {
-                    Ok(Some((k, v))) => {
-                        if k.starts_with(&self.prefix) {
-                            Some(Ok((k.to_vec(), v.to_vec())))
-                        } else {
-                            None // Beyond prefix range
-                        }
-                    }
-                    Ok(None) => None, // End of iteration
-                    Err(e) => Some(Err(DbError::InvalidOperation(format!("libmdbx cursor error: {}", e)))),
-                }
+        let table = txn.open_table(Some(&self.table_name))
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx open table error: {}", e)))?;
+        
+        let mut cursor = txn.cursor(&table)
+            .map_err(|e| DbError::InvalidOperation(format!("libmdbx cursor error: {}", e)))?;
+        
+        let mut results = Vec::new();
+        
+        // Iterate through all entries and filter by prefix
+        for item in cursor.iter::<Cow<'_, [u8]>, Cow<'_, [u8]>>() {
+            let (k, v) = item.map_err(|e| DbError::InvalidOperation(format!("libmdbx cursor iter error: {}", e)))?;
+            if k.starts_with(prefix) {
+                results.push((k.to_vec(), v.to_vec()));
             }
         }
         
-        Box::new(ScanIterator {
-            _txn: txn,
-            cursor,
-            prefix: prefix.to_vec(),
-            started: false,
-        })
+        Ok(results)
     }
 }
 
@@ -257,21 +220,19 @@ mod tests {
     
     fn create_test_index() -> (StructuralIndex, TempDir) {
         let temp_dir = TempDir::new().unwrap();
-        let env = Environment::<NoWriteMap>::new()
-            .set_max_dbs(8)
-            .set_geometry(libmdbx::Geometry {
-                size: Some(0..(1024 * 1024 * 1024)),
-                growth_step: Some(1024 * 1024 * 1024),
-                shrink_threshold: None,
-                page_size: None,
-            })
-            .open(temp_dir.path())
-            .unwrap();
         
-        let db = env.create_db(Some("test_structural"), libmdbx::DatabaseFlags::empty()).unwrap();
-        let databases = Arc::new(DashMap::new());
+        // libmdbx 0.6.3: Use Database::open_with_options
+        let mut options = libmdbx::DatabaseOptions::default();
+        options.max_tables = Some(10);
         
-        (StructuralIndex::new(Arc::new(env), db, databases), temp_dir)
+        let db = Database::<NoWriteMap>::open_with_options(temp_dir.path(), options).unwrap();
+        
+        // Create the table
+        let txn = db.begin_rw_txn().unwrap();
+        let _ = txn.create_table(Some("test_structural"), TableFlags::empty()).unwrap();
+        txn.commit().unwrap();
+        
+        (StructuralIndex::new(Arc::new(db), "test_structural".to_string()), temp_dir)
     }
     
     #[test]

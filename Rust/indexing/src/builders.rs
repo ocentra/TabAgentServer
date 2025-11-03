@@ -13,8 +13,7 @@ use crate::persistence::EnhancedVectorIndex;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use libmdbx::{Environment, NoWriteMap, Database};
-use dashmap::DashMap;
+use libmdbx::{Database, NoWriteMap};
 
 /// Builder for creating vector indexes with custom configurations.
 pub struct VectorIndexBuilder {
@@ -526,12 +525,11 @@ impl GraphIndexBuilder {
     }
     
     /// Builds the graph index.
-    pub fn build(self, env: Arc<Environment<NoWriteMap>>, outgoing_db: Database, incoming_db: Database, databases: Arc<DashMap<String, Database>>) -> DbResult<crate::graph::GraphIndex> {
+    pub fn build(self, db: Arc<Database<NoWriteMap>>) -> DbResult<crate::graph::GraphIndex> {
         Ok(crate::graph::GraphIndex::new(
-            env,
-            outgoing_db,
-            incoming_db,
-            databases
+            db,
+            "graph_outgoing".to_string(),
+            "graph_incoming".to_string()
         ))
     }
 }

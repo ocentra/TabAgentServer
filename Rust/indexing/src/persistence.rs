@@ -78,10 +78,8 @@ impl PersistentVectorIndex {
         let mut buffer = Vec::new();
         reader.read_to_end(&mut buffer)?;
         
-        // Deserialize the index
-        let archived = rkyv::check_archived_root::<SerializedVectorIndex>(&buffer)
-            .map_err(|e| DbError::Serialization(e.to_string()))?;
-        let serialized = archived.deserialize(&mut rkyv::Infallible)
+        // Deserialize the index (rkyv 0.8: Use from_bytes with error type)
+        let serialized = rkyv::from_bytes::<SerializedVectorIndex, rkyv::rancor::Error>(&buffer)
             .map_err(|e| DbError::Serialization(e.to_string()))?;
         
         // Create a new vector index
@@ -114,9 +112,10 @@ impl PersistentVectorIndex {
             .truncate(true)
             .open(&self.persist_path)?;
         let mut writer = BufWriter::new(file);
-        let bytes = rkyv::to_bytes::<_, 256>(&serialized)
+        // rkyv 0.8: specify error type, returns AlignedVec
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&serialized)
             .map_err(|e| DbError::Serialization(e.to_string()))?;
-        writer.write_all(&bytes)?;
+        writer.write_all(&bytes.to_vec())?;
         
         self.dirty = false;
         Ok(())

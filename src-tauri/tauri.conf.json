@@ -50,7 +50,9 @@
     ],
     "security": {
       "csp": null
-    }
+    },
+    "withGlobalTauri": false,
+    "singleInstance": true
   }
 }
 

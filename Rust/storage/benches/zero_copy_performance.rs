@@ -11,10 +11,10 @@ use tempfile::TempDir;
 /// Simple manual benchmark (no criterion) since we're in libmdbx constraint territory
 fn main() {
     println!("🚀 Storage Layer Zero-Copy Performance Benchmark");
-    println!("=" .repeat(60));
+    println!("{}", "=".repeat(60));
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let storage = StorageManager::new(temp_dir.path().join("bench.db").to_str().unwrap())
+    let storage: StorageManager<storage::engine::MdbxEngine> = StorageManager::new(temp_dir.path().join("bench.db").to_str().unwrap())
         .expect("Failed to create storage");
 
     // Setup: Insert test data
@@ -26,7 +26,7 @@ fn main() {
     let embedding = Embedding {
         id: embedding_id.clone(),
         vector: large_vector.clone(),
-        metadata: json!({"bench": true, "dim": 4096}),
+        model: "test-model".to_string(),
     };
     storage.insert_embedding(&embedding).expect("Failed to insert");
 
@@ -39,7 +39,7 @@ fn main() {
         text_content: "This is a benchmark message with some content to test performance of zero-copy access patterns.".to_string(),
         attachment_ids: vec![],
         embedding_id: Some(embedding_id.clone()),
-        metadata: json!({"bench": true}),
+        metadata: json!({"bench": true}).to_string(),
     };
     storage.insert_node(&Node::Message(message)).expect("Failed to insert");
 
@@ -66,7 +66,7 @@ fn main() {
     let start = Instant::now();
     for _ in 0..ITERATIONS {
         let emb_ref = storage.get_embedding_ref(embedding_id.as_str()).expect("Failed to get ref");
-        let _vector = emb_ref.vector();
+        let _vector = emb_ref.map(|e| e.vector());
         std::hint::black_box(_vector);
     }
     let archived_time = start.elapsed();
@@ -94,7 +94,7 @@ fn main() {
     let start = Instant::now();
     for _ in 0..ITERATIONS {
         let node_ref = storage.get_node_ref(msg_id.as_str()).expect("Failed to get ref");
-        let _text = node_ref.message_text();
+        let _text: Option<String> = node_ref.and_then(|n| n.message_text().map(String::from));
         std::hint::black_box(_text);
     }
     let node_archived_time = start.elapsed();

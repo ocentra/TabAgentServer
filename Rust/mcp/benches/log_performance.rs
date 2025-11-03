@@ -112,7 +112,7 @@ fn bench_get_log_stats(c: &mut Criterion) {
                 },
                 format!("context_{}", i % 5),
                 format!("Message {}", i),
-                if i % 2 == 0 { LogSource::Storage } else { LogSource::Server },
+                if i % 2 == 0 { LogSource::Storage } else { LogSource::GrpcServer },
             )).unwrap();
         }
     });

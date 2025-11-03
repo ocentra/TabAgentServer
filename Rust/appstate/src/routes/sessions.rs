@@ -46,7 +46,7 @@ pub async fn handle_save_message(
         text_content: message.content.clone(),
         attachment_ids: vec![],
         embedding_id: None,
-        metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}).to_string(),
     };
 
     // Save to database using the new DatabaseClient

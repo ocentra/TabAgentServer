@@ -3,47 +3,52 @@ use crate::manifest::ManifestEntry;
 use crate::schema::QuantStatus;
 use crate::storage::ChunkStorage;
 use crate::download::{ModelDownloader, ProgressCallback};
+use storage::engine::{MdbxEngine, StorageEngine};
 use std::path::Path;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// Main model cache manager - combines storage, downloads, and manifest management
 pub struct ModelCache {
-    /// Keep the database alive for the entire lifetime of ModelCache
-    _db: Arc<sled::Db>,
     storage: Arc<ChunkStorage>,
     downloader: Arc<ModelDownloader>,
-    manifests: Arc<RwLock<sled::Tree>>,
+    manifest_engine: Arc<MdbxEngine>,
 }
 
 impl ModelCache {
     /// Create a new model cache at the specified path
     pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self> {
-        // Open the database ONCE
-        let db = Arc::new(sled::open(&db_path)?);
+        let path_str = db_path.as_ref().to_str()
+            .ok_or_else(|| ModelCacheError::Storage("Invalid UTF-8 in path".to_string()))?;
         
-        // Share the database instance with ChunkStorage
-        let storage = Arc::new(ChunkStorage::new(Arc::clone(&db))?);
+        // Create storage for chunks
+        let storage = Arc::new(ChunkStorage::new(path_str)?);
+        
+        // Create separate engine for manifests
+        let manifest_path = db_path.as_ref().join("manifests");
+        std::fs::create_dir_all(&manifest_path)
+            .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
+        let manifest_path_str = manifest_path.to_str()
+            .ok_or_else(|| ModelCacheError::Storage("Invalid UTF-8 in path".to_string()))?;
+        let manifest_engine = Arc::new(MdbxEngine::open(manifest_path_str)
+            .map_err(|e| ModelCacheError::Storage(e.to_string()))?);
+        
         let downloader = Arc::new(ModelDownloader::new());
         
-        // Open manifests tree using the same database instance
-        let manifests = Arc::new(RwLock::new(db.open_tree(b"model_manifests")?));
-        
         Ok(Self {
-            _db: db,
             storage,
             downloader,
-            manifests,
+            manifest_engine,
         })
     }
     
     /// Get or create manifest entry for a repo
     pub async fn get_manifest(&self, repo_id: &str) -> Result<Option<ManifestEntry>> {
-        let manifests = self.manifests.read().await;
         let key = format!("manifest:{}", repo_id);
         
-        if let Some(bytes) = manifests.get(key.as_bytes())? {
-            let (entry, _): (ManifestEntry, usize) = bincode::decode_from_slice(&bytes, bincode::config::standard())?;
+        if let Some(guard) = self.manifest_engine.get("metadata", key.as_bytes())
+            .map_err(|e| ModelCacheError::Storage(e.to_string()))? {
+            let entry = rkyv::from_bytes::<ManifestEntry, rkyv::rancor::Error>(&guard.data)
+                .map_err(|e| ModelCacheError::Serialization(e.to_string()))?;
             return Ok(Some(entry));
         }
         
@@ -52,11 +57,14 @@ impl ModelCache {
     
     /// Save manifest entry
     pub async fn save_manifest(&self, entry: &ManifestEntry) -> Result<()> {
-        let manifests = self.manifests.write().await;
         let key = format!("manifest:{}", entry.repo_id);
-        let bytes = bincode::encode_to_vec(entry, bincode::config::standard())?;
-        manifests.insert(key.as_bytes(), bytes)?;
-        manifests.flush()?;
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(entry)
+            .map_err(|e| ModelCacheError::Serialization(e.to_string()))?;
+        
+        self.manifest_engine.insert("metadata", key.as_bytes(), bytes.to_vec())
+            .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
+        self.manifest_engine.flush()
+            .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
         Ok(())
     }
     
@@ -287,7 +295,7 @@ impl ModelCache {
     
     /// Stream a file chunk-by-chunk (ZERO RAM OVERHEAD for large models)
     /// 
-    /// This is critical for serving 20GB models without exhausting memory
+    /// Streams file chunks without loading the entire file into memory.
     /// Returns an iterator that yields 5MB chunks
     /// 
     /// Example:
@@ -325,10 +333,11 @@ impl ModelCache {
         }
         
         // Delete manifest
-        let manifests = self.manifests.write().await;
         let key = format!("manifest:{}", repo_id);
-        manifests.remove(key.as_bytes())?;
-        manifests.flush()?;
+        self.manifest_engine.remove("metadata", key.as_bytes())
+            .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
+        self.manifest_engine.flush()
+            .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
         
         log::info!("Deleted model: {}", repo_id);
         
@@ -337,13 +346,13 @@ impl ModelCache {
     
     /// Get storage statistics
     pub async fn get_stats(&self) -> Result<CacheStats> {
-        let manifests = self.manifests.read().await;
         let mut total_repos = 0;
         let mut total_size = 0u64;
         
-        for item in manifests.iter() {
-            let (_key, value) = item?;
-            let (entry, _): (ManifestEntry, usize) = bincode::decode_from_slice(&value, bincode::config::standard())?;
+        for item in self.manifest_engine.scan_prefix("metadata", b"manifest:") {
+            let (_key, guard) = item.map_err(|e| ModelCacheError::Storage(e.to_string()))?;
+            let entry = rkyv::from_bytes::<ManifestEntry, rkyv::rancor::Error>(&guard.data)
+                .map_err(|e| ModelCacheError::Serialization(e.to_string()))?;
             total_repos += 1;
             total_size += self.storage.get_repo_size(&entry.repo_id)?;
         }
@@ -356,20 +365,14 @@ impl ModelCache {
     
     /// Flush pending writes to disk
     /// 
-    /// **Resource Analysis (RAG Rule 15.1):**
-    /// - Sled is memory-mapped; keeping open ≈ 5-10MB overhead (metadata/cache)
-    /// - Reopening = expensive (file I/O, index rebuild)
+    /// **Resource Analysis:**
+    /// - libmdbx is memory-mapped; keeping open ≈ minimal overhead
     /// - **Strategy: Keep open, flush at logical boundaries**
     /// 
     /// **When to flush:**
     /// - After complete download (all files)
     /// - After scan_repo (manifest created)
     /// - On explicit request (e.g., before backup)
-    /// 
-    /// **When NOT to flush:**
-    /// - After each chunk (would destroy streaming performance!)
-    /// - After single file read (no writes!)
-    /// - Between model operations (DB stays open)
     pub async fn flush(&self) -> Result<()> {
         log::debug!("[ModelCache] Flushing pending writes...");
         
@@ -377,38 +380,23 @@ impl ModelCache {
         self.storage.flush()?;
         
         // Flush manifests
-        let manifests = self.manifests.read().await;
-        manifests.flush()?;
+        self.manifest_engine.flush()
+            .map_err(|e| ModelCacheError::Storage(e.to_string()))?;
         
         log::debug!("[ModelCache] Flush complete");
         Ok(())
     }
     
     /// Graceful shutdown - final flush before application exit
-    /// 
-    /// **ONLY call on application shutdown!**
-    /// 
-    /// The cache is designed to stay open for application lifetime (RAG Rule 4.2).
-    /// Sled's memory-mapped design means minimal overhead (~5-10MB) when idle.
     pub async fn shutdown(&self) -> Result<()> {
         log::info!("[ModelCache] Application shutdown - final flush...");
         self.flush().await?;
-        log::info!("[ModelCache] Shutdown complete. DB will close on Drop.");
+        log::info!("[ModelCache] Shutdown complete.");
         Ok(())
     }
 }
 
-/// Automatic cleanup on drop (RAG Rule 4.2: RAII)
-/// 
-/// Sled's Drop implementation will:
-/// 1. Flush any pending writes
-/// 2. Close file handles
-/// 3. Release memory-mapped regions (OS handles this)
-/// 
-/// **Resource behavior:**
-/// - Connection open during app lifetime: ~5-10MB overhead
-/// - On drop: All resources released automatically
-/// - No explicit close needed (RAII pattern)
+/// Automatic cleanup on drop (RAII pattern)
 impl Drop for ModelCache {
     fn drop(&mut self) {
         log::debug!("[ModelCache] Drop - ensuring final flush...");
@@ -418,7 +406,6 @@ impl Drop for ModelCache {
             log::warn!("[ModelCache] Failed to flush on drop: {}", e);
         }
         
-        // Sled's Drop will handle file handles and memory cleanup
         log::debug!("[ModelCache] Resources released");
     }
 }

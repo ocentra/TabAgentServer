@@ -11,7 +11,7 @@ use crate::{
 pub type ModelValue = Value<ModelDataValueMarker>;
 
 /// Concrete model data types (RAG: Use enums for type safety).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum ModelDataType {
     /// Tensor data (for ONNX, GGUF inference).
     Tensor {
@@ -38,7 +38,7 @@ pub enum ModelDataType {
 }
 
 /// Tensor data storage (RAG: Use enums to handle different types safely).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum TensorData {
     F32(Vec<f32>),
     F64(Vec<f64>),

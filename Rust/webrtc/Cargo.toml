@@ -17,35 +17,32 @@ common = { path = "../common" }
 appstate = { path = "../appstate" }
 
 # WebRTC implementation
-webrtc = "0.14.0"
+webrtc = { workspace = true }
 
 # Async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true }
 
 # Serialization
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 # Error handling
-anyhow = "1"
-thiserror = "2"
+anyhow = { workspace = true }
+thiserror = { workspace = true }
 
 # Logging
-tracing = "0.1"
+tracing = { workspace = true }
 
 # Utilities
-async-trait = "0.1"
-futures = "0.3"
-uuid = { version = "1", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
-regex = "1"
-
-# Media processing (for video/audio codec validation and handling)
-# Note: These provide validation and metadata parsing, not full encoding/decoding
-bytes = "1"
+async-trait = { workspace = true }
+futures = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+regex = { workspace = true }
+bytes = { workspace = true }
 
 [dev-dependencies]
-tokio-test = "0.4"
+tokio-test = { workspace = true }
 
 [features]
 default = []

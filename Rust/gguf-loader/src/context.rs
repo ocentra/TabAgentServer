@@ -259,7 +259,7 @@ impl Context {
     /// # Ok::<(), model_loader::ModelError>(())
     /// ```
     pub fn generate(&mut self, prompt: &str) -> Result<String> {
-        use crate::ffi::{LlamaBatch, LlamaTokenData, LlamaTokenDataArray};
+        use crate::ffi::{LlamaTokenData, LlamaTokenDataArray};
         
         // Tokenize the prompt
         let mut tokens = self.tokenize(prompt, true)?;
@@ -455,8 +455,6 @@ impl Context {
     /// # Ok::<(), gguf_loader::ModelError>(())
     /// ```
     pub fn generate_embeddings(&mut self, text: &str) -> Result<Vec<f32>> {
-        use crate::ffi::LlamaBatch;
-        
         // Enable embedding mode
         // SAFETY: Calling llama_set_embeddings with valid context pointer
         unsafe {

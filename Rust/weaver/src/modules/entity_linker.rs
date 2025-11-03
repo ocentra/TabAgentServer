@@ -3,9 +3,9 @@
 //! This module performs Named Entity Recognition (NER) on text nodes
 //! and creates Entity nodes and MENTIONS edges.
 
-use crate::{WeaverContext, WeaverResult};
+use crate::{WeaverContext, WeaverResult, WeaverError};
 use common::{NodeId, EdgeId, models::{Edge, Entity as EntityNode, Node}};
-use rkyv;
+use storage::traits::DirectAccessOperations;
 
 /// Processes a newly created node for entity extraction and linking.
 pub async fn on_node_created(
@@ -23,7 +23,7 @@ pub async fn on_node_created(
     // Load the node
     let node = if let Some(node_ref) = context.coordinator.conversations_active().get_node_ref(node_id)? {
         node_ref.deserialize()
-            .map_err(|e| WeaverError::Storage(e))?
+            .map_err(|e| WeaverError::Database(e))?
     } else {
         log::warn!("Node {} not found for entity linking", node_id);
         return Ok(());
@@ -93,7 +93,7 @@ async fn create_or_find_entity(
             // Load the entity node to verify entity_type matches
             if let Some(node_ref) = context.coordinator.knowledge_active().get_node_ref(candidate_id.as_str())? {
                 let node = node_ref.deserialize()
-                    .map_err(|e| WeaverError::Storage(e))?;
+                    .map_err(|e| WeaverError::Database(e))?;
                 
                 if let Node::Entity(entity) = node {
                     // Check if entity_type matches
@@ -107,7 +107,7 @@ async fn create_or_find_entity(
             // Also check stable knowledge tier
             if let Some(node_ref) = context.coordinator.knowledge_stable().get_node_ref(candidate_id.as_str())? {
                 let node = node_ref.deserialize()
-                    .map_err(|e| WeaverError::Storage(e))?;
+                    .map_err(|e| WeaverError::Database(e))?;
                 
                 if let Node::Entity(entity) = node {
                     if entity.entity_type == entity_type {
@@ -126,7 +126,7 @@ async fn create_or_find_entity(
         label: label.to_string(),
         entity_type: entity_type.to_string(),
         embedding_id: None,
-        metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}).to_string(),
     };
     
     context.coordinator.knowledge_active().insert_node(&Node::Entity(entity))?;
@@ -150,11 +150,11 @@ async fn create_mentions_edge(
         edge_type: "MENTIONS".to_string(),
         created_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| WeaverError::Storage(common::DbError::InvalidOperation(
+            .map_err(|e| WeaverError::Database(common::DbError::InvalidOperation(
                 format!("System time error: {}", e)
             )))?
             .as_millis() as i64,
-        metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}).to_string(),
     };
     
     context.coordinator.knowledge_active().insert_edge(&edge)?;

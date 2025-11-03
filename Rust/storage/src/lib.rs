@@ -1,70 +1,83 @@
-//! Core storage layer for the TabAgent embedded database.
+//! Core storage layer for the TabAgent system.
 //!
-//! This crate provides a safe, transactional interface for CRUD operations on
-//! nodes, edges, and embeddings using the `libmdbx` embedded database engine.
+//! This crate provides a multi-database orchestration system built on `libmdbx`.
 //!
 //! # Architecture
 //!
-//! The storage layer implements the Hybrid Schema Model:
-//! - **Strongly-typed core fields** enable high-performance indexing
-//! - **Flexible metadata fields** provide extensibility
-//! - Serialization with `rkyv`
+//! The storage system is split into two layers:
 //!
-//! # Concurrency Safety
+//! ## Generic Storage Infrastructure (this crate)
+//! - **StorageRegistry**: Multi-database orchestrator that manages named databases
+//! - **StorageManager**: Generic CRUD operations over a single database
+//! - **MdbxEngine**: Low-level libmdbx interface with zero-copy capabilities
+//! - **DbConfig**: Configuration for database instances
 //!
-//! The `StorageManager` is designed to be thread-safe and can be safely shared
-//! across multiple threads. The underlying libmdbx database provides MVCC concurrency,
-//! so multiple threads can perform operations concurrently without additional
-//! synchronization.
+//! ## Domain-Specific Logic (mia-storage crate)
+//! - DatabaseCoordinator: Manages MIA's 7-database cognitive architecture
+//! - Domain managers: ConversationManager, KnowledgeManager, etc.
+//! - Indexing integration: Updates search indexes when data changes
 //!
-//! For sharing across threads, wrap the StorageManager in an `Arc`:
+//! # Using StorageRegistry
 //!
 //! ```no_run
-//! use storage::StorageManager;
-//! use std::sync::Arc;
-//! use std::thread;
+//! use storage::{StorageRegistry, DbConfig};
 //!
-//! # fn main() -> Result<(), storage::DbError> {
-//! let storage = Arc::new(StorageManager::new("my_database")?);
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let registry = StorageRegistry::new("/data");
 //!
-//! // Share across threads
-//! let storage_clone = Arc::clone(&storage);
-//! let handle = thread::spawn(move || {
-//!     // Safe to use storage_clone here
-//!     # Ok::<(), storage::DbError>(())
-//! });
+//! // Register a database
+//! let config = DbConfig::new("knowledge_graph.mdbx")
+//!     .with_collection("nodes")
+//!     .with_collection("edges");
+//! registry.add_storage("knowledge_graph", config)?;
 //!
-//! // Safe to use storage here as well
-//! handle.join().unwrap()?;
+//! // Perform CRUD operations
+//! registry.insert("knowledge_graph", "nodes", b"key1", b"value1")?;
+//! let value = registry.get("knowledge_graph", "nodes", b"key1")?;
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! # Concurrency Safety
+//!
+//! `StorageRegistry` and `StorageManager` are thread-safe and can be safely shared
+//! across multiple threads. The underlying libmdbx database provides MVCC concurrency,
+//! so multiple threads can perform operations concurrently without additional
+//! synchronization.
 
+// Core infrastructure modules
+pub mod config;
+pub mod registry;
+pub mod engine;
+mod storage_manager;
+
+// Domain-specific modules (will be moved to mia-storage crate)
 mod archived_node;
 pub mod conversations;
 pub mod coordinator;
 mod database_type;
 pub mod embeddings;
-pub mod engine;
 pub mod experience;
 pub mod knowledge;
-mod storage_manager;
 pub mod summaries;
 pub mod grpc_server;
 pub mod database_client;
-
-// Re-export for convenience
-pub use archived_node::{ArchivedNodeRef, ArchivedEdgeRef, ArchivedEmbeddingRef};
-pub use database_client::DatabaseClient;
-pub use engine::{StorageEngine, StorageTransaction, MdbxEngine, MdbxEngineError};
 pub mod time_queries;
 pub mod time_scope;
 pub mod tool_results;
 pub mod traits;
 
+// Core infrastructure exports
+pub use config::DbConfig;
+pub use registry::{StorageRegistry, RegistryError};
+pub use engine::{StorageEngine, StorageTransaction, MdbxEngine, MdbxEngineError};
+pub use storage_manager::{StorageManager, DefaultStorageManager};
+
+// Domain-specific exports (will be moved to mia-storage)
+pub use archived_node::{ArchivedNodeRef, ArchivedEdgeRef, ArchivedEmbeddingRef};
+pub use database_client::DatabaseClient;
 pub use coordinator::DatabaseCoordinator;
 pub use database_type::{DatabaseType, TemperatureTier};
-pub use storage_manager::{StorageManager, DefaultStorageManager};
 pub use time_scope::TimeScope;
 
 // Re-export commonly used types for convenience

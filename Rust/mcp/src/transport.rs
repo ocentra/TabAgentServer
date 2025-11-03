@@ -3,11 +3,11 @@
 //! Handles JSON-RPC over stdin/stdout for MCP protocol communication
 
 use crate::McpManager;
-use common::logging::{LogEntry, LogLevel, LogSource};
+use common::logging::LogEntry;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 /// MCP JSON-RPC request
 #[derive(Debug, Clone, Deserialize)]
@@ -143,7 +143,7 @@ async fn handle_request(
         
         // === MODEL TOOLS ===
         "list_models" => {
-            manager.list_models().await
+            manager.list_models().await.map_err(|e| e.into())
         }
         
         "load_model" => {
@@ -156,7 +156,7 @@ async fn handle_request(
                 .and_then(|p| p.get("variant"))
                 .and_then(|v| v.as_str().map(|s| s.to_string()));
             
-            manager.load_model(model_id, variant).await
+            manager.load_model(model_id, variant).await.map_err(|e| e.into())
         }
         
         "unload_model" => {
@@ -165,7 +165,7 @@ async fn handle_request(
                 .and_then(|p| p.get("model_id")?.as_str().map(|s| s.to_string()))
                 .ok_or_else(|| anyhow::anyhow!("Missing model_id"))?;
             
-            manager.unload_model(model_id).await
+            manager.unload_model(model_id).await.map_err(|e| e.into())
         }
         
         "get_model_info" => {
@@ -174,7 +174,7 @@ async fn handle_request(
                 .and_then(|p| p.get("model_id")?.as_str().map(|s| s.to_string()))
                 .ok_or_else(|| anyhow::anyhow!("Missing model_id"))?;
             
-            manager.get_model_info(model_id).await
+            manager.get_model_info(model_id).await.map_err(|e| e.into())
         }
         
         "pull_model" => {
@@ -187,7 +187,7 @@ async fn handle_request(
                 .and_then(|p| p.get("quantization"))
                 .and_then(|v| v.as_str().map(|s| s.to_string()));
             
-            manager.pull_model(model, quantization).await
+            manager.pull_model(model, quantization).await.map_err(|e| e.into())
         }
         
         "delete_model" => {
@@ -196,15 +196,15 @@ async fn handle_request(
                 .and_then(|p| p.get("model_id")?.as_str().map(|s| s.to_string()))
                 .ok_or_else(|| anyhow::anyhow!("Missing model_id"))?;
             
-            manager.delete_model(model_id).await
+            manager.delete_model(model_id).await.map_err(|e| e.into())
         }
         
         "get_loaded_models" => {
-            manager.get_loaded_models().await
+            manager.get_loaded_models().await.map_err(|e| e.into())
         }
         
         "get_embedding_models" => {
-            manager.get_embedding_models().await
+            manager.get_embedding_models().await.map_err(|e| e.into())
         }
         
         "select_model" => {
@@ -213,24 +213,24 @@ async fn handle_request(
                 .and_then(|p| p.get("model_id")?.as_str().map(|s| s.to_string()))
                 .ok_or_else(|| anyhow::anyhow!("Missing model_id"))?;
             
-            manager.select_model(model_id).await
+            manager.select_model(model_id).await.map_err(|e| e.into())
         }
         
         // === SYSTEM TOOLS ===
         "health_check" => {
-            manager.health_check().await
+            manager.health_check().await.map_err(|e| e.into())
         }
         
         "get_system_info" => {
-            manager.get_system_info().await
+            manager.get_system_info().await.map_err(|e| e.into())
         }
         
         "get_stats" => {
-            manager.get_stats().await
+            manager.get_stats().await.map_err(|e| e.into())
         }
         
         "get_resources" => {
-            manager.get_resources().await
+            manager.get_resources().await.map_err(|e| e.into())
         }
         
         "estimate_memory" => {
@@ -243,11 +243,11 @@ async fn handle_request(
                 .and_then(|p| p.get("quantization"))
                 .and_then(|v| v.as_str().map(|s| s.to_string()));
             
-            manager.estimate_memory(model, quantization).await
+            manager.estimate_memory(model, quantization).await.map_err(|e| e.into())
         }
         
         "get_hardware_info" => {
-            manager.get_hardware_info().await
+            manager.get_hardware_info().await.map_err(|e| e.into())
         }
         
         "check_model_feasibility" => {
@@ -256,11 +256,11 @@ async fn handle_request(
                 .and_then(|p| p.get("model_size_mb")?.as_u64())
                 .ok_or_else(|| anyhow::anyhow!("Missing model_size_mb"))?;
             
-            manager.check_model_feasibility(model_size_mb).await
+            manager.check_model_feasibility(model_size_mb).await.map_err(|e| e.into())
         }
         
         "get_recommended_models" => {
-            manager.get_recommended_models().await
+            manager.get_recommended_models().await.map_err(|e| e.into())
         }
         
         // === GENERATION TOOLS ===
@@ -274,7 +274,7 @@ async fn handle_request(
                 .and_then(|p| p.get("prompt")?.as_str().map(|s| s.to_string()))
                 .ok_or_else(|| anyhow::anyhow!("Missing prompt"))?;
             
-            manager.test_generation(model, prompt).await
+            manager.test_generation(model, prompt).await.map_err(|e| e.into())
         }
         
         "test_chat" => {
@@ -288,7 +288,7 @@ async fn handle_request(
                 .and_then(|msgs| serde_json::from_value::<Vec<tabagent_values::Message>>(serde_json::Value::Array(msgs)).ok())
                 .ok_or_else(|| anyhow::anyhow!("Missing messages"))?;
             
-            manager.test_chat(model, messages).await
+            manager.test_chat(model, messages).await.map_err(|e| e.into())
         }
         
         "generate_embeddings" => {
@@ -302,7 +302,7 @@ async fn handle_request(
                 .and_then(|v| serde_json::from_value::<tabagent_values::EmbeddingInput>(v.clone()).ok())
                 .ok_or_else(|| anyhow::anyhow!("Missing input"))?;
             
-            manager.generate_embeddings(model, input).await
+            manager.generate_embeddings(model, input).await.map_err(|e| e.into())
         }
         
         "stop_generation" => {
@@ -311,7 +311,7 @@ async fn handle_request(
                 .and_then(|p| p.get("request_id")?.as_str().map(|s| s.to_string()))
                 .ok_or_else(|| anyhow::anyhow!("Missing request_id"))?;
             
-            manager.stop_generation(request_id).await
+            manager.stop_generation(request_id).await.map_err(|e| e.into())
         }
         
         // === RAG TOOLS ===
@@ -328,7 +328,7 @@ async fn handle_request(
                 .as_ref()
                 .and_then(|p| p.get("filters").cloned());
             
-            manager.semantic_search(query, k, filters).await
+            manager.semantic_search(query, k, filters).await.map_err(|e| e.into())
         }
         
         "calculate_similarity" => {
@@ -345,7 +345,7 @@ async fn handle_request(
                 .and_then(|p| p.get("model"))
                 .and_then(|v| v.as_str().map(|s| s.to_string()));
             
-            manager.calculate_similarity(text1, text2, model).await
+            manager.calculate_similarity(text1, text2, model).await.map_err(|e| e.into())
         }
         
         "rerank" => {
@@ -367,7 +367,7 @@ async fn handle_request(
                 .and_then(|p| p.get("top_n"))
                 .and_then(|v| v.as_u64().map(|u| u as usize));
             
-            manager.rerank(model, query, documents, top_n).await
+            manager.rerank(model, query, documents, top_n).await.map_err(|e| e.into())
         }
         
         // === SESSION TOOLS ===
@@ -381,7 +381,7 @@ async fn handle_request(
                 .and_then(|p| p.get("limit"))
                 .and_then(|v| v.as_u64().map(|u| u as usize));
             
-            manager.get_chat_history(session_id, limit).await
+            manager.get_chat_history(session_id, limit).await.map_err(|e| e.into())
         }
         
         // Unknown method

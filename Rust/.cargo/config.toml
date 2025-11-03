@@ -1,0 +1,8 @@
+# Cargo configuration for TabAgent Rust workspace
+# Auto-sets LIBCLANG_PATH for bindgen (required by mdbx-sys on Windows)
+
+[env]
+# Set LIBCLANG_PATH for Windows builds
+# This is required by bindgen when building mdbx-sys
+LIBCLANG_PATH = { value = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\Llvm\\x64\\bin", force = true, relative = false }
+

@@ -76,20 +76,22 @@ use std::fmt;
 ///     // Can only be a response
 /// }
 /// ```
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize)]
 pub struct Value<Type: ValueTypeMarker = DynValueTypeMarker> {
     inner: ValueInner,
+    #[serde(skip)]
     _marker: std::marker::PhantomData<Type>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize)]
 struct ValueInner {
     data: ValueData,
     dtype: ValueType,
 }
 
 /// The actual data stored in a value (RAG: Use enums for type safety)
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize)]
+#[serde(untagged)]
 enum ValueData {
     Request(Box<RequestType>),
     Response(Box<ResponseType>),

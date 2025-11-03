@@ -69,8 +69,8 @@ impl ExperienceOperations for ExperienceManager {
         let pattern_outcome = ActionOutcome {
             id: common::NodeId::new(format!("pattern_{}", pattern_id)),
             action_type: format!("success_pattern_{}", action_type),
-            action_args: serde_json::json!({"confidence": confidence}),
-            result: serde_json::json!({"pattern_id": pattern_id, "type": "success"}),
+            action_args: serde_json::json!({"confidence": confidence}).to_string(),
+            result: serde_json::json!({"pattern_id": pattern_id, "type": "success"}).to_string(),
             user_feedback: None,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -93,8 +93,8 @@ impl ExperienceOperations for ExperienceManager {
         let pattern_outcome = ActionOutcome {
             id: common::NodeId::new(format!("pattern_{}", pattern_id)),
             action_type: format!("error_pattern_{}", action_type),
-            action_args: serde_json::json!({"error_count": error_count}),
-            result: serde_json::json!({"pattern_id": pattern_id, "type": "error"}),
+            action_args: serde_json::json!({"error_count": error_count}).to_string(),
+            result: serde_json::json!({"pattern_id": pattern_id, "type": "error"}).to_string(),
             user_feedback: None,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

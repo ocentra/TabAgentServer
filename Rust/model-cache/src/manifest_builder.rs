@@ -6,7 +6,7 @@ use crate::{
     error::Result,
 };
 
-/// Extension-compatible quantization information
+/// Quantization information for model files.
 /// Matches the TypeScript QuantInfo interface in idbModel.ts
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +21,7 @@ pub struct ExtensionQuantInfo {
     pub has_external_data: bool,
 }
 
-/// Extension-compatible manifest entry
+/// Manifest entry for model files.
 /// Matches the TypeScript ManifestEntry interface in idbModel.ts
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,7 +53,7 @@ pub const DEFAULT_BYPASS_MODELS: &[&str] = &[
 /// * `bypass_models` - Models that bypass size limits
 ///
 /// # Returns
-/// Extension-compatible manifest with all ONNX quantizations detected
+/// Complete manifest with all ONNX quantizations detected.
 ///
 /// # Examples
 /// ```no_run
@@ -104,7 +104,7 @@ pub fn build_manifest_from_hf(
         let mut total_size: u64 = onnx_file.size.unwrap_or(0);
         
         // Check for corresponding .onnx_data OR .onnx.data file
-        // Extension checks BOTH patterns (sidepanel.ts:1777)
+        // Check both patterns for external data files
         let base_name = onnx_path.strip_suffix(".onnx").unwrap_or(onnx_path);
         let data_path_underscore = format!("{}.onnx_data", base_name);
         let data_path_dot = format!("{}.onnx.data", base_name);

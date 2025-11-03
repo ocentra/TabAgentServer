@@ -48,8 +48,10 @@ pub fn bridge_to_ort(
 
 /// Convert a single execution provider to ort format
 fn convert_provider(provider: &Arc<dyn ExecutionProvider>) -> Option<ort::execution_providers::ExecutionProviderDispatch> {
+    #[allow(unused_imports)] // Used in feature-gated blocks
     use tabagent_execution_providers::constants::*;
     
+    #[allow(unused_variables)] // Used in feature-gated blocks
     let config = provider.config();
     
     match provider.backend_type() {

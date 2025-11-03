@@ -10,7 +10,6 @@ use common::grpc::database::{
     database_service_client::DatabaseServiceClient,
     Conversation, ConversationRequest, StoreConversationRequest,
     Knowledge, KnowledgeRequest, StoreKnowledgeRequest,
-    StatusResponse,
 };
 use storage::coordinator::DatabaseCoordinator;
 use storage::traits::{ConversationOperations, KnowledgeOperations, DirectAccessOperations};
@@ -48,9 +47,8 @@ impl DatabaseClient {
                 let conversations: Vec<Conversation> = storage
                     .scan_prefix(session_prefix.as_bytes())
                     .filter_map(|result| result.ok())
-                    .filter_map(|(key, value)| {
-                        let archived = rkyv::check_archived_root::<Node>(&value).ok()?;
-                        let node = archived.deserialize(&mut rkyv::Infallible).ok()?;
+                    .filter_map(|(_key, value)| {
+                        let node = rkyv::from_bytes::<Node, rkyv::rancor::Error>(&value).ok()?;
                         
                         if let Node::Message(msg) = node {
                             Some(Conversation {
@@ -92,7 +90,7 @@ impl DatabaseClient {
                     text_content: conversation.content,
                     attachment_ids: vec![],
                     embedding_id: None,
-                    metadata: serde_json::json!({}),
+                    metadata: serde_json::json!({}).to_string(),
                 };
                 
                 coordinator.conversation_manager.insert_message(message)?;
@@ -143,7 +141,7 @@ impl DatabaseClient {
                     label: knowledge.content,
                     entity_type: knowledge.source,
                     embedding_id: None,
-                    metadata: serde_json::json!({}),
+                    metadata: serde_json::json!({}).to_string(),
                 };
                 
                 coordinator.knowledge_manager.insert_entity(entity)?;

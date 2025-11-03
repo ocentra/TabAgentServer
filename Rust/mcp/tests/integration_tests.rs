@@ -52,7 +52,7 @@ async fn test_store_and_query_logs() {
         LogLevel::Info,
         "test_context".to_string(),
         "Test info message".to_string(),
-        LogSource::Server,
+        LogSource::GrpcServer,
     );
     
     manager.store_log(log1.clone()).unwrap();
@@ -111,7 +111,7 @@ async fn test_query_logs_by_source() {
         LogLevel::Info,
         "context".to_string(),
         "Message 2".to_string(),
-        LogSource::Server,
+        LogSource::GrpcServer,
     )).unwrap();
     
     // Query only storage logs
@@ -186,7 +186,7 @@ async fn test_get_log_stats() {
         LogLevel::Info,
         "context1".to_string(),
         "Info".to_string(),
-        LogSource::Server,
+        LogSource::GrpcServer,
     )).unwrap();
     
     let stats = manager.get_log_stats().unwrap();

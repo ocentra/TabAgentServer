@@ -95,10 +95,19 @@ async fn main() -> Result<()> {
         .init();
 
     // Parse CLI arguments
-    let args = CliArgs::parse();
+    let mut args = CliArgs::parse();
+    
+    // Override port from environment if set by port manager
+    if let Ok(port_str) = std::env::var("TABAGENT_RUST_PORT") {
+        if let Ok(port) = port_str.parse::<u16>() {
+            info!("Using port {} from TABAGENT_RUST_PORT environment variable", port);
+            args.port = port;
+        }
+    }
     
     info!("Starting TabAgent Server v{}", env!("CARGO_PKG_VERSION"));
     info!("Mode: {:?}", args.mode);
+    info!("Ports: HTTP={}, WebRTC={}", args.port, args.webrtc_port);
 
     // Kill any existing processes on ports BEFORE initializing state (to avoid DB lock conflicts)
     match args.mode {

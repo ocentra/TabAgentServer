@@ -8,11 +8,44 @@
 
 use storage::DatabaseCoordinator;
 use common::{DbResult, models::Node, backend::AppStateProvider};
-use common::logging::{LogEntry, LogLevel, LogQuery, LogSource};
+use common::logging::{LogEntry, LogQuery, LogSource};
 use std::sync::Arc;
 
 pub mod error;
 pub mod transport;
+
+/// Helper function to check if a log entry matches query criteria
+fn query_matches(query: &LogQuery, log: &LogEntry) -> bool {
+    if let Some(ref level_filter) = query.level {
+        if log.level.to_string() != level_filter.to_lowercase() {
+            return false;
+        }
+    }
+    
+    if let Some(ref context_filter) = query.context {
+        if !log.context.contains(context_filter) {
+            return false;
+        }
+    }
+    
+    if let Some(ref source_filter) = query.source {
+        let source = LogSource::from(source_filter.as_str());
+        if log.source != source {
+            return false;
+        }
+    }
+    
+    if let Some(ref since) = query.since {
+        if let Ok(since_time) = chrono::DateTime::parse_from_rfc3339(since) {
+            let since_ms = since_time.timestamp_millis();
+            if log.timestamp < since_ms {
+                return false;
+            }
+        }
+    }
+    
+    true
+}
 
 pub use error::{McpError, McpResult};
 
@@ -109,7 +142,7 @@ impl McpManager {
         // Input validation
         if let Some(limit) = query.limit {
             if limit == 0 || limit > 10000 {
-                return Err(common::DbError::InvalidInput(
+                return Err(common::DbError::InvalidOperation(
                     "limit must be between 1 and 10000".to_string()
                 ));
             }
@@ -117,7 +150,7 @@ impl McpManager {
 
         if let Some(ref since) = query.since {
             if chrono::DateTime::parse_from_rfc3339(since).is_err() {
-                return Err(common::DbError::InvalidInput(
+                return Err(common::DbError::InvalidOperation(
                     format!("Invalid RFC3339 timestamp: {}", since)
                 ));
             }
@@ -141,14 +174,12 @@ impl McpManager {
             let (_, bytes) = result?;
             
             // Deserialize node
-            let archived = rkyv::check_archived_root::<Node>(&bytes)
-                .map_err(|e| common::DbError::Serialization(e.to_string()))?;
-            let node = archived.deserialize(&mut rkyv::Infallible)
-                .map_err(|e| common::DbError::Serialization(e.to_string()))?;
+            let node = rkyv::from_bytes::<Node, rkyv::rancor::Error>(&bytes)
+                .map_err(|e| common::DbError::InvalidOperation(format!("Deserialization failed: {}", e)))?;
             
             if let Node::Log(log) = node {
                 // Apply filters using helper function
-                if !self::query_matches(&query, &log) {
+                if !crate::query_matches(&query, &log) {
                     continue;
                 }
                 
@@ -166,39 +197,6 @@ impl McpManager {
         results.truncate(limit);
         
         Ok(results)
-    }
-
-    /// Helper function to check if a log entry matches query criteria
-    fn query_matches(query: &LogQuery, log: &LogEntry) -> bool {
-        if let Some(ref level_filter) = query.level {
-            if log.level.to_string() != level_filter.to_lowercase() {
-                return false;
-            }
-        }
-        
-        if let Some(ref context_filter) = query.context {
-            if !log.context.contains(context_filter) {
-                return false;
-            }
-        }
-        
-        if let Some(ref source_filter) = query.source {
-            let source = LogSource::from(source_filter.as_str());
-            if log.source != source {
-                return false;
-            }
-        }
-        
-        if let Some(ref since) = query.since {
-            if let Ok(since_time) = chrono::DateTime::parse_from_rfc3339(since) {
-                let since_ms = since_time.timestamp_millis();
-                if log.timestamp < since_ms {
-                    return false;
-                }
-            }
-        }
-        
-        true
     }
 
     /// Clear logs from persistent storage
@@ -233,7 +231,7 @@ impl McpManager {
             
             // We need to read the node to check if it's a log, but we can just try to delete
             // For now, let's just delete all nodes in the logs database
-            self.coordinator.logs.remove_node(&String::from_utf8_lossy(&key).as_ref())?;
+            self.coordinator.logs.delete_node(&String::from_utf8_lossy(&key))?;
             count += 1;
         }
         

@@ -12,7 +12,8 @@ pub struct ArchivedNodeRef<G: ReadGuard> {
 
 impl<G: ReadGuard> ArchivedNodeRef<G> {
     pub(crate) fn new(guard: G) -> DbResult<Self> {
-        let archived = guard.archived::<Node>()?;
+        let archived = guard.archived::<Node>()
+            .map_err(|e| common::DbError::InvalidOperation(e))?;
         let archived = unsafe { std::mem::transmute(archived) };
         Ok(Self { _guard: guard, archived })
     }
@@ -53,7 +54,7 @@ impl<G: ReadGuard> ArchivedNodeRef<G> {
     #[inline]
     pub fn message_id(&self) -> Option<&str> {
         match self.archived {
-            rkyv::Archived::<Node>::Message(m) => Some(m.id.as_str()),
+            rkyv::Archived::<Node>::Message(m) => Some(m.id.0.as_str()),
             _ => None,
         }
     }
@@ -62,7 +63,7 @@ impl<G: ReadGuard> ArchivedNodeRef<G> {
     #[inline]
     pub fn message_chat_id(&self) -> Option<&str> {
         match self.archived {
-            rkyv::Archived::<Node>::Message(m) => Some(m.chat_id.as_str()),
+            rkyv::Archived::<Node>::Message(m) => Some(m.chat_id.0.as_str()),
             _ => None,
         }
     }
@@ -123,8 +124,8 @@ impl<G: ReadGuard> ArchivedNodeRef<G> {
     
     /// Deserialize to owned type
     pub fn deserialize(&self) -> DbResult<Node> {
-        self.archived
-            .deserialize(&mut rkyv::Infallible)
+        // Use from_bytes with the guard's data
+        rkyv::from_bytes::<Node, rkyv::rancor::Error>(self._guard.data())
             .map_err(|e| common::DbError::Serialization(e.to_string()))
     }
 }
@@ -137,7 +138,8 @@ pub struct ArchivedEdgeRef<G: ReadGuard> {
 
 impl<G: ReadGuard> ArchivedEdgeRef<G> {
     pub(crate) fn new(guard: G) -> DbResult<Self> {
-        let archived = guard.archived::<common::models::Edge>()?;
+        let archived = guard.archived::<common::models::Edge>()
+            .map_err(|e| common::DbError::InvalidOperation(e))?;
         let archived = unsafe { std::mem::transmute(archived) };
         Ok(Self { _guard: guard, archived })
     }
@@ -156,13 +158,13 @@ impl<G: ReadGuard> ArchivedEdgeRef<G> {
     /// Get from_node ID without deserializing
     #[inline]
     pub fn from_node(&self) -> &str {
-        self.archived.from_node.as_str()
+        self.archived.from_node.0.as_str()
     }
     
     /// Get to_node ID without deserializing
     #[inline]
     pub fn to_node(&self) -> &str {
-        self.archived.to_node.as_str()
+        self.archived.to_node.0.as_str()
     }
     
     /// Get created_at timestamp without deserializing
@@ -173,8 +175,8 @@ impl<G: ReadGuard> ArchivedEdgeRef<G> {
     
     /// Deserialize to owned type (ALLOCATES)
     pub fn deserialize(&self) -> DbResult<common::models::Edge> {
-        self.archived
-            .deserialize(&mut rkyv::Infallible)
+        // Use from_bytes with the guard's data
+        rkyv::from_bytes::<common::models::Edge, rkyv::rancor::Error>(self._guard.data())
             .map_err(|e| common::DbError::Serialization(e.to_string()))
     }
 }
@@ -187,7 +189,8 @@ pub struct ArchivedEmbeddingRef<G: ReadGuard> {
 
 impl<G: ReadGuard> ArchivedEmbeddingRef<G> {
     pub(crate) fn new(guard: G) -> DbResult<Self> {
-        let archived = guard.archived::<common::models::Embedding>()?;
+        let archived = guard.archived::<common::models::Embedding>()
+            .map_err(|e| common::DbError::InvalidOperation(e))?;
         let archived = unsafe { std::mem::transmute(archived) };
         Ok(Self { _guard: guard, archived })
     }
@@ -199,8 +202,9 @@ impl<G: ReadGuard> ArchivedEmbeddingRef<G> {
     
     /// Get vector slice without deserializing
     #[inline]
-    pub fn vector(&self) -> &[f32] {
-        self.archived.vector.as_slice()
+    pub fn vector(&self) -> Vec<f32> {
+        // Convert from archived f32_le to native f32
+        self.archived.vector.iter().map(|&v| v.into()).collect()
     }
     
     /// Get vector dimension without deserializing
@@ -217,8 +221,8 @@ impl<G: ReadGuard> ArchivedEmbeddingRef<G> {
     
     /// Deserialize to owned type (ALLOCATES)
     pub fn deserialize(&self) -> DbResult<common::models::Embedding> {
-        self.archived
-            .deserialize(&mut rkyv::Infallible)
+        // Use from_bytes with the guard's data
+        rkyv::from_bytes::<common::models::Embedding, rkyv::rancor::Error>(self._guard.data())
             .map_err(|e| common::DbError::Serialization(e.to_string()))
     }
 }

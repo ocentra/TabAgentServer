@@ -21,7 +21,7 @@ fn test_storage_manager_creation() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.db");
 
-    let storage = StorageManager::new(db_path.to_str().unwrap()).expect("Failed to create storage");
+    let storage: StorageManager<storage::engine::MdbxEngine> = StorageManager::new(db_path.to_str().unwrap()).expect("Failed to create storage");
     // Storage created via new() doesn't have a specific type or tier
     assert_eq!(storage.tier(), None);
 
@@ -33,7 +33,7 @@ fn test_node_crud_operations() {
     println!("\n🧪 Testing Node CRUD operations...");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let storage = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
+    let storage: StorageManager<storage::engine::MdbxEngine> = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
         .expect("Failed to create storage");
 
     // CREATE: Insert a message node
@@ -47,7 +47,7 @@ fn test_node_crud_operations() {
         text_content: "Hello, world!".to_string(),
         attachment_ids: vec![],
         embedding_id: None,
-        metadata: json!({"test": true}),
+        metadata: json!({"test": true}).to_string(),
     };
 
     println!("➕ Creating message node: {}", msg_id.as_str());
@@ -58,9 +58,9 @@ fn test_node_crud_operations() {
     // READ: Retrieve the node - ZERO-COPY path
     println!("📖 Reading message node...");
     let retrieved = if let Some(guard) = storage.get_node_guard(msg_id.as_str()).expect("Failed to get node guard") {
-        let archived = rkyv::check_archived_root::<common::models::Node>(guard.data())
-            .expect("Failed to check archived root");
-        archived.deserialize(&mut rkyv::Infallible).expect("Failed to deserialize")
+        use storage::engine::ReadGuard;
+        Some(rkyv::from_bytes::<common::models::Node, rkyv::rancor::Error>(guard.data())
+            .expect("Failed to deserialize"))
     } else {
         None
     };
@@ -93,7 +93,7 @@ fn test_edge_crud_operations() {
     println!("\n🧪 Testing Edge CRUD operations...");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let storage = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
+    let storage: StorageManager<storage::engine::MdbxEngine> = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
         .expect("Failed to create storage");
 
     // Create two message nodes first
@@ -109,7 +109,7 @@ fn test_edge_crud_operations() {
         text_content: "First message".to_string(),
         attachment_ids: vec![],
         embedding_id: None,
-        metadata: json!({}),
+        metadata: json!({}).to_string(),
     };
 
     let msg2 = Message {
@@ -120,7 +120,7 @@ fn test_edge_crud_operations() {
         text_content: "Second message".to_string(),
         attachment_ids: vec![],
         embedding_id: None,
-        metadata: json!({}),
+        metadata: json!({}).to_string(),
     };
 
     storage
@@ -139,7 +139,7 @@ fn test_edge_crud_operations() {
         to_node: node2_id.clone(),
         edge_type: "REPLY".to_string(),
         created_at: current_timestamp(),
-        metadata: json!({"weight": 1.0}),
+        metadata: json!({"weight": 1.0}).to_string(),
     };
 
     println!(
@@ -152,9 +152,9 @@ fn test_edge_crud_operations() {
     // READ: Retrieve the edge - ZERO-COPY path
     println!("📖 Reading edge...");
     let retrieved = if let Some(guard) = storage.get_edge_guard(edge_id.as_str()).expect("Failed to get edge guard") {
-        let archived = rkyv::check_archived_root::<common::models::Edge>(guard.data())
-            .expect("Failed to check archived root");
-        Some(archived.deserialize(&mut rkyv::Infallible).expect("Failed to deserialize"))
+        use storage::engine::ReadGuard;
+        Some(rkyv::from_bytes::<common::models::Edge, rkyv::rancor::Error>(guard.data())
+            .expect("Failed to deserialize"))
     } else {
         None
     };
@@ -185,7 +185,7 @@ fn test_embedding_operations() {
     println!("\n🧪 Testing Embedding operations...");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let storage = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
+    let storage: StorageManager<storage::engine::MdbxEngine> = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
         .expect("Failed to create storage");
 
     // CREATE: Insert embedding
@@ -207,9 +207,9 @@ fn test_embedding_operations() {
     // READ: Retrieve embedding - ZERO-COPY path
     println!("📖 Reading embedding...");
     let retrieved = if let Some(guard) = storage.get_embedding_guard(embed_id.as_str()).expect("Failed to get embedding guard") {
-        let archived = rkyv::check_archived_root::<common::models::Embedding>(guard.data())
-            .expect("Failed to check archived root");
-        Some(archived.deserialize(&mut rkyv::Infallible).expect("Failed to deserialize"))
+        use storage::engine::ReadGuard;
+        Some(rkyv::from_bytes::<common::models::Embedding, rkyv::rancor::Error>(guard.data())
+            .expect("Failed to deserialize"))
     } else {
         None
     };
@@ -244,7 +244,7 @@ fn test_storage_with_indexing() {
     println!("\n🧪 Testing StorageManager with indexing...");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let storage = StorageManager::with_indexing(temp_dir.path().join("test.db").to_str().unwrap())
+    let storage: StorageManager<storage::engine::MdbxEngine> = StorageManager::with_indexing(temp_dir.path().join("test.db").to_str().unwrap())
         .expect("Failed to create storage with indexing");
 
     assert!(
@@ -263,7 +263,7 @@ fn test_storage_with_indexing() {
         message_ids: vec![],
         summary_ids: vec![],
         embedding_id: None,
-        metadata: json!({"indexed": true}),
+        metadata: json!({"indexed": true}).to_string(),
     };
 
     println!("➕ Creating indexed chat node");
@@ -272,10 +272,13 @@ fn test_storage_with_indexing() {
         .expect("Failed to insert chat");
 
     // ZERO-COPY path
-    let retrieved = if let Some(guard) = storage.get_node_guard(chat_id.as_str()).expect("Failed to get node guard") {
-        let archived = rkyv::check_archived_root::<common::models::Node>(guard.data())
-            .expect("Failed to check archived root");
-        Some(archived.deserialize(&mut rkyv::Infallible).expect("Failed to deserialize"))
+    use storage::engine::{ReadGuard, MdbxEngine};
+    let retrieved: Option<Node> = if let Some(guard) = storage.get_node_guard(chat_id.as_str()).expect("Failed to get node guard") {
+        let data_slice: &[u8] = ReadGuard::data(&guard);
+        let data_vec: Vec<u8> = data_slice.to_vec();
+        let node: Node = rkyv::from_bytes::<common::models::Node, rkyv::rancor::Error>(&data_vec)
+            .expect("Failed to deserialize");
+        Some(node)
     } else {
         None
     };
@@ -311,7 +314,7 @@ fn test_concurrent_operations() {
     println!("\n🧪 Testing concurrent operations...");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let storage = std::sync::Arc::new(
+    let storage: std::sync::Arc<StorageManager<storage::engine::MdbxEngine>> = std::sync::Arc::new(
         StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
             .expect("Failed to create storage"),
     );
@@ -331,7 +334,7 @@ fn test_concurrent_operations() {
                 text_content: format!("Message {}", i),
                 attachment_ids: vec![],
                 embedding_id: None,
-                metadata: json!({"thread": i}),
+                metadata: json!({"thread": i}).to_string(),
             };
 
             storage_clone
@@ -362,7 +365,7 @@ fn test_error_handling() {
     println!("\n🧪 Testing error handling...");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let storage = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
+    let storage: StorageManager<storage::engine::MdbxEngine> = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
         .expect("Failed to create storage");
 
     // Test retrieval of non-existent node
@@ -397,7 +400,7 @@ fn test_zero_copy_archived_access() {
     println!("\n🧪 Testing ZERO-COPY archived access patterns...");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let storage = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
+    let storage: StorageManager<storage::engine::MdbxEngine> = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
         .expect("Failed to create storage");
 
     // CREATE: Insert a message with metadata
@@ -411,7 +414,7 @@ fn test_zero_copy_archived_access() {
         text_content: "Testing zero-copy access!".to_string(),
         attachment_ids: vec![],
         embedding_id: None,
-        metadata: json!({"test": "zero_copy", "performance": "critical"}),
+        metadata: json!({"test": "zero_copy", "performance": "critical"}).to_string(),
     };
 
     storage
@@ -456,7 +459,7 @@ fn test_zero_copy_embedding_access() {
     println!("\n🧪 Testing ZERO-COPY embedding access...");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let storage = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
+    let storage: StorageManager<storage::engine::MdbxEngine> = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
         .expect("Failed to create storage");
 
     // Create a test embedding with a large vector
@@ -465,7 +468,7 @@ fn test_zero_copy_embedding_access() {
     let embedding = Embedding {
         id: embed_id.clone(),
         vector: large_vector.clone(),
-        metadata: json!({"model": "test-model", "dim": 1536}),
+        model: "test-model".to_string(),
     };
 
     storage.insert_embedding(&embedding).expect("Failed to insert embedding");
@@ -501,7 +504,7 @@ fn test_zero_copy_edge_access() {
     println!("\n🧪 Testing ZERO-COPY edge access...");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let storage = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
+    let storage: StorageManager<storage::engine::MdbxEngine> = StorageManager::new(temp_dir.path().join("test.db").to_str().unwrap())
         .expect("Failed to create storage");
 
     let node1_id = NodeId::new("node1");
@@ -513,7 +516,7 @@ fn test_zero_copy_edge_access() {
         to_node: node2_id.clone(),
         edge_type: "RELATES_TO".to_string(),
         created_at: current_timestamp(),
-        metadata: json!({"weight": 1.0, "confidence": 0.95}),
+        metadata: json!({"weight": 1.0, "confidence": 0.95}).to_string(),
     };
 
     storage.insert_edge(&edge).expect("Failed to insert edge");
@@ -524,8 +527,8 @@ fn test_zero_copy_edge_access() {
     {
         let from = edge_ref.from_node();
         let to = edge_ref.to_node();
-        assert_eq!(from, from_id.as_str());
-        assert_eq!(to, to_id.as_str());
+        assert_eq!(from, node1_id.as_str());
+        assert_eq!(to, node2_id.as_str());
         println!("✅ Successfully accessed archived Edge");
     } else {
         panic!("Should have found edge");

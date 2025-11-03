@@ -566,9 +566,11 @@ mod tests {
     
     #[test]
     fn test_entity_similarity() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
         let kg = KnowledgeGraph::new(
-            DatabaseCoordinator::new().unwrap(),
-            IndexManager::new_with_hybrid(&sled::Config::new().temporary(true).open().unwrap(), false).unwrap()
+            DatabaseCoordinator::with_base_path(Some(temp_dir.path().to_path_buf())).unwrap(),
+            IndexManager::new(temp_dir.path().join("index")).unwrap()
         );
         
         let entity1 = Entity {
@@ -604,9 +606,11 @@ mod tests {
     
     #[test]
     fn test_entity_similarity_no_embeddings() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
         let kg = KnowledgeGraph::new(
-            DatabaseCoordinator::new().unwrap(),
-            IndexManager::new_with_hybrid(&sled::Config::new().temporary(true).open().unwrap(), false).unwrap()
+            DatabaseCoordinator::with_base_path(Some(temp_dir.path().to_path_buf())).unwrap(),
+            IndexManager::new(temp_dir.path().join("index")).unwrap()
         );
         
         let entity1 = Entity {
@@ -640,9 +644,11 @@ mod tests {
     
     #[test]
     fn test_graph_operations() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
         let mut kg = KnowledgeGraph::new(
-            DatabaseCoordinator::new().unwrap(),
-            IndexManager::new_with_hybrid(&sled::Config::new().temporary(true).open().unwrap(), false).unwrap()
+            DatabaseCoordinator::with_base_path(Some(temp_dir.path().to_path_buf())).unwrap(),
+            IndexManager::new(temp_dir.path().join("index")).unwrap()
         );
         
         // Add entities

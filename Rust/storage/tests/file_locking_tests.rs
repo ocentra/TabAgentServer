@@ -15,11 +15,11 @@ fn test_multiple_processes_same_database() -> DbResult<()> {
     let db_path = temp_dir.path().join("shared_test.db");
 
     // Create the first StorageManager instance
-    let storage1 = StorageManager::new(db_path.to_str().unwrap())?;
+    let storage1: StorageManager<storage::engine::MdbxEngine> = StorageManager::new(db_path.to_str().unwrap())?;
 
     // Try to create a second StorageManager instance pointing to the same database
     // This should demonstrate the file locking behavior
-    let storage2_result = StorageManager::new(db_path.to_str().unwrap());
+    let storage2_result: Result<StorageManager<storage::engine::MdbxEngine>, _> = StorageManager::new(db_path.to_str().unwrap());
 
     // The second attempt might fail due to file locking, or it might succeed but cause issues
     match storage2_result {
@@ -38,7 +38,7 @@ fn test_multiple_processes_same_database() -> DbResult<()> {
                 message_ids: vec![],
                 summary_ids: vec![],
                 embedding_id: None,
-                metadata: json!({}),
+                metadata: json!({}).to_string(),
             };
 
             storage1.insert_node(&Node::Chat(chat1))?;
@@ -57,7 +57,7 @@ fn test_multiple_processes_same_database() -> DbResult<()> {
 
     // Now test with multiple threads trying to access the same database
     let storage1_arc = Arc::new(storage1);
-    let storage2 = StorageManager::new(db_path.to_str().unwrap())?;
+    let storage2: StorageManager<storage::engine::MdbxEngine> = StorageManager::new(db_path.to_str().unwrap())?;
     let storage2_arc = Arc::new(storage2);
 
     // Spawn multiple threads that will try to write to the database
@@ -77,7 +77,7 @@ fn test_multiple_processes_same_database() -> DbResult<()> {
                 message_ids: vec![],
                 summary_ids: vec![],
                 embedding_id: None,
-                metadata: json!({}),
+                metadata: json!({}).to_string(),
             };
 
             // Alternate between storage instances
@@ -131,7 +131,7 @@ fn test_coordinator_with_shared_paths() -> DbResult<()> {
                 message_ids: vec![],
                 summary_ids: vec![],
                 embedding_id: None,
-                metadata: json!({}),
+                metadata: json!({}).to_string(),
             };
 
             coordinator1.insert_chat(chat1)?;
@@ -162,7 +162,7 @@ fn test_coordinator_with_shared_paths() -> DbResult<()> {
                         message_ids: vec![],
                         summary_ids: vec![],
                         embedding_id: None,
-                        metadata: json!({}),
+                        metadata: json!({}).to_string(),
                     };
 
                     // Alternate between coordinators
@@ -223,7 +223,7 @@ fn test_real_world_concurrent_access() -> DbResult<()> {
                 message_ids: vec![],
                 summary_ids: vec![],
                 embedding_id: None,
-                metadata: json!({}),
+                metadata: json!({}).to_string(),
             };
 
             coordinator_clone.insert_chat(chat)?;
@@ -241,7 +241,7 @@ fn test_real_world_concurrent_access() -> DbResult<()> {
                 text_content: format!("Test message {}", i),
                 attachment_ids: vec![],
                 embedding_id: None,
-                metadata: json!({}),
+                metadata: json!({}).to_string(),
             };
 
             coordinator_clone.insert_message(message)?;

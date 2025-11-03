@@ -69,7 +69,7 @@ impl Pipeline for SegmentationPipeline {
     }
     
     fn generate(&self, input: Value) -> Result<Value> {
-        let session = self.session.as_ref()
+        let _session = self.session.as_ref()
             .ok_or(crate::error::PipelineError::ModelNotLoaded)?;
         
         // Extract image data

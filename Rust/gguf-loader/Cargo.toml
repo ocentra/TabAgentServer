@@ -23,7 +23,7 @@ log = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tabagent-model-cache = { path = "../model-cache" }
-env_logger = "0.11"
+env_logger = { workspace = true }
 
 [target.'cfg(windows)'.dev-dependencies]
-winapi = { version = "0.3", features = ["libloaderapi"] }
+winapi = { workspace = true }

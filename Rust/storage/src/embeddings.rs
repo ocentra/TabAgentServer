@@ -104,7 +104,7 @@ impl EmbeddingOperations for EmbeddingManager {
                 Ok(storage) => *recent_guard = Some(storage),
                 Err(e) => {
                     // If recent doesn't exist yet, that's OK
-                    if !matches!(e, common::DbError::Sled(_)) {
+                    if !matches!(e, common::DbError::InvalidOperation(_)) {
                         return Err(e);
                     }
                 }
@@ -151,7 +151,7 @@ impl EmbeddingOperations for EmbeddingManager {
                 }
                 Err(e) => {
                     // If archive doesn't exist yet, that's OK for lazy loading
-                    if !matches!(e, common::DbError::Sled(_)) {
+                    if !matches!(e, common::DbError::InvalidOperation(_)) {
                         return Err(e);
                     }
                 }

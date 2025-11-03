@@ -72,11 +72,11 @@ impl Pipeline for YoloPipeline {
     }
     
     fn generate(&self, input: Value) -> Result<Value> {
-        let session = self.session.as_ref()
+        let _session = self.session.as_ref()
             .ok_or(crate::error::PipelineError::ModelNotLoaded)?;
         
         // Extract image data
-        let image_data = input.get("image")
+        let _image_data = input.get("image")
             .ok_or_else(|| crate::error::PipelineError::InvalidInput(
                 "image data is required".to_string()
             ))?;

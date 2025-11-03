@@ -10,7 +10,7 @@ use storage::{Chat, Node, NodeId, StorageManager};
 #[test]
 fn test_storage_manager_concurrent_access() -> DbResult<()> {
     let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
-    let storage = Arc::new(StorageManager::new(
+    let storage: Arc<StorageManager<storage::engine::MdbxEngine>> = Arc::new(StorageManager::new(
         temp_dir.path().join("test.db").to_str().unwrap(),
     )?);
 
@@ -24,7 +24,7 @@ fn test_storage_manager_concurrent_access() -> DbResult<()> {
         message_ids: vec![],
         summary_ids: vec![],
         embedding_id: None,
-        metadata: json!({}),
+                metadata: json!({}).to_string(),
     };
 
     // Insert the chat in the main thread
@@ -36,11 +36,12 @@ fn test_storage_manager_concurrent_access() -> DbResult<()> {
     for i in 0..5 {
         let storage_clone = Arc::clone(&storage);
         let handle = thread::spawn(move || -> DbResult<Option<Chat>> {
+            use storage::engine::{ReadGuard, MdbxEngine};
             // Each thread tries to read the chat - ZERO-COPY path
             if let Some(guard) = storage_clone.get_node_guard("concurrent_chat")? {
-                let archived = rkyv::check_archived_root::<common::models::Node>(guard.data())
-                    .map_err(|e| common::DbError::Serialization(e.to_string()))?;
-                let node = archived.deserialize(&mut rkyv::Infallible)
+                let data_slice: &[u8] = ReadGuard::data(&guard);
+                let data_vec: Vec<u8> = data_slice.to_vec();
+                let node: Node = rkyv::from_bytes::<common::models::Node, rkyv::rancor::Error>(&data_vec)
                     .map_err(|e| common::DbError::Serialization(e.to_string()))?;
                 match node {
                     Node::Chat(chat) => Ok(Some(chat)),
@@ -74,7 +75,7 @@ fn test_storage_manager_concurrent_access() -> DbResult<()> {
 #[test]
 fn test_concurrent_writes() -> DbResult<()> {
     let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
-    let storage = Arc::new(StorageManager::new(
+    let storage: Arc<StorageManager<storage::engine::MdbxEngine>> = Arc::new(StorageManager::new(
         temp_dir.path().join("test.db").to_str().unwrap(),
     )?);
 
@@ -93,7 +94,7 @@ fn test_concurrent_writes() -> DbResult<()> {
                 message_ids: vec![],
                 summary_ids: vec![],
                 embedding_id: None,
-                metadata: json!({}),
+                metadata: json!({}).to_string(),
             };
 
             storage_clone.insert_node(&Node::Chat(chat))
@@ -108,12 +109,13 @@ fn test_concurrent_writes() -> DbResult<()> {
     }
 
     // Verify all chats were inserted - ZERO-COPY path
+    use storage::engine::{ReadGuard, MdbxEngine};
     for i in 0..5 {
         let chat_id = format!("concurrent_chat_{}", i);
         if let Some(guard) = storage.get_node_guard(&chat_id)? {
-            let archived = rkyv::check_archived_root::<common::models::Node>(guard.data())
-                .map_err(|e| common::DbError::Serialization(e.to_string()))?;
-            let node = archived.deserialize(&mut rkyv::Infallible)
+            let data_slice: &[u8] = ReadGuard::data(&guard);
+            let data_vec: Vec<u8> = data_slice.to_vec();
+            let node: Node = rkyv::from_bytes::<common::models::Node, rkyv::rancor::Error>(&data_vec)
                 .map_err(|e| common::DbError::Serialization(e.to_string()))?;
             if let Node::Chat(chat) = node {
                 assert_eq!(chat.title, format!("Concurrent Chat {}", i));

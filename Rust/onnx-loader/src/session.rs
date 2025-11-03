@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tabagent_tokenization::Tokenizer;
 use tabagent_execution_providers::ExecutionProvider;
-use common::InferenceSettings;
 use ort::{
     inputs,
     session::{Session, builder::GraphOptimizationLevel},

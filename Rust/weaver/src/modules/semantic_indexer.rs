@@ -3,9 +3,9 @@
 //! This module is triggered when new nodes are created or updated.
 //! It extracts text content from nodes and generates embeddings using the ML bridge.
 
-use crate::{WeaverContext, WeaverResult};
+use crate::{WeaverContext, WeaverResult, WeaverError};
 use common::{EmbeddingId, models::{Embedding, Node}};
-use rkyv;
+use storage::traits::DirectAccessOperations;
 
 /// Processes a newly created node for semantic indexing.
 ///
@@ -26,7 +26,7 @@ pub async fn on_node_created(
     // Load the node
     let node = if let Some(node_ref) = context.coordinator.conversations_active().get_node_ref(node_id)? {
         node_ref.deserialize()
-            .map_err(|e| WeaverError::Storage(e))?
+            .map_err(|e| WeaverError::Database(e))?
     } else {
         log::warn!("Node {} not found for semantic indexing", node_id);
         return Ok(());
@@ -71,7 +71,7 @@ pub async fn on_node_created(
     // Update the node to include embedding_id
     if let Some(node_ref) = context.coordinator.conversations_active().get_node_ref(node_id)? {
         let mut node = node_ref.deserialize()
-            .map_err(|e| WeaverError::Storage(e))?;
+            .map_err(|e| WeaverError::Database(e))?;
         
         // Update embedding_id based on node type
         match &mut node {

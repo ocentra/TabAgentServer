@@ -5,6 +5,7 @@
 
 use crate::{WeaverContext, WeaverResult};
 use common::{NodeId, EdgeId, models::Edge};
+use storage::traits::DirectAccessOperations;
 
 /// Processes a newly created node to find and link similar content.
 ///
@@ -90,7 +91,7 @@ async fn create_similarity_edge(
             .as_millis() as i64,
         metadata: serde_json::json!({
             "similarity_score": similarity_score,
-        }),
+        }).to_string(),
     };
     
     context.coordinator.knowledge_active().insert_edge(&edge)?;

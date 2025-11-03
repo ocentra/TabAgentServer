@@ -61,6 +61,8 @@ use indexing::IndexManager;
 use models::*;
 use rkyv;
 use storage::DatabaseCoordinator;
+use storage::traits::DirectAccessOperations;
+use storage::engine::ReadGuard;
 
 // Re-export key types for convenience
 pub use models::{ConvergedQuery, QueryResult};
@@ -92,7 +94,7 @@ pub type QueryResult2<T> = Result<T, QueryError>;
 pub struct QueryManager<'a> {
     coordinator: &'a DatabaseCoordinator,
     indexing: &'a IndexManager,
-    query_cache: HashMap<String, Vec<QueryResult>>,
+    _query_cache: HashMap<String, Vec<QueryResult>>, // Planned: Query result caching
 }
 
 impl<'a> QueryManager<'a> {
@@ -112,7 +114,7 @@ impl<'a> QueryManager<'a> {
     /// # }
     /// ```
     pub fn new(coordinator: &'a DatabaseCoordinator, indexing: &'a IndexManager) -> Self {
-        Self { coordinator, indexing, query_cache: HashMap::new() }
+        Self { coordinator, indexing, _query_cache: HashMap::new() }
     }
 
     /// The main entry point for all queries in the database.
@@ -308,10 +310,8 @@ impl<'a> QueryManager<'a> {
                 // Fetch actual Edge objects and traverse - ZERO-COPY path
                 for edge_id in edge_ids {
                     let edge = if let Some(guard) = self.coordinator.conversations_active().get_edge_guard(edge_id.as_str())? {
-                        let archived = rkyv::check_archived_root::<common::models::Edge>(guard.data())
-                            .map_err(|e| QueryError::Storage(e.to_string()))?;
-                        archived.deserialize(&mut rkyv::Infallible)
-                            .map_err(|e| QueryError::Storage(e.to_string()))?
+                        rkyv::from_bytes::<common::models::Edge, rkyv::rancor::Error>(guard.data())
+                            .map_err(|e| QueryError::Storage(DbError::InvalidOperation(format!("Deserialization failed: {}", e))))?
                     } else {
                         continue; // Edge was deleted
                     };
@@ -525,10 +525,8 @@ impl<'a> QueryManager<'a> {
             let outgoing_edges = self.indexing.get_outgoing_edges(&current_node)?;
             for edge_id in outgoing_edges {
                 if let Some(guard) = self.coordinator.conversations_active().get_edge_guard(edge_id.as_str())? {
-                    let archived = rkyv::check_archived_root::<common::models::Edge>(guard.data())
-                        .map_err(|e| QueryError::Storage(e.to_string()))?;
-                    let edge = archived.deserialize(&mut rkyv::Infallible)
-                        .map_err(|e| QueryError::Storage(e.to_string()))?;
+                    let edge = rkyv::from_bytes::<common::models::Edge, rkyv::rancor::Error>(guard.data())
+                        .map_err(|e| QueryError::Storage(DbError::InvalidOperation(format!("Deserialization failed: {}", e))))?;
                     let neighbor = edge.to_node.as_str();
                     
                     if !visited.contains(neighbor) {
@@ -687,10 +685,8 @@ impl<'a> QueryManager<'a> {
                                 let edge_ids = self.indexing.get_outgoing_edges(node_id.as_str())?;
                                 for edge_id in edge_ids {
                                     if let Some(guard) = self.coordinator.conversations_active().get_edge_guard(edge_id.as_str())? {
-                                        let archived = rkyv::check_archived_root::<common::models::Edge>(guard.data())
-                                            .map_err(|e| QueryError::Storage(e.to_string()))?;
-                                        let edge = archived.deserialize(&mut rkyv::Infallible)
-                                            .map_err(|e| QueryError::Storage(e.to_string()))?;
+                                        let edge = rkyv::from_bytes::<common::models::Edge, rkyv::rancor::Error>(guard.data())
+                                            .map_err(|e| QueryError::Storage(DbError::InvalidOperation(format!("Deserialization failed: {}", e))))?;
                                         next_level.insert(edge.to_node.clone());
                                     }
                                 }

@@ -14,7 +14,7 @@ sysinfo.workspace = true
 
 # Platform-specific dependencies
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62.2", features = [
+windows = { workspace = true, features = [
     "Win32_Foundation",
     "Win32_System_SystemInformation",
     "Win32_System_SystemServices",

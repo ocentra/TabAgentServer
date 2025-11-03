@@ -12,15 +12,16 @@ indexing = { path = "../indexing" }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
+rkyv = { workspace = true }
 
 # Error handling
 thiserror = { workspace = true }
 
 # Collections
-hashbrown = "0.16.0"
+hashbrown = { workspace = true }
 
 # Graph algorithms (for shortest path)
-petgraph = "0.8.3"
+petgraph = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.8"
+tempfile = { workspace = true }

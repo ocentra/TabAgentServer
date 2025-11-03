@@ -5,8 +5,6 @@
 use crate::error::{OnnxError, Result};
 use crate::session::OnnxSession;
 use ort::{inputs, value::TensorRef};
-use std::sync::Arc;
-use tabagent_tokenization::Tokenizer;
 
 /// Text generation configuration
 #[derive(Debug, Clone)]
@@ -147,12 +145,12 @@ impl TextGenerator {
             .map_err(|e| OnnxError::TokenizerLoadFailed(e.to_string()))?;
         
         let mut token_ids: Vec<i64> = encoding.get_ids().iter().map(|i| *i as i64).collect();
-        let original_len = token_ids.len();
+        let _original_len = token_ids.len();
         
         let ort_session = self.session.session();
         let mut full_generated = String::new();
         
-        for step in 0..config.max_new_tokens {
+        for _step in 0..config.max_new_tokens {
             let input = TensorRef::from_array_view((vec![1, 1, token_ids.len() as i64], token_ids.as_slice()))
                 .map_err(|e| OnnxError::InferenceFailed(e.to_string()))?;
             

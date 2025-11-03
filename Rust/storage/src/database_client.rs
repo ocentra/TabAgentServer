@@ -10,7 +10,6 @@ use common::grpc::database::{
     database_service_client::DatabaseServiceClient,
     Conversation, ConversationRequest, StoreConversationRequest,
     Knowledge, KnowledgeRequest, StoreKnowledgeRequest,
-    StatusResponse,
 };
 use crate::coordinator::DatabaseCoordinator;
 use crate::traits::{ConversationOperations, KnowledgeOperations, DirectAccessOperations};
@@ -40,7 +39,6 @@ impl DatabaseClient {
         match self {
             Self::InProcess(coordinator) => {
                 // Direct in-process access
-                use common::models::Node;
                 
                 let storage = coordinator.conversations_active();
                 let session_prefix = format!("session:{}", session_id);
@@ -48,7 +46,7 @@ impl DatabaseClient {
                 let conversations: Vec<Conversation> = storage
                     .scan_prefix_nodes_ref(session_prefix.as_bytes())
                     .filter_map(|result| result.ok())
-                    .filter_map(|(key, node_ref)| {
+                    .filter_map(|(_key, node_ref)| {
                         if let (
                             Some(text),
                             Some(timestamp),
@@ -99,7 +97,7 @@ impl DatabaseClient {
                     text_content: conversation.content,
                     attachment_ids: vec![],
                     embedding_id: None,
-                    metadata: serde_json::json!({}),
+                    metadata: serde_json::json!({}).to_string(),
                 };
                 
                 coordinator.conversation_manager.insert_message(message)?;
@@ -150,7 +148,7 @@ impl DatabaseClient {
                     label: knowledge.content,
                     entity_type: knowledge.source,
                     embedding_id: None,
-                    metadata: serde_json::json!({}),
+                    metadata: serde_json::json!({}).to_string(),
                 };
                 
                 coordinator.knowledge_manager.insert_entity(entity)?;
