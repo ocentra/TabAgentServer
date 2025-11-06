@@ -97,7 +97,7 @@ impl EmbeddingOperations for EmbeddingManager {
 
         if recent_guard.is_none() {
             // Lazy load recent tier
-            match DefaultStorageManager::open_typed_with_indexing(
+            match DefaultStorageManager::open_typed(
                 crate::DatabaseType::Embeddings,
                 Some(TemperatureTier::Recent),
             ) {

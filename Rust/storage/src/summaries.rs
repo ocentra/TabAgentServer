@@ -22,7 +22,7 @@ impl SummaryOperations for SummaryManager {
         let tier_key = tier.name().to_string();
         if !summaries.contains_key(&tier_key) {
             // Lazy load summary tier
-            let storage = DefaultStorageManager::open_typed_with_indexing(
+            let storage = DefaultStorageManager::open_typed(
                 crate::DatabaseType::Summaries,
                 Some(tier),
             )?;

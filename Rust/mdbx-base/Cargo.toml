@@ -1,7 +1,13 @@
 [package]
-name = "libmdbx-test"
+name = "mdbx-base"
 version = "0.1.0"
 edition = "2021"
+description = "Shared MDBX zero-copy FFI patterns and TDD validation"
+authors = ["TabAgent Team"]
+
+[lib]
+name = "mdbx_base"
+path = "src/lib.rs"
 
 [dependencies]
 # FFI bindings for MDBX_RESERVE (guaranteed alignment)

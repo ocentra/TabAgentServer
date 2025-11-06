@@ -1,0 +1,22 @@
+[package]
+name = "embedding"
+version = "0.1.0"
+edition = "2021"
+description = "Embedding service - generates vectors using 0.6B/8B models, stores to storage's databases"
+
+[dependencies]
+common = { path = "../common" }
+mdbx-base = { path = "../mdbx-base" }
+# NO mdbx-sys - we only use mdbx-base abstractions!
+# NO storage dependency - storage calls us, we don't call storage!
+
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rkyv = { workspace = true }
+
+# TODO: Add ML model dependencies when implementing
+# - ONNX runtime for model inference
+# - Tokenizers for text processing
+# - Or bridge to PythonML service via gRPC
+

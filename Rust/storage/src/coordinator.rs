@@ -143,10 +143,10 @@ impl DatabaseCoordinator {
                     common::DbError::InvalidOperation("Invalid UTF-8 in database path".to_string())
                 })?;
 
-                DefaultStorageManager::with_indexing(path_str)
+                DefaultStorageManager::new(path_str)
             } else {
                 // Use default platform paths
-                DefaultStorageManager::open_typed_with_indexing(db_type, tier)
+                DefaultStorageManager::open_typed(db_type, tier)
             }
         };
 

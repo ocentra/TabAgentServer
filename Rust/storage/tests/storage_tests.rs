@@ -1,7 +1,7 @@
 //! Comprehensive tests for storage layer
 //! Following RAG Rule 17.6: Test real functionality with real data
 
-use common::models::{Chat, Edge, Embedding, Message, Node};
+use common::models::{Edge, Embedding, Message, Node};
 use common::{EdgeId, EmbeddingId, NodeId};
 use serde_json::json;
 use storage::{DatabaseType, StorageManager, TemperatureTier};
@@ -240,53 +240,6 @@ fn test_embedding_operations() {
 }
 
 #[test]
-fn test_storage_with_indexing() {
-    println!("\n🧪 Testing StorageManager with indexing...");
-
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let storage: StorageManager<storage::engine::MdbxEngine> = StorageManager::with_indexing(temp_dir.path().join("test.db").to_str().unwrap())
-        .expect("Failed to create storage with indexing");
-
-    assert!(
-        storage.index_manager().is_some(),
-        "Index manager should be present"
-    );
-
-    // Create and insert a chat node
-    let chat_id = NodeId::new("chat_789".to_string());
-    let chat = Chat {
-        id: chat_id.clone(),
-        title: "Test Chat".to_string(),
-        topic: "Testing".to_string(),
-        created_at: current_timestamp(),
-        updated_at: current_timestamp(),
-        message_ids: vec![],
-        summary_ids: vec![],
-        embedding_id: None,
-        metadata: json!({"indexed": true}).to_string(),
-    };
-
-    println!("➕ Creating indexed chat node");
-    storage
-        .insert_node(&Node::Chat(chat))
-        .expect("Failed to insert chat");
-
-    // ZERO-COPY path
-    use storage::engine::ReadGuard;
-    let retrieved: Option<Node> = if let Some(guard) = storage.get_node_guard(chat_id.as_str()).expect("Failed to get node guard") {
-        let data_slice: &[u8] = ReadGuard::data(&guard);
-        let data_vec: Vec<u8> = data_slice.to_vec();
-        let node: Node = rkyv::from_bytes::<common::models::Node, rkyv::rancor::Error>(&data_vec)
-            .expect("Failed to deserialize");
-        Some(node)
-    } else {
-        None
-    };
-    assert!(retrieved.is_some(), "Indexed chat should exist");
-    println!("✅ Indexed storage working correctly");
-}
-
-#[test]
 fn test_database_type_paths() {
     println!("\n🧪 Testing DatabaseType path generation...");
 
@@ -480,7 +433,7 @@ fn test_zero_copy_embedding_access() {
         .expect("Failed to get embedding ref")
     {
         let vector = emb_ref.vector();
-        assert_eq!(vector.len(), 384);
+        assert_eq!(vector.len(), 1536); // Should match the created embedding size
         println!("✅ Successfully accessed archived Embedding");
     } else {
         panic!("Should have found embedding");

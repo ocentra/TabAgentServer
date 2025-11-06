@@ -9,7 +9,6 @@ use crate::{
     engine::{StorageEngine, ReadGuard},
 };
 use common::DbResult;
-use std::sync::Arc;
 
 /// Manages all direct interactions with storage engines for CRUD operations.
 ///
@@ -24,7 +23,6 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct StorageManager<E: StorageEngine = crate::engine::MdbxEngine> {
     engine: E,
-    index_manager: Option<Arc<indexing::IndexManager>>,
 
     // Database type and tier (for multi-tier architecture)
     db_type: DatabaseType,
@@ -59,7 +57,6 @@ impl<E: StorageEngine> StorageManager<E> {
 
         Ok(Self {
             engine,
-            index_manager: None,
             db_type: DatabaseType::Conversations,
             tier: None,
         })
@@ -118,47 +115,9 @@ impl<E: StorageEngine> StorageManager<E> {
     }
 
     /// Opens a database with automatic indexing enabled
-    pub fn with_indexing(path: &str) -> DbResult<Self> {
-        let engine = E::open(path)?;
-        
-        engine.open_tree("nodes")
-            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to open nodes tree: {}", e)))?;
-        engine.open_tree("edges")
-            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to open edges tree: {}", e)))?;
-        engine.open_tree("embeddings")
-            .map_err(|e| common::DbError::InvalidOperation(format!("Failed to open embeddings tree: {}", e)))?;
-
-        let index_manager = indexing::IndexManager::new(path)?;
-
-        Ok(Self {
-            engine,
-            index_manager: Some(Arc::new(index_manager)),
-            db_type: DatabaseType::Conversations,
-            tier: None,
-        })
-    }
-
-    /// Opens a typed database with indexing
-    pub fn open_typed_with_indexing(
-        db_type: DatabaseType,
-        tier: Option<TemperatureTier>,
-    ) -> DbResult<Self> {
-        let path = db_type.get_path(tier);
-
-        if let Some(parent) = path.parent() {
-            common::platform::ensure_db_directory(parent)?;
-        }
-
-        let path_str = path.to_str().ok_or_else(|| {
-            common::DbError::InvalidOperation("Invalid UTF-8 in database path".to_string())
-        })?;
-
-        let mut storage = Self::with_indexing(path_str)?;
-        storage.db_type = db_type;
-        storage.tier = tier;
-
-        Ok(storage)
-    }
+    // NOTE: Indexing is now handled externally by the indexing crate.
+    // Storage provides database access, indexing receives DB pointers.
+    // See: indexing/ARCHITECTURE.md for details.
 
     // --- Node Operations ---
     
@@ -262,9 +221,7 @@ impl<E: StorageEngine> StorageManager<E> {
             .map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))?;
 
         // Update indexes if enabled
-        if let Some(ref idx) = self.index_manager {
-            idx.index_node(node)?;
-        }
+        // Indexing handled externally - see indexing/ARCHITECTURE.md
 
         Ok(())
     }
@@ -310,10 +267,7 @@ impl<E: StorageEngine> StorageManager<E> {
         self.engine.remove("nodes", id.as_bytes())
             .map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))?;
 
-        // Update indexes
-        if let Some(ref idx) = self.index_manager {
-            idx.unindex_node(&node)?;
-        }
+        // Indexing handled externally - see indexing/ARCHITECTURE.md
 
         Ok(Some(node))
     }
@@ -418,9 +372,7 @@ impl<E: StorageEngine> StorageManager<E> {
         self.engine.insert("edges", edge.id.as_str().as_bytes(), bytes.as_slice().to_vec())
             .map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))?;
 
-        if let Some(ref idx) = self.index_manager {
-            idx.index_edge(edge)?;
-        }
+        // Indexing handled externally - see indexing/ARCHITECTURE.md
 
         Ok(())
     }
@@ -467,9 +419,7 @@ impl<E: StorageEngine> StorageManager<E> {
             .map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))?;
 
         // Update indexes
-        if let Some(ref idx) = self.index_manager {
-            idx.unindex_edge(&edge)?;
-        }
+        // Indexing handled externally - see indexing/ARCHITECTURE.md
 
         Ok(Some(edge))
     }
@@ -632,9 +582,7 @@ impl<E: StorageEngine> StorageManager<E> {
         self.engine.insert("embeddings", embedding.id.as_str().as_bytes(), bytes.as_slice().to_vec())
             .map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))?;
 
-        if let Some(ref idx) = self.index_manager {
-            idx.index_embedding(embedding)?;
-        }
+        // Indexing handled externally - see indexing/ARCHITECTURE.md
 
         Ok(())
     }
@@ -681,9 +629,7 @@ impl<E: StorageEngine> StorageManager<E> {
             .map_err(|e| common::DbError::InvalidOperation(format!("Engine error: {}", e)))?;
 
         // Update indexes
-        if let Some(ref idx) = self.index_manager {
-            idx.unindex_embedding(embedding.id.as_str())?;
-        }
+        // Indexing handled externally - see indexing/ARCHITECTURE.md
 
         Ok(Some(embedding))
     }
@@ -695,10 +641,8 @@ impl<E: StorageEngine> StorageManager<E> {
     /// # Returns
     ///
     /// Returns `Some(&IndexManager)` if indexing is enabled, `None` otherwise.
-    #[inline]
-    pub fn index_manager(&self) -> Option<&indexing::IndexManager> {
-        self.index_manager.as_ref().map(|arc| arc.as_ref())
-    }
+    // NOTE: IndexManager is now created externally and receives DB pointers from storage.
+    // See indexing/ARCHITECTURE.md for the correct architecture.
     
     /// Scan all key-value pairs with keys that start with the given prefix.
     ///
@@ -799,5 +743,59 @@ impl StorageManager<crate::engine::MdbxEngine> {
     /// Get the database path (for registry introspection)
     pub fn db_path(&self) -> Option<String> {
         self.engine.db_path()
+    }
+    
+    /// Get raw MDBX environment pointer for external services (e.g., indexing)
+    ///
+    /// # Safety
+    ///
+    /// This is unsafe because:
+    /// - The pointer is only valid while this StorageManager exists
+    /// - Caller must follow MDBX's thread-safety rules
+    /// - No `mdbx_env_close` should be called on this pointer
+    ///
+    /// # Usage
+    ///
+    /// This is intended for services like `indexing` that need to create
+    /// their own DBIs within this database's MDBX environment.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use storage::StorageManager;
+    /// use indexing::IndexManager;
+    ///
+    /// let storage = StorageManager::new("./conversations.mdbx")?;
+    /// 
+    /// // Get pointers for indexing
+    /// let env = unsafe { storage.get_raw_env() };
+    /// let structural_dbi = storage.get_or_create_dbi("structural_index")?;
+    /// let outgoing_dbi = storage.get_or_create_dbi("graph_outgoing")?;
+    /// let incoming_dbi = storage.get_or_create_dbi("graph_incoming")?;
+    /// 
+    /// // Create IndexManager (in caller's code, not storage!)
+    /// let index = IndexManager::new_from_storage(
+    ///     env, structural_dbi, outgoing_dbi, incoming_dbi, true
+    /// )?;
+    /// # Ok::<(), common::DbError>(())
+    /// ```
+    pub unsafe fn get_raw_env(&self) -> *mut mdbx_base::mdbx_sys::MDBX_env {
+        self.engine.get_raw_env()
+    }
+    
+    /// Get or create a DBI (table) in this database
+    ///
+    /// This allows external services to create their own tables within
+    /// this database's MDBX environment.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Name of the table/DBI to get or create
+    ///
+    /// # Errors
+    ///
+    /// Returns error if DBI creation fails
+    pub fn get_or_create_dbi(&self, name: &str) -> DbResult<mdbx_base::mdbx_sys::MDBX_dbi> {
+        self.engine.get_or_create_dbi(name)
     }
 }

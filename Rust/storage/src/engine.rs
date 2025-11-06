@@ -40,13 +40,13 @@ pub trait StorageTransaction: Send {
 
 mod mdbx_engine {
     use super::*;
-    use crate::zero_copy_ffi;
+    use mdbx_base::zero_copy_ffi;
     use dashmap::DashMap;
     use std::sync::Arc;
     use std::ptr;
     use std::ffi::CString;
     use std::os::raw::c_void;
-    use mdbx_sys::{
+    use mdbx_base::mdbx_sys::{
         MDBX_env, MDBX_txn, MDBX_dbi, MDBX_val, MDBX_SUCCESS, MDBX_NOTFOUND,
         MDBX_TXN_RDONLY, MDBX_CREATE, MDBX_FIRST, MDBX_NEXT,
         mdbx_env_create, mdbx_env_set_geometry, mdbx_env_open,
@@ -54,6 +54,7 @@ mod mdbx_engine {
         mdbx_dbi_open, mdbx_del, mdbx_env_sync_ex, mdbx_env_close_ex,
         mdbx_cursor_open, mdbx_cursor_close, mdbx_cursor_get,
         MDBX_cursor,
+        mdbx_env_set_option, MDBX_opt_max_db, mdbx_get,
     };
     
     pub struct MdbxReadGuard {
@@ -132,6 +133,74 @@ mod mdbx_engine {
         pub fn db_path(&self) -> Option<String> {
             Some((*self.path).clone())
         }
+        
+        /// UNSAFE: Get raw MDBX environment pointer for indexing service
+        ///
+        /// # Safety
+        ///
+        /// The caller MUST ensure that:
+        /// - The returned pointer is only used while this MdbxEngine exists
+        /// - No mdbx_env_close is called on this pointer
+        /// - All operations on this env follow MDBX's thread-safety rules
+        ///
+        /// This is intended ONLY for indexing services that need to create
+        /// additional DBIs in the same MDBX environment.
+        pub unsafe fn get_raw_env(&self) -> *mut MDBX_env {
+            self.env
+        }
+        
+        /// Get or create a DBI (table) in this database
+        ///
+        /// If the DBI already exists, returns the cached handle.
+        /// Otherwise, creates a new DBI with MDBX_CREATE flag.
+        ///
+        /// # Arguments
+        ///
+        /// * `name` - Name of the table/DBI to get or create
+        ///
+        /// # Errors
+        ///
+        /// Returns error if DBI creation fails
+        pub fn get_or_create_dbi(&self, name: &str) -> DbResult<MDBX_dbi> {
+            // Check if already exists in cache
+            if let Some(dbi) = self.dbis.get(name) {
+                return Ok(*dbi);
+            }
+            
+            // Create new DBI
+            unsafe {
+                let mut txn: *mut MDBX_txn = ptr::null_mut();
+                let rc = mdbx_txn_begin_ex(self.env, ptr::null_mut(), 0, &mut txn as *mut _, ptr::null_mut());
+                if rc != MDBX_SUCCESS {
+                    return Err(common::DbError::InvalidOperation(format!(
+                        "Failed to begin txn for DBI creation: {}", rc
+                    )));
+                }
+                
+                let name_c = CString::new(name)
+                    .map_err(|e| common::DbError::InvalidOperation(format!("Invalid DBI name: {}", e)))?;
+                
+                let mut dbi: MDBX_dbi = 0;
+                let rc = mdbx_dbi_open(txn, name_c.as_ptr(), MDBX_CREATE, &mut dbi as *mut _);
+                if rc != MDBX_SUCCESS {
+                    mdbx_txn_abort(txn);
+                    return Err(common::DbError::InvalidOperation(format!(
+                        "mdbx_dbi_open failed for {}: {}", name, rc
+                    )));
+                }
+                
+                let rc = mdbx_txn_commit_ex(txn, ptr::null_mut());
+                if rc != MDBX_SUCCESS {
+                    return Err(common::DbError::InvalidOperation(format!(
+                        "Failed to commit DBI creation: {}", rc
+                    )));
+                }
+                
+                // Cache the DBI
+                self.dbis.insert(name.to_string(), dbi);
+                Ok(dbi)
+            }
+        }
     }
     
     impl StorageEngine for MdbxEngine {
@@ -146,6 +215,15 @@ mod mdbx_engine {
                 let rc = mdbx_env_create(&mut env as *mut _);
                 if rc != MDBX_SUCCESS {
                     return Err(common::DbError::InvalidOperation(format!("mdbx_env_create failed: {}", rc)));
+                }
+                
+                // Set max_db limit (REQUIRED to avoid -30791 MDBX_DBS_FULL error)
+                // We use 5 DBIs: nodes, edges, embeddings, metadata, chunks
+                // Setting to 10 for headroom
+                let rc = mdbx_env_set_option(env, MDBX_opt_max_db, 10);
+                if rc != MDBX_SUCCESS {
+                    mdbx_env_close_ex(env, false);
+                    return Err(common::DbError::InvalidOperation(format!("mdbx_env_set_option(max_db) failed: {}", rc)));
                 }
                 
                 let mapsize: isize = 10 * 1024 * 1024 * 1024;
@@ -224,7 +302,7 @@ mod mdbx_engine {
                     iov_base: ptr::null_mut(),
                 };
                 
-                let rc = mdbx_sys::mdbx_get(txn, dbi, &mut key_val as *mut _, &mut data_val as *mut _);
+                let rc = mdbx_get(txn, dbi, &mut key_val as *mut _, &mut data_val as *mut _);
                 
                 if rc == MDBX_NOTFOUND {
                     mdbx_txn_abort(txn);
@@ -324,7 +402,7 @@ mod mdbx_engine {
                     iov_base: ptr::null_mut(),
                 };
                 
-                let rc_get = mdbx_sys::mdbx_get(txn, dbi, &mut key_val as *mut _, &mut data_val as *mut _);
+                let rc_get = mdbx_get(txn, dbi, &mut key_val as *mut _, &mut data_val as *mut _);
                 
                 let old_value = if rc_get == MDBX_SUCCESS {
                     let vptr = data_val.iov_base as *const u8;
@@ -498,7 +576,7 @@ mod mdbx_engine {
                     iov_base: ptr::null_mut(),
                 };
                 
-                let rc = mdbx_sys::mdbx_get(txn, dbi, &mut key_val as *mut _, &mut data_val as *mut _);
+                let rc = mdbx_get(txn, dbi, &mut key_val as *mut _, &mut data_val as *mut _);
                 
                 let result = if rc == MDBX_SUCCESS {
                     let vptr = data_val.iov_base as *const u8;
@@ -563,7 +641,7 @@ mod mdbx_engine {
                     iov_base: ptr::null_mut(),
                 };
                 
-                let rc_get = mdbx_sys::mdbx_get(txn, dbi, &mut key_val as *mut _, &mut data_val as *mut _);
+                let rc_get = mdbx_get(txn, dbi, &mut key_val as *mut _, &mut data_val as *mut _);
                 
                 let old_value = if rc_get == MDBX_SUCCESS {
                     let vptr = data_val.iov_base as *const u8;

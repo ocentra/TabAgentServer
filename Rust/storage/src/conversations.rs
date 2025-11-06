@@ -175,7 +175,7 @@ impl ConversationOperations for ConversationManager {
                     let recent_storage = if let Some(recent) = self.get_or_load_conversations_recent()? {
                         recent
                     } else {
-                        let recent_db = crate::DefaultStorageManager::open_typed_with_indexing(
+                        let recent_db = crate::DefaultStorageManager::open_typed(
                             crate::DatabaseType::Conversations,
                             Some(TemperatureTier::Recent),
                         )?;
@@ -204,7 +204,7 @@ impl ConversationOperations for ConversationManager {
 
         if recent_guard.is_none() {
             // Lazy load recent tier
-            match crate::DefaultStorageManager::open_typed_with_indexing(
+            match crate::DefaultStorageManager::open_typed(
                 crate::DatabaseType::Conversations,
                 Some(TemperatureTier::Recent),
             ) {

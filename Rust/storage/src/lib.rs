@@ -49,7 +49,6 @@
 pub mod config;
 pub mod registry;
 pub mod engine;
-pub mod zero_copy_ffi;
 mod storage_manager;
 
 // Domain-specific modules (will be moved to mia-storage crate)
@@ -73,6 +72,9 @@ pub use config::DbConfig;
 pub use registry::{StorageRegistry, RegistryError};
 pub use engine::{StorageEngine, StorageTransaction, MdbxEngine, MdbxEngineError};
 pub use storage_manager::{StorageManager, DefaultStorageManager};
+
+// Re-export mdbx_base for indexing crate (indexing → storage → mdbx_base → mdbx_sys)
+pub use mdbx_base;
 
 // Domain-specific exports (will be moved to mia-storage)
 pub use archived_node::{ArchivedNodeRef, ArchivedEdgeRef, ArchivedEmbeddingRef};
