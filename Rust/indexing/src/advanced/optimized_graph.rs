@@ -7,7 +7,7 @@
 
 use crate::algorithms::graph_traits::*;
 use common::{DbError, DbResult};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Node data structure for the optimized graph.

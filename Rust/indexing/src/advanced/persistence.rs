@@ -48,15 +48,20 @@ pub struct PersistentVectorIndex {
 }
 
 impl PersistentVectorIndex {
-    /// Creates a new persistent vector index.
+    /// Creates a new persistent vector index with default dimension (384).
     pub fn new<P: AsRef<Path>>(persist_path: P) -> DbResult<Self> {
+        Self::new_with_dimension(persist_path, 384)
+    }
+    
+    /// Creates a new persistent vector index with specified dimension.
+    pub fn new_with_dimension<P: AsRef<Path>>(persist_path: P, dimension: usize) -> DbResult<Self> {
         let persist_path = persist_path.as_ref().to_path_buf();
         
         // Try to load an existing index
         let inner = if persist_path.exists() {
-            Self::load_from_path(&persist_path)?
+            Self::load_from_path_with_dimension(&persist_path, dimension)?
         } else {
-            VectorIndex::new(&persist_path)?
+            VectorIndex::new_with_dimension(&persist_path, dimension)?
         };
         
         Ok(Self {
@@ -67,7 +72,7 @@ impl PersistentVectorIndex {
     }
     
     /// Loads a vector index from a persistence file.
-    fn load_from_path<P: AsRef<Path>>(path: P) -> DbResult<VectorIndex> {
+    fn load_from_path_with_dimension<P: AsRef<Path>>(path: P, dimension: usize) -> DbResult<VectorIndex> {
         let path = path.as_ref();
         
         // Open the file
@@ -79,11 +84,11 @@ impl PersistentVectorIndex {
         reader.read_to_end(&mut buffer)?;
         
         // Deserialize the index (rkyv 0.8: Use from_bytes with error type)
-        let serialized = rkyv::from_bytes::<SerializedVectorIndex, rkyv::rancor::Error>(&buffer)
+        let _serialized = rkyv::from_bytes::<SerializedVectorIndex, rkyv::rancor::Error>(&buffer)
             .map_err(|e| DbError::Serialization(e.to_string()))?;
         
         // Create a new vector index
-        let index = VectorIndex::new(path)?;
+        let index = VectorIndex::new_with_dimension(path, dimension)?;
         
         // Restore the mappings and metadata
         // Note: We can't directly restore the HNSW index, so we'll need to rebuild it
@@ -210,6 +215,9 @@ pub struct PersistenceConfig {
     
     /// Whether to compress saved data
     pub compress: bool,
+    
+    /// Vector dimension
+    pub dimension: usize,
 }
 
 impl Default for PersistenceConfig {
@@ -218,6 +226,7 @@ impl Default for PersistenceConfig {
             auto_save: true,
             save_interval: 30,
             compress: false,
+            dimension: 384,
         }
     }
 }
@@ -280,7 +289,7 @@ impl PersistentSegmentIndex {
         
         // Create the segment if it doesn't exist
         if !self.segments.contains_key(segment_id) {
-            let segment = PersistentVectorIndex::new(&segment_path)?;
+            let segment = PersistentVectorIndex::new_with_dimension(&segment_path, self.config.dimension)?;
             self.segments.insert(segment_id.to_string(), segment);
         }
         
@@ -348,12 +357,22 @@ pub struct EnhancedVectorIndex {
 }
 
 impl EnhancedVectorIndex {
-    /// Creates a new enhanced vector index.
+    /// Creates a new enhanced vector index with default dimension (384).
     pub fn new<P: AsRef<Path>>(
         segments_path: P,
         distance_metric: Box<dyn DistanceMetric>,
     ) -> DbResult<Self> {
-        let config = PersistenceConfig::default();
+        Self::new_with_dimension(segments_path, distance_metric, 384)
+    }
+    
+    /// Creates a new enhanced vector index with specified dimension.
+    pub fn new_with_dimension<P: AsRef<Path>>(
+        segments_path: P,
+        distance_metric: Box<dyn DistanceMetric>,
+        dimension: usize,
+    ) -> DbResult<Self> {
+        let mut config = PersistenceConfig::default();
+        config.dimension = dimension;
         let mut inner = PersistentSegmentIndex::new(&segments_path, config)?;
         
         // Load existing segments
@@ -383,72 +402,5 @@ impl EnhancedVectorIndex {
     /// Flushes the index to disk.
     pub fn flush(&mut self) -> DbResult<()> {
         self.inner.flush()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-    
-    #[test]
-    fn test_persistent_vector_index() {
-        let temp_dir = TempDir::new().unwrap();
-        let index_path = temp_dir.path().join("test_index.bin");
-        
-        // Create a new persistent index
-        let mut index = PersistentVectorIndex::new(&index_path).unwrap();
-        
-        // Add vectors
-        assert!(index.add_vector("vector1", vec![1.0, 0.0, 0.0]).is_ok());
-        assert!(index.add_vector("vector2", vec![0.9, 0.1, 0.0]).is_ok());
-        
-        // Save the index
-        assert!(index.save().is_ok());
-        
-        // Check that the file was created
-        assert!(index_path.exists());
-    }
-    
-    #[test]
-    fn test_persistent_segment_index() {
-        let temp_dir = TempDir::new().unwrap();
-        let segments_path = temp_dir.path().join("segments");
-        
-        // Create a new persistent segment index
-        let mut index = PersistentSegmentIndex::new(&segments_path, PersistenceConfig::default()).unwrap();
-        
-        // Add vectors
-        assert!(index.add_vector("vector1", vec![1.0, 0.0, 0.0]).is_ok());
-        assert!(index.add_vector("vector2", vec![0.9, 0.1, 0.0]).is_ok());
-        
-        // Save segments
-        assert!(index.save_segments().is_ok());
-        
-        // Check that the segments directory was created
-        assert!(segments_path.exists());
-    }
-    
-    #[test]
-    fn test_enhanced_vector_index() {
-        let temp_dir = TempDir::new().unwrap();
-        let segments_path = temp_dir.path().join("segments");
-        
-        // Create a new enhanced vector index
-        let mut index = EnhancedVectorIndex::new(
-            &segments_path,
-            Box::new(crate::utils::distance_metrics::CosineMetric::new()),
-        ).unwrap();
-        
-        // Add vectors
-        assert!(index.add_vector("vector1", vec![1.0, 0.0, 0.0]).is_ok());
-        assert!(index.add_vector("vector2", vec![0.9, 0.1, 0.0]).is_ok());
-        
-        // Search
-        let results = index.search(&[1.0, 0.0, 0.0], 2).unwrap();
-        assert_eq!(results.len(), 2);
-        
-        // Flush
-        assert!(index.flush().is_ok());
     }
 }

@@ -1,7 +1,7 @@
 //! Iterator-based graph traversal implementations.
 //!
 //! This module provides lazy evaluation iterators for graph traversal algorithms
-//! such as BFS and DFS, following patterns inspired by petgraph but adapted
+//! such as BFS and DFS, following standard graph algorithm patterns adapted
 //! to our specific needs and graph traits.
 
 use crate::algorithms::graph_traits::*;

@@ -8,9 +8,8 @@
 use common::{DbError, DbResult, EmbeddingId};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
 use memmap2::MmapMut;
 
 /// Trait for vector storage backends.
@@ -189,7 +188,7 @@ impl MmapVectorStorage {
     }
     
     /// Reads a vector from the memory-mapped file at the given offset.
-    fn read_vector(&self, offset: u64) -> DbResult<Vec<f32>> {
+    pub fn read_vector(&self, offset: u64) -> DbResult<Vec<f32>> {
         if offset + (self.dimension as u64) * 4 > self.mmap.len() as u64 {
             return Err(DbError::InvalidOperation("Invalid offset".to_string()));
         }
@@ -215,7 +214,7 @@ impl MmapVectorStorage {
     }
     
     /// Writes a vector to the memory-mapped file at the current write position.
-    fn write_vector(&mut self, vector: &[f32]) -> DbResult<u64> {
+    pub fn write_vector(&mut self, vector: &[f32]) -> DbResult<u64> {
         if vector.len() != self.dimension {
             return Err(DbError::InvalidOperation("Vector dimension mismatch".to_string()));
         }

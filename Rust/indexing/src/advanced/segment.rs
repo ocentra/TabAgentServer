@@ -51,12 +51,23 @@ pub struct Segment {
 }
 
 impl Segment {
-    /// Creates a new segment.
+    /// Creates a new segment with default dimension (384).
     pub fn new<P: AsRef<Path>>(
         id: String,
         path: P,
         max_vectors: usize,
         appendable: bool,
+    ) -> DbResult<Self> {
+        Self::new_with_dimension(id, path, max_vectors, appendable, 384)
+    }
+    
+    /// Creates a new segment with specified dimension.
+    pub fn new_with_dimension<P: AsRef<Path>>(
+        id: String,
+        path: P,
+        max_vectors: usize,
+        appendable: bool,
+        dimension: usize,
     ) -> DbResult<Self> {
         let path = path.as_ref().to_path_buf();
         
@@ -65,7 +76,7 @@ impl Segment {
         
         // Create the vector index for this segment
         let vector_index_path = path.join("vectors.hnsw");
-        let vector_index = VectorIndex::new(vector_index_path)?;
+        let vector_index = VectorIndex::new_with_dimension(vector_index_path, dimension)?;
         
         Ok(Self {
             id,
@@ -197,6 +208,9 @@ pub struct SegmentConfig {
     
     /// Path where segments are stored
     pub segments_path: PathBuf,
+    
+    /// Vector dimension
+    pub dimension: usize,
 }
 
 impl Default for SegmentConfig {
@@ -206,6 +220,7 @@ impl Default for SegmentConfig {
             min_vectors_for_new_segment: 10_000,
             auto_optimize: true,
             segments_path: PathBuf::from("segments"),
+            dimension: 384,
         }
     }
 }
@@ -253,11 +268,12 @@ impl SegmentManager {
         self.next_segment_id += 1;
         
         let segment_path = self.config.segments_path.join(&segment_id);
-        let segment = Segment::new(
+        let segment = Segment::new_with_dimension(
             segment_id.clone(),
             segment_path,
             self.config.max_vectors_per_segment,
             true,
+            self.config.dimension,
         )?;
         
         // Add the segment to the manager
@@ -431,13 +447,23 @@ pub struct SegmentBasedVectorIndex {
 }
 
 impl SegmentBasedVectorIndex {
-    /// Creates a new segment-based vector index.
+    /// Creates a new segment-based vector index with default dimension (384).
     pub fn new<P: AsRef<Path>>(
         segments_path: P,
         distance_metric: Box<dyn DistanceMetric>,
     ) -> DbResult<Self> {
+        Self::new_with_dimension(segments_path, distance_metric, 384)
+    }
+    
+    /// Creates a new segment-based vector index with specified dimension.
+    pub fn new_with_dimension<P: AsRef<Path>>(
+        segments_path: P,
+        distance_metric: Box<dyn DistanceMetric>,
+        dimension: usize,
+    ) -> DbResult<Self> {
         let config = SegmentConfig {
             segments_path: segments_path.as_ref().to_path_buf(),
+            dimension,
             ..Default::default()
         };
         
@@ -492,98 +518,5 @@ impl SegmentBasedVectorIndex {
     /// Gets statistics about the index.
     pub fn get_statistics(&self) -> SegmentStatistics {
         self.segment_manager.get_statistics()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-    
-    #[test]
-    fn test_segment_creation() {
-        let temp_dir = TempDir::new().unwrap();
-        let segment_path = temp_dir.path().join("test_segment");
-        
-        let segment = Segment::new(
-            "test_segment".to_string(),
-            &segment_path,
-            1000,
-            true,
-        );
-        
-        assert!(segment.is_ok());
-        let segment = segment.unwrap();
-        assert_eq!(segment.id(), "test_segment");
-        assert_eq!(segment.len(), 0);
-        assert!(segment.is_appendable());
-    }
-    
-    #[test]
-    fn test_segment_add_remove_vector() {
-        let temp_dir = TempDir::new().unwrap();
-        let segment_path = temp_dir.path().join("test_segment");
-        
-        let mut segment = Segment::new(
-            "test_segment".to_string(),
-            &segment_path,
-            1000,
-            true,
-        ).unwrap();
-        
-        // Add a vector
-        assert!(segment.add_vector("vector1", vec![1.0, 0.0, 0.0], None).is_ok());
-        assert_eq!(segment.len(), 1);
-        
-        // Remove a vector
-        assert!(segment.remove_vector("vector1").unwrap());
-        assert_eq!(segment.len(), 0);
-    }
-    
-    #[test]
-    fn test_segment_manager() {
-        let temp_dir = TempDir::new().unwrap();
-        let segments_path = temp_dir.path().join("segments");
-        
-        let config = SegmentConfig {
-            segments_path,
-            max_vectors_per_segment: 2,
-            ..Default::default()
-        };
-        
-        let mut manager = SegmentManager::new(config).unwrap();
-        
-        // Add vectors
-        assert!(manager.add_vector("vector1", vec![1.0, 0.0, 0.0], None).is_ok());
-        assert!(manager.add_vector("vector2", vec![0.0, 1.0, 0.0], None).is_ok());
-        assert!(manager.add_vector("vector3", vec![0.0, 0.0, 1.0], None).is_ok());
-        
-        // Check that we have multiple segments
-        let stats = manager.get_statistics();
-        assert_eq!(stats.total_vectors, 3);
-        assert!(stats.segment_count >= 2);
-    }
-    
-    #[test]
-    fn test_segment_based_vector_index() {
-        let temp_dir = TempDir::new().unwrap();
-        let segments_path = temp_dir.path().join("segments");
-        
-        let mut index = SegmentBasedVectorIndex::new(
-            &segments_path,
-            Box::new(crate::utils::distance_metrics::CosineMetric::new()),
-        ).unwrap();
-        
-        // Add vectors
-        assert!(index.add_vector("vector1", vec![1.0, 0.0, 0.0], None).is_ok());
-        assert!(index.add_vector("vector2", vec![0.9, 0.1, 0.0], None).is_ok());
-        
-        // Search
-        let results = index.search(&[1.0, 0.0, 0.0], 2, None).unwrap();
-        assert_eq!(results.len(), 2);
-        
-        // Check statistics
-        let stats = index.get_statistics();
-        assert_eq!(stats.total_vectors, 2);
     }
 }

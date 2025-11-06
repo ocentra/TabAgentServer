@@ -45,8 +45,9 @@
 //! ```
 
 use crate::hybrid::{QuantizedVector, QuantizationType};
-use crate::lock_free::lock_free::{LockFreeHashMap, LockFreeAccessTracker, LockFreeStats};
-use common::{DbResult, EmbeddingId};
+use crate::lock_free::lock_free_common::{LockFreeAccessTracker, LockFreeStats};
+use common::DbResult;
+use dashmap::DashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -55,11 +56,11 @@ use std::time::Instant;
 /// This implementation uses lock-free data structures and atomic operations
 /// to provide high-performance concurrent access without traditional locking.
 pub struct LockFreeHotVectorIndex {
-    /// Quantized vectors mapped by ID using a lock-free hash map
-    vectors: Arc<LockFreeHashMap<String, QuantizedVector>>,
+    /// Quantized vectors mapped by ID using DashMap (concurrent hash map)
+    vectors: Arc<DashMap<String, QuantizedVector>>,
     
     /// Access tracking for temperature management using lock-free access trackers
-    access_trackers: Arc<LockFreeHashMap<String, LockFreeAccessTracker>>,
+    access_trackers: Arc<DashMap<String, LockFreeAccessTracker>>,
     
     /// Default quantization type for new vectors
     default_quantization: QuantizationType,
@@ -72,8 +73,8 @@ impl LockFreeHotVectorIndex {
     /// Creates a new LockFreeHotVectorIndex with scalar quantization by default.
     pub fn new() -> Self {
         Self {
-            vectors: Arc::new(LockFreeHashMap::new(64)),
-            access_trackers: Arc::new(LockFreeHashMap::new(64)),
+            vectors: Arc::new(DashMap::new()),
+            access_trackers: Arc::new(DashMap::new()),
             default_quantization: QuantizationType::Scalar,
             stats: Arc::new(LockFreeStats::new()),
         }
@@ -82,8 +83,8 @@ impl LockFreeHotVectorIndex {
     /// Creates a new LockFreeHotVectorIndex with a specific quantization type.
     pub fn with_quantization(quantization_type: QuantizationType) -> Self {
         Self {
-            vectors: Arc::new(LockFreeHashMap::new(64)),
-            access_trackers: Arc::new(LockFreeHashMap::new(64)),
+            vectors: Arc::new(DashMap::new()),
+            access_trackers: Arc::new(DashMap::new()),
             default_quantization: quantization_type,
             stats: Arc::new(LockFreeStats::new()),
         }
@@ -98,8 +99,8 @@ impl LockFreeHotVectorIndex {
             }
         };
         
-        self.vectors.insert(id.to_string(), quantized)?;
-        self.access_trackers.insert(id.to_string(), LockFreeAccessTracker::new())?;
+        self.vectors.insert(id.to_string(), quantized);
+        self.access_trackers.insert(id.to_string(), LockFreeAccessTracker::new());
         self.stats.increment_vector_count();
         Ok(())
     }
@@ -107,8 +108,8 @@ impl LockFreeHotVectorIndex {
     /// Adds a vector to the index with scalar quantization.
     pub fn add_vector_scalar(&self, id: &str, vector: Vec<f32>) -> DbResult<()> {
         let quantized = QuantizedVector::new(&vector);
-        self.vectors.insert(id.to_string(), quantized)?;
-        self.access_trackers.insert(id.to_string(), LockFreeAccessTracker::new())?;
+        self.vectors.insert(id.to_string(), quantized);
+        self.access_trackers.insert(id.to_string(), LockFreeAccessTracker::new());
         self.stats.increment_vector_count();
         Ok(())
     }
@@ -116,16 +117,16 @@ impl LockFreeHotVectorIndex {
     /// Adds a vector to the index with product quantization.
     pub fn add_vector_product(&self, id: &str, vector: Vec<f32>, subvector_size: usize) -> DbResult<()> {
         let quantized = QuantizedVector::new_product_quantized(&vector, subvector_size);
-        self.vectors.insert(id.to_string(), quantized)?;
-        self.access_trackers.insert(id.to_string(), LockFreeAccessTracker::new())?;
+        self.vectors.insert(id.to_string(), quantized);
+        self.access_trackers.insert(id.to_string(), LockFreeAccessTracker::new());
         self.stats.increment_vector_count();
         Ok(())
     }
     
     /// Removes a vector from the index.
     pub fn remove_vector(&self, id: &str) -> DbResult<bool> {
-        let existed = self.vectors.remove(&id.to_string())?.is_some();
-        self.access_trackers.remove(&id.to_string())?;
+        let existed = self.vectors.remove(&id.to_string()).is_some();
+        self.access_trackers.remove(&id.to_string());
         
         if existed {
             self.stats.decrement_vector_count();
@@ -148,13 +149,13 @@ impl LockFreeHotVectorIndex {
         // Collect all vector IDs and their quantized vectors
         let mut similarities: Vec<(String, f32)> = Vec::new();
         
-        // Iterate through all vectors in the index using our new iterator
-        for result in self.vectors.iter() {
-            if let Ok((id, vector)) = result {
-                let similarity = query_quantized.cosine_similarity(&vector);
-                similarities.push((id, similarity));
-                self.stats.increment_similarity_computations();
-            }
+        // Iterate through all vectors in the index using DashMap's iterator
+        for entry in self.vectors.iter() {
+            let id = entry.key().clone();
+            let vector = entry.value();
+            let similarity = query_quantized.cosine_similarity(vector);
+            similarities.push((id, similarity));
+            self.stats.increment_similarity_computations();
         }
         
         // Sort by similarity (highest first) and take top k
@@ -184,7 +185,7 @@ impl LockFreeHotVectorIndex {
         LockFreeHotVectorStats {
             vector_count: self.stats.vector_count.load(std::sync::atomic::Ordering::Relaxed),
             query_count: self.stats.query_count.load(std::sync::atomic::Ordering::Relaxed),
-            total_query_time_micros: self.stats.total_query_time_micros.load(std::sync::atomic::Ordering::Relaxed),
+            total_query_time_micros: self.stats.total_query_time_micros.load(std::sync::atomic::Ordering::Relaxed) as u64,
             promotions: self.stats.promotions.load(std::sync::atomic::Ordering::Relaxed),
             demotions: self.stats.demotions.load(std::sync::atomic::Ordering::Relaxed),
             similarity_computations: self.stats.similarity_computations.load(std::sync::atomic::Ordering::Relaxed),

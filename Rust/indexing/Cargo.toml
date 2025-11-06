@@ -5,8 +5,7 @@ edition = "2021"
 
 [dependencies]
 common = { path = "../common" }
-libmdbx = { workspace = true }
-mdbx-sys = { workspace = true }
+storage = { path = "../storage" }
 rkyv = { workspace = true }
 crc32fast = { workspace = true }
 crc32c = { workspace = true }
@@ -24,12 +23,24 @@ hnsw_rs = { workspace = true }
 petgraph.workspace = true
 ordered-float = { workspace = true }
 
+# Graph algorithm dependencies (from petgraph/qdrant)
+hashbrown = "0.16.0"
+fixedbitset = "0.5"
+indexmap = "2.6"
+itertools = "0.14"
+
 # SIMD support for vector operations
 wide = "0.8.1"
 safer-ffi = "0.1"
 
 [dev-dependencies]
 tempfile = { workspace = true }
+criterion = "0.7.0"
+mdbx-base = { path = "../mdbx-base" }
+
+[[bench]]
+name = "warm_vs_cold_benchmark"
+harness = false
 
 [features]
 simd = []

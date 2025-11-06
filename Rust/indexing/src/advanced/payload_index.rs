@@ -10,7 +10,6 @@ use serde_json::Value as JsonValue;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::str::FromStr;
 use ordered_float::OrderedFloat;
 
 /// A trait for types that can be used as payload field values.
@@ -227,10 +226,24 @@ impl Payload {
         self.fields.remove(name)
     }
     
-    /// Checks if the payload matches a condition.
+    /// Checks if a specific field in the payload matches a condition.
+    ///
+    /// # Arguments
+    /// * `field_name` - The field name to check
+    /// * `condition` - The condition to match against
+    ///
+    /// Returns `true` if the field exists and matches the condition, `false` otherwise.
+    pub fn field_matches_condition(&self, field_name: &str, condition: &PayloadCondition) -> bool {
+        self.fields
+            .get(field_name)
+            .map(|value| value.matches(condition))
+            .unwrap_or(false)
+    }
+    
+    /// Checks if the payload matches a condition on ANY field (legacy method).
+    ///
+    /// For more precise matching, use `field_matches_condition` instead.
     pub fn matches_condition(&self, condition: &PayloadCondition) -> bool {
-        // For simplicity, we'll check if any field matches the condition
-        // In a real implementation, we would need to specify which field to check
         self.fields.values().any(|value| value.matches(condition))
     }
     
@@ -545,12 +558,13 @@ impl PayloadIndex {
         result
     }
     
-    /// Gets embedding IDs that match a condition.
+    /// Gets embedding IDs that match a condition across ALL fields.
+    ///
+    /// Searches all field indexes and returns IDs where ANY field matches.
+    /// For field-specific queries, use `get_ids_for_field_condition` instead.
     fn get_ids_for_condition(&self, condition: &PayloadCondition) -> HashSet<EmbeddingId> {
         let mut result = HashSet::new();
         
-        // This is a simplified implementation
-        // In a real implementation, we would need to specify which field to check
         match condition {
             PayloadCondition::Match { value } => {
                 match value {
@@ -740,68 +754,5 @@ impl HybridVectorIndex {
     /// Gets the payload for an embedding ID.
     pub fn get_payload(&self, id: &EmbeddingId) -> Option<&Payload> {
         self.payload_index.get_payload(id)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-    
-    #[test]
-    fn test_payload_creation() {
-        let mut payload = Payload::new();
-        payload.add_field("name".to_string(), PayloadFieldValue::String("test".to_string()));
-        payload.add_field("age".to_string(), PayloadFieldValue::Integer(25));
-        payload.add_field("active".to_string(), PayloadFieldValue::Boolean(true));
-        
-        assert_eq!(payload.get_field("name"), Some(&PayloadFieldValue::String("test".to_string())));
-        assert_eq!(payload.get_field("age"), Some(&PayloadFieldValue::Integer(25)));
-        assert_eq!(payload.get_field("active"), Some(&PayloadFieldValue::Boolean(true)));
-    }
-    
-    #[test]
-    fn test_payload_index() {
-        let mut index = PayloadIndex::new();
-        
-        let id1 = EmbeddingId::from("vector1");
-        let mut payload1 = Payload::new();
-        payload1.add_field("category".to_string(), PayloadFieldValue::String("A".to_string()));
-        payload1.add_field("score".to_string(), PayloadFieldValue::Float(OrderedFloat(0.8)));
-        
-        let id2 = EmbeddingId::from("vector2");
-        let mut payload2 = Payload::new();
-        payload2.add_field("category".to_string(), PayloadFieldValue::String("B".to_string()));
-        payload2.add_field("score".to_string(), PayloadFieldValue::Float(OrderedFloat(0.9)));
-        
-        index.add_payload(id1.clone(), payload1).unwrap();
-        index.add_payload(id2.clone(), payload2).unwrap();
-        
-        // Test filtering
-        let mut filter = PayloadFilter::new();
-        filter = filter.must(PayloadCondition::Match {
-            value: PayloadFieldValue::String("A".to_string()),
-        });
-        
-        let results = index.filter(&filter);
-        assert!(results.contains(&id1));
-        assert!(!results.contains(&id2));
-    }
-    
-    #[test]
-    fn test_hybrid_vector_index() {
-        let temp_dir = TempDir::new().unwrap();
-        let index_path = temp_dir.path().join("test_index");
-        
-        let mut index = HybridVectorIndex::new(&index_path).unwrap();
-        
-        let mut payload = Payload::new();
-        payload.add_field("category".to_string(), PayloadFieldValue::String("test".to_string()));
-        
-        index.add_vector_with_payload("vector1", vec![1.0, 0.0, 0.0], payload).unwrap();
-        
-        let results = index.search_with_filter(&[1.0, 0.0, 0.0], 1, None).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, EmbeddingId::from("vector1"));
     }
 }

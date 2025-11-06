@@ -1,0 +1,8 @@
+# Permanent mock databases (committed to repo)
+# These are fixtures, not generated files
+!mock_vectors.mdbx/
+!mock_graph.mdbx/
+
+# Lock files
+*.lock
+

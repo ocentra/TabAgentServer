@@ -1,37 +1,27 @@
-//! Graph indexes for relationship traversal - TRUE ZERO-COPY with transaction guards.
+//! Graph indexes for relationship traversal with zero-copy MDBX access.
 //!
-//! **ARCHITECTURE:**
-//! - Returns `GraphIndexGuard` that keeps transaction alive
-//! - Provides zero-copy iterators over `&str` slices from mmap
-//! - NO allocations, NO deserialization - pure pointer access
+//! Returns `GraphIndexGuard` that keeps transaction alive and provides
+//! zero-copy iterators over (EdgeId, target_node) pairs from mmap.
 //!
-//! **API:**
-//! ```rust
+//! ```rust,ignore
 //! let guard = index.get_outgoing("chat_123")?;
-//! for edge_id_str in guard.iter_strs() {
-//!     // edge_id_str is &str borrowed from mmap - ZERO allocation!
+//! for (edge_id_str, target_node_str) in guard.iter_edges() {
+//!     // Both &str borrowed from mmap
 //! }
 //! ```
-//!
-//! **KEY FORMATS:**
-//! ```text
-//! Outgoing: "out:{node_id}" → Vec<EdgeId> (sorted)
-//! Incoming: "in:{node_id}" → Vec<EdgeId> (sorted)
-//! ```
 
-use common::{DbError, DbResult, EdgeId};
+use common::{DbError, DbResult, EdgeId, NodeId};
 use common::models::Edge;
-use mdbx_sys::{
+use storage::mdbx_base::mdbx_sys::{
     MDBX_env, MDBX_txn, MDBX_dbi, MDBX_val,
-    MDBX_SUCCESS, MDBX_NOTFOUND,
-    mdbx_txn_begin_ex, mdbx_txn_commit_ex, mdbx_txn_abort, mdbx_del,
-    MDBX_TXN_RDONLY,
+    mdbx_txn_begin_ex, mdbx_txn_commit_ex, mdbx_txn_abort,
+    MDBX_SUCCESS,
 };
+use std::ffi::c_void;
 use std::ptr;
-use std::os::raw::c_void;
-use crate::zero_copy_ffi;
+use storage::mdbx_base::zero_copy_ffi;
+use storage::mdbx_base::txn_pool;  // ← USE TRANSACTION POOL to avoid -30783!
 
-/// Graph index - TRUE ZERO-COPY with transaction-backed guards.
 pub struct GraphIndex {
     env: *mut MDBX_env,
     outgoing_dbi: MDBX_dbi,
@@ -43,53 +33,66 @@ unsafe impl Sync for GraphIndex {}
 
 /// Zero-copy guard for graph index reads.
 /// 
-/// Holds the transaction alive and provides direct mmap access to EdgeId strings.
-/// NO allocations, NO deserialization!
+/// Holds transaction alive and provides mmap access to (EdgeId, NodeId) pairs.
 pub struct GraphIndexGuard {
     txn: *mut MDBX_txn,
-    archived: &'static rkyv::Archived<Vec<EdgeId>>,
+    archived: &'static rkyv::Archived<Vec<(EdgeId, NodeId)>>,
+    owns_txn: bool,  // If false, txn is from pool and should NOT be closed
 }
 
 impl Drop for GraphIndexGuard {
     fn drop(&mut self) {
-        unsafe {
-            mdbx_txn_abort(self.txn);
+        // Only close transaction if we own it (not from pool)
+        if self.owns_txn {
+            unsafe {
+                mdbx_txn_abort(self.txn);
+            }
         }
     }
 }
 
 impl GraphIndexGuard {
-    /// Returns the count of edge IDs - O(1), zero-copy.
+    /// Returns the count of edges.
     pub fn len(&self) -> usize {
         self.archived.len()
     }
     
-    /// Checks if empty - O(1), zero-copy.
+    /// Checks if empty.
     pub fn is_empty(&self) -> bool {
         self.archived.is_empty()
     }
     
-    /// Returns an iterator over zero-copy &str slices.
-    /// 
-    /// Each string is borrowed directly from mmap memory - NO allocations!
-    pub fn iter_strs(&self) -> impl Iterator<Item = &str> + '_ {
-        self.archived.iter().map(|archived_id| archived_id.0.as_str())
+    /// Returns an iterator over (edge_id, target_node) pairs from mmap.
+    pub fn iter_edges(&self) -> impl Iterator<Item = (&str, &str)> + '_ {
+        self.archived.iter().map(|tuple| {
+            (tuple.0.0.as_str(), tuple.1.0.as_str())
+        })
+    }
+    
+    /// Returns an iterator over edge IDs.
+    pub fn iter_edge_ids(&self) -> impl Iterator<Item = &str> + '_ {
+        self.archived.iter().map(|tuple| tuple.0.0.as_str())
+    }
+    
+    /// Returns an iterator over just target nodes.
+    pub fn iter_targets(&self) -> impl Iterator<Item = &str> + '_ {
+        self.archived.iter().map(|tuple| tuple.1.0.as_str())
     }
     
     /// Returns the archived Vec directly for advanced use cases.
-    pub fn archived(&self) -> &rkyv::Archived<Vec<EdgeId>> {
+    pub fn archived(&self) -> &rkyv::Archived<Vec<(EdgeId, NodeId)>> {
         self.archived
     }
     
-    /// Checks if a specific edge ID exists (by string comparison) - zero-copy.
-    pub fn contains_str(&self, edge_id_str: &str) -> bool {
-        self.archived.iter().any(|id| id.0.as_str() == edge_id_str)
+    /// Checks if a specific edge ID exists.
+    pub fn contains_edge(&self, edge_id_str: &str) -> bool {
+        self.archived.iter().any(|tuple| tuple.0.0.as_str() == edge_id_str)
     }
     
-    /// Collects to owned Vec<EdgeId> - USE ONLY WHEN NEEDED (allocates).
-    pub fn to_owned(&self) -> DbResult<Vec<EdgeId>> {
+    /// Collects to owned Vec<EdgeId> for WARM cache.
+    pub fn to_owned_edge_ids(&self) -> DbResult<Vec<EdgeId>> {
         self.archived.iter()
-            .map(|id| rkyv::deserialize::<EdgeId, rkyv::rancor::Error>(id)
+            .map(|tuple| rkyv::deserialize::<EdgeId, rkyv::rancor::Error>(&tuple.0)
                 .map_err(|e| DbError::Serialization(format!("Failed to deserialize EdgeId: {}", e))))
             .collect::<Result<Vec<_>, _>>()
     }
@@ -101,11 +104,31 @@ impl GraphIndex {
         Self { env, outgoing_dbi, incoming_dbi }
     }
     
+    /// Adds an edge with just node IDs (convenience method).
+    ///
+    /// Generates an edge ID automatically and creates the edge.
+    /// For more control, use `add_edge_with_struct()`.
+    pub fn add_edge(&self, from_id: &str, to_id: &str) -> DbResult<EdgeId> {
+        // Generate simple edge ID
+        let edge_id = EdgeId(format!("{}:{}", from_id, to_id));
+        
+        let edge = Edge {
+            id: edge_id.clone(),
+            from_node: NodeId(from_id.to_string()),
+            to_node: NodeId(to_id.to_string()),
+            edge_type: "generic".to_string(),
+            metadata: "{}".to_string(),
+            created_at: 0, // Timestamp can be added if needed
+        };
+        
+        self.add_edge_with_struct(&edge)?;
+        Ok(edge_id)
+    }
+    
     /// Adds an edge to both outgoing and incoming indexes.
-    pub fn add_edge(&self, edge: &Edge) -> DbResult<()> {
+    pub fn add_edge_with_struct(&self, edge: &Edge) -> DbResult<()> {
         let from_key = format!("out:{}", edge.from_node.0);
         let to_key = format!("in:{}", edge.to_node.0);
-        let edge_id = edge.id.clone();
         
         unsafe {
             let mut txn: *mut MDBX_txn = ptr::null_mut();
@@ -120,14 +143,26 @@ impl GraphIndex {
                 return Err(DbError::InvalidOperation(format!("Failed to begin RW txn: {}", rc)));
             }
             
-            // Add to outgoing
-            if let Err(e) = self.add_to_index(txn, self.outgoing_dbi, &from_key, edge_id.clone()) {
+            // Add to outgoing: (edge_id, to_node)
+            if let Err(e) = self.add_to_index(
+                txn, 
+                self.outgoing_dbi, 
+                &from_key, 
+                edge.id.clone(), 
+                edge.to_node.clone()
+            ) {
                 mdbx_txn_abort(txn);
                 return Err(e);
             }
             
-            // Add to incoming
-            if let Err(e) = self.add_to_index(txn, self.incoming_dbi, &to_key, edge_id) {
+            // Add to incoming: (edge_id, from_node)
+            if let Err(e) = self.add_to_index(
+                txn, 
+                self.incoming_dbi, 
+                &to_key, 
+                edge.id.clone(), 
+                edge.from_node.clone()
+            ) {
                 mdbx_txn_abort(txn);
                 return Err(e);
             }
@@ -145,7 +180,6 @@ impl GraphIndex {
     pub fn remove_edge(&self, edge: &Edge) -> DbResult<()> {
         let from_key = format!("out:{}", edge.from_node.0);
         let to_key = format!("in:{}", edge.to_node.0);
-        let edge_id = edge.id.clone();
         
         unsafe {
             let mut txn: *mut MDBX_txn = ptr::null_mut();
@@ -161,13 +195,13 @@ impl GraphIndex {
             }
             
             // Remove from outgoing
-            if let Err(e) = self.remove_from_index(txn, self.outgoing_dbi, &from_key, edge_id.clone()) {
+            if let Err(e) = self.remove_from_index(txn, self.outgoing_dbi, &from_key, edge.id.clone()) {
                 mdbx_txn_abort(txn);
                 return Err(e);
             }
             
             // Remove from incoming
-            if let Err(e) = self.remove_from_index(txn, self.incoming_dbi, &to_key, edge_id) {
+            if let Err(e) = self.remove_from_index(txn, self.incoming_dbi, &to_key, edge.id.clone()) {
                 mdbx_txn_abort(txn);
                 return Err(e);
             }
@@ -193,41 +227,138 @@ impl GraphIndex {
         self.get_from_index(false, &key)
     }
     
-    /// Returns the count of outgoing edges - O(1), zero-copy.
+    /// Returns the count of outgoing edges.
     pub fn count_outgoing(&self, node_id: &str) -> DbResult<usize> {
         let key = format!("out:{}", node_id);
         self.count_from_index(true, &key)
     }
     
-    /// Returns the count of incoming edges - O(1), zero-copy.
+    /// Returns the count of incoming edges.
     pub fn count_incoming(&self, node_id: &str) -> DbResult<usize> {
         let key = format!("in:{}", node_id);
         self.count_from_index(false, &key)
     }
     
+    /// Adds a node to the graph (no-op for GraphIndex as nodes are implicit).
+    ///
+    /// In GraphIndex, nodes are implicitly created when edges are added.
+    /// This method exists for API compatibility with graph generators/operators.
+    pub fn add_node(&self, _node_id: &str) -> DbResult<()> {
+        // Nodes are implicit - they exist when they have edges
+        // No storage needed for isolated nodes in this design
+        Ok(())
+    }
+    
+    /// Gets all node IDs in the graph by iterating outgoing edge keys.
+    ///
+    /// Returns all unique node IDs that have outgoing edges.
+    /// **Note:** Isolated nodes (no edges) are not tracked.
+    pub fn get_all_nodes(&self) -> DbResult<Vec<String>> {
+        use storage::mdbx_base::mdbx_sys::{mdbx_cursor_open, mdbx_cursor_get, mdbx_cursor_close, MDBX_cursor};
+        use storage::mdbx_base::mdbx_sys::{MDBX_FIRST, MDBX_NEXT};
+        use std::collections::HashSet;
+        
+        unsafe {
+            // Use transaction pool to reuse read transaction (fixes -30783)
+            let txn = txn_pool::get_or_create_read_txn(self.env)
+                .map_err(|e| DbError::InvalidOperation(format!("Failed to get pooled txn: {:?}", e)))?;
+            
+            let mut cursor: *mut MDBX_cursor = ptr::null_mut();
+            let rc = mdbx_cursor_open(txn, self.outgoing_dbi, &mut cursor);
+            if rc != MDBX_SUCCESS {
+                // txn is from pool, don't abort it
+                return Err(DbError::InvalidOperation(format!("Failed to open cursor: {}", rc)));
+            }
+            
+            let mut nodes = HashSet::new();
+            let mut key = MDBX_val { iov_base: ptr::null_mut(), iov_len: 0 };
+            let mut data = MDBX_val { iov_base: ptr::null_mut(), iov_len: 0 };
+            
+            // Iterate all keys in outgoing_dbi
+            let mut rc = mdbx_cursor_get(cursor, &mut key, &mut data, MDBX_FIRST);
+            while rc == MDBX_SUCCESS {
+                // Extract key as string
+                let key_slice = std::slice::from_raw_parts(
+                    key.iov_base as *const u8,
+                    key.iov_len
+                );
+                
+                if let Ok(key_str) = std::str::from_utf8(key_slice) {
+                    // Keys are "out:node_id" format
+                    if let Some(node_id) = key_str.strip_prefix("out:") {
+                        nodes.insert(node_id.to_string());
+                    }
+                }
+                
+                rc = mdbx_cursor_get(cursor, &mut key, &mut data, MDBX_NEXT);
+            }
+            
+            mdbx_cursor_close(cursor);
+            // txn is from pool, don't abort it
+            
+            Ok(nodes.into_iter().collect())
+        }
+    }
+    
+    /// Gets outgoing edges for a node as owned Vec.
+    ///
+    /// This is a convenience wrapper that deserializes the edges.
+    /// For zero-copy access, use `get_outgoing()` instead.
+    pub fn get_outgoing_edges(&self, node_id: &str) -> DbResult<Vec<(NodeId, EdgeId)>> {
+        if let Some(guard) = self.get_outgoing(node_id)? {
+            let edges: Vec<(NodeId, EdgeId)> = guard.iter_edges()
+                .map(|(edge_id_str, target_str)| {
+                    (NodeId(target_str.to_string()), EdgeId(edge_id_str.to_string()))
+                })
+                .collect();
+            Ok(edges)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+    
+    /// Gets incoming edges for a node as owned Vec.
+    ///
+    /// This is a convenience wrapper that deserializes the edges.
+    /// For zero-copy access, use `get_incoming()` instead.
+    pub fn get_incoming_edges(&self, node_id: &str) -> DbResult<Vec<(NodeId, EdgeId)>> {
+        if let Some(guard) = self.get_incoming(node_id)? {
+            let edges: Vec<(NodeId, EdgeId)> = guard.iter_edges()
+                .map(|(edge_id_str, source_str)| {
+                    (NodeId(source_str.to_string()), EdgeId(edge_id_str.to_string()))
+                })
+                .collect();
+            Ok(edges)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+    
     // === PRIVATE HELPERS ===
     
-    fn add_to_index(&self, txn: *mut MDBX_txn, dbi: MDBX_dbi, key: &str, edge_id: EdgeId) -> DbResult<()> {
+    fn add_to_index(
+        &self, 
+        txn: *mut MDBX_txn, 
+        dbi: MDBX_dbi, 
+        key: &str, 
+        edge_id: EdgeId,
+        target_node: NodeId,
+    ) -> DbResult<()> {
         unsafe {
-            // Get existing Vec or create new
-            let mut vec = match zero_copy_ffi::get_zero_copy::<Vec<EdgeId>>(txn, dbi, key.as_bytes()) {
+            let mut vec = match zero_copy_ffi::get_zero_copy::<Vec<(EdgeId, NodeId)>>(txn, dbi, key.as_bytes()) {
                 Ok(Some(archived)) => {
-                    archived.iter()
-                        .map(|id| rkyv::deserialize::<EdgeId, rkyv::rancor::Error>(id)
-                            .map_err(|e| DbError::Serialization(format!("Deserialize error: {}", e))))
-                        .collect::<Result<Vec<_>, _>>()?
+                    rkyv::deserialize::<Vec<(EdgeId, NodeId)>, rkyv::rancor::Error>(archived)
+                        .map_err(|e| DbError::Serialization(format!("Deserialize error: {}", e)))?
                 }
                 Ok(None) => Vec::new(),
                 Err(e) => return Err(DbError::InvalidOperation(format!("Failed to read: {}", e))),
             };
             
-            // Binary search insert
-            match vec.binary_search(&edge_id) {
-                Ok(_) => return Ok(()), // Already exists
-                Err(pos) => vec.insert(pos, edge_id),
+            match vec.binary_search_by_key(&&edge_id, |(id, _)| id) {
+                Ok(_) => return Ok(()),
+                Err(pos) => vec.insert(pos, (edge_id, target_node)),
             }
             
-            // Serialize and write back
             let archived_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&vec)
                 .map_err(|e| DbError::Serialization(format!("Failed to serialize Vec: {}", e)))?;
             
@@ -238,34 +369,28 @@ impl GraphIndex {
     
     fn remove_from_index(&self, txn: *mut MDBX_txn, dbi: MDBX_dbi, key: &str, edge_id: EdgeId) -> DbResult<()> {
         unsafe {
-            // Get existing Vec
-            let mut vec = match zero_copy_ffi::get_zero_copy::<Vec<EdgeId>>(txn, dbi, key.as_bytes()) {
+            let mut vec = match zero_copy_ffi::get_zero_copy::<Vec<(EdgeId, NodeId)>>(txn, dbi, key.as_bytes()) {
                 Ok(Some(archived)) => {
-                    archived.iter()
-                        .map(|id| rkyv::deserialize::<EdgeId, rkyv::rancor::Error>(id)
-                            .map_err(|e| DbError::Serialization(format!("Deserialize error: {}", e))))
-                        .collect::<Result<Vec<_>, _>>()?
+                    rkyv::deserialize::<Vec<(EdgeId, NodeId)>, rkyv::rancor::Error>(archived)
+                        .map_err(|e| DbError::Serialization(format!("Deserialize error: {}", e)))?
                 }
-                Ok(None) => return Ok(()), // Nothing to remove
+                Ok(None) => return Ok(()),
                 Err(e) => return Err(DbError::InvalidOperation(format!("Failed to read: {}", e))),
             };
             
-            // Binary search remove
-            if let Ok(pos) = vec.binary_search(&edge_id) {
+            if let Ok(pos) = vec.binary_search_by_key(&&edge_id, |(id, _)| id) {
                 vec.remove(pos);
                 
                 if vec.is_empty() {
-                    // Remove key entirely
                     let mut key_val = MDBX_val {
                         iov_base: key.as_ptr() as *mut c_void,
                         iov_len: key.len(),
                     };
-                    let rc = mdbx_del(txn, dbi, &mut key_val, ptr::null_mut());
-                    if rc != MDBX_SUCCESS && rc != MDBX_NOTFOUND {
+                    let rc = storage::mdbx_base::mdbx_sys::mdbx_del(txn, dbi, &mut key_val, ptr::null_mut());
+                    if rc != MDBX_SUCCESS && rc != storage::mdbx_base::mdbx_sys::MDBX_NOTFOUND {
                         return Err(DbError::InvalidOperation(format!("Failed to delete key: {}", rc)));
                     }
                 } else {
-                    // Serialize and write back
                     let archived_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&vec)
                         .map_err(|e| DbError::Serialization(format!("Failed to serialize Vec: {}", e)))?;
                     
@@ -282,36 +407,27 @@ impl GraphIndex {
         let dbi = if is_outgoing { self.outgoing_dbi } else { self.incoming_dbi };
         
         unsafe {
-            let mut txn: *mut MDBX_txn = ptr::null_mut();
-            let rc = mdbx_txn_begin_ex(
-                self.env,
-                ptr::null_mut(),
-                MDBX_TXN_RDONLY,
-                &mut txn,
-                ptr::null_mut(),
-            );
-            if rc != MDBX_SUCCESS {
-                return Err(DbError::InvalidOperation(format!("Failed to begin RO txn: {}", rc)));
-            }
+            // Use transaction pool to reuse read transaction (fixes -30783)
+            let txn = txn_pool::get_or_create_read_txn(self.env)
+                .map_err(|e| DbError::InvalidOperation(format!("Failed to get pooled txn: {:?}", e)))?;
             
-            // TRUE ZERO-COPY READ!
-            match zero_copy_ffi::get_zero_copy::<Vec<EdgeId>>(txn, dbi, key.as_bytes()) {
+            match zero_copy_ffi::get_zero_copy::<Vec<(EdgeId, NodeId)>>(txn, dbi, key.as_bytes()) {
                 Ok(Some(archived)) => {
-                    // Extend archived lifetime to 'static (safe because txn is kept alive in guard)
-                    let archived_static: &'static rkyv::Archived<Vec<EdgeId>> = 
+                    let archived_static: &'static rkyv::Archived<Vec<(EdgeId, NodeId)>> = 
                         std::mem::transmute(archived);
                     
                     Ok(Some(GraphIndexGuard {
                         txn,
                         archived: archived_static,
+                        owns_txn: false,  // From pool, don't close in Drop!
                     }))
                 }
                 Ok(None) => {
-                    mdbx_txn_abort(txn);
+                    // txn is from pool, don't abort it - just return None
                     Ok(None)
                 }
                 Err(e) => {
-                    mdbx_txn_abort(txn);
+                    // txn is from pool, don't abort it - just return error
                     Err(DbError::InvalidOperation(format!("Zero-copy get failed: {}", e)))
                 }
             }
@@ -322,26 +438,16 @@ impl GraphIndex {
         let dbi = if is_outgoing { self.outgoing_dbi } else { self.incoming_dbi };
         
         unsafe {
-            let mut txn: *mut MDBX_txn = ptr::null_mut();
-            let rc = mdbx_txn_begin_ex(
-                self.env,
-                ptr::null_mut(),
-                MDBX_TXN_RDONLY,
-                &mut txn,
-                ptr::null_mut(),
-            );
-            if rc != MDBX_SUCCESS {
-                return Err(DbError::InvalidOperation(format!("Failed to begin RO txn: {}", rc)));
-            }
+            // Use transaction pool to reuse read transaction (fixes -30783)
+            let txn = txn_pool::get_or_create_read_txn(self.env)
+                .map_err(|e| DbError::InvalidOperation(format!("Failed to get pooled txn: {:?}", e)))?;
             
-            let result = match zero_copy_ffi::get_zero_copy::<Vec<EdgeId>>(txn, dbi, key.as_bytes()) {
-                Ok(Some(archived)) => Ok(archived.len()),  // TRUE zero-copy!
+            // txn is from pool, don't abort it - just return result
+            match zero_copy_ffi::get_zero_copy::<Vec<(EdgeId, NodeId)>>(txn, dbi, key.as_bytes()) {
+                Ok(Some(archived)) => Ok(archived.len()),
                 Ok(None) => Ok(0),
                 Err(e) => Err(DbError::InvalidOperation(format!("Zero-copy get failed: {}", e))),
-            };
-            
-            mdbx_txn_abort(txn);
-            result
+            }
         }
     }
 }

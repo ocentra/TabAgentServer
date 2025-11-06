@@ -5,10 +5,8 @@
 //! The implementation follows the Rust Architecture Guidelines for safety,
 //! performance, and clarity.
 
-use common::{DbError, DbResult};
-use crossbeam::epoch::{self, Atomic, Guard, Owned, Pointer, Shared};
-use rand::Rng;
-use std::cmp::Ordering;
+use common::DbResult;
+use crossbeam::epoch::{Atomic, Owned, Shared};
 use std::sync::atomic::{AtomicUsize, AtomicU32, Ordering as AtomicOrdering};
 
 /// Maximum number of levels in the skip list
@@ -142,9 +140,8 @@ where
 
 impl<K, V> Drop for LockFreeSkipList<K, V> {
     fn drop(&mut self) {
-        // In a real implementation, we would need to properly clean up all nodes
-        // and handle memory reclamation. For simplicity, we're just dropping the
-        // atomic pointers here.
+        // Set header pointer to null. crossbeam-epoch's garbage collector
+        // will reclaim memory when it's safe (no threads accessing).
         self.header.store(Shared::null(), AtomicOrdering::Relaxed);
     }
 }

@@ -1,7 +1,7 @@
 //! Generic graph traits for the TabAgent indexing system.
 //!
 //! This module defines traits that abstract over different graph implementations,
-//! following patterns inspired by petgraph but adapted to our specific needs.
+//! following standard graph algorithm patterns adapted to our MDBX+rkyv architecture.
 //! These traits enable generic algorithms that work with different graph representations.
 //!
 //! # Design Principles
@@ -12,7 +12,7 @@
 //! 3. **Performance**: Designed for zero-cost abstractions (RAG Rule 15.1)
 //! 4. **Ergonomics**: Easy to use correctly, hard to misuse (RAG Rule 1.4)
 
-use common::{DbResult, DbError};
+use common::DbResult;
 use std::hash::Hash;
 
 /// A node identifier in a graph.
@@ -75,7 +75,7 @@ impl EdgeIndex {
 /// A trait for basic graph operations.
 ///
 /// This trait defines the fundamental operations that any graph implementation
-/// must support. It's inspired by petgraph's GraphTrait but simplified for our needs.
+/// must support for use with graph algorithms.
 pub trait GraphBase {
     /// The type of node identifiers.
     type NodeId: Clone + PartialEq + Eq + Hash;
@@ -134,6 +134,12 @@ pub enum Direction {
     /// Incoming edges to a node.
     Incoming,
 }
+
+/// Outgoing edges direction constant.
+pub const Outgoing: Direction = Direction::Outgoing;
+
+/// Incoming edges direction constant.
+pub const Incoming: Direction = Direction::Incoming;
 
 /// A trait for undirected graph operations.
 ///

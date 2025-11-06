@@ -1,61 +1,65 @@
-//! Indexing layer for fast data retrieval.
+//! **Indexing Service** - Builds indexes into storage's databases.
 //!
-//! This crate provides three types of indexes to enable different query patterns:
+//! **CRITICAL ARCHITECTURE:**
+//! - This crate does NOT own databases!
+//! - It receives `MDBX_env` and `MDBX_dbi` pointers from `storage`
+//! - It builds indexes directly into storage's databases
+//! - See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for details
+//!
+//! # Index Types
+//!
 //! - **Structural indexes**: Fast property-based filtering (O(log n))
 //! - **Graph indexes**: Efficient relationship traversal (O(1) neighbor lookup)
 //! - **Vector indexes**: Semantic similarity search using HNSW (O(log n))
+//! - **Hybrid indexes**: Hot/warm layer caching for maximum performance
 //!
-//! # Architecture
+//! # Correct Architecture
 //!
 //! ```text
-//! IndexManager
-//!   ├── Structural Index (B-tree on properties)
-//!   ├── Graph Index (Adjacency lists)
-//!   └── Vector Index (HNSW for semantic search)
+//! ┌─────────────────────────────────────────────────────────────┐
+//! │                Storage (Database Owner)                      │
+//! │  - Creates MDBX_env, MDBX_dbi                               │
+//! │  - Manages conversations.mdbx, embeddings.mdbx, etc.        │
+//! └─────────────────────┬───────────────────────────────────────┘
+//!                       │ Provides env + dbi pointers
+//!                       ▼
+//! ┌─────────────────────────────────────────────────────────────┐
+//! │            IndexManager (Service)                            │
+//! │  ┌───────────────┬──────────────┬────────────────────────┐ │
+//! │  │ Structural    │ Graph        │ Vector                 │ │
+//! │  │ Index         │ Index        │ Index                  │ │
+//! │  │ (B-tree)      │ (Adjacency)  │ (HNSW)                 │ │
+//! │  │               │              │ + Hot/Warm layers      │ │
+//! │  └───────────────┴──────────────┴────────────────────────┘ │
+//! └─────────────────────────────────────────────────────────────┘
 //! ```
 //!
-//! All indexes are updated **automatically** when data changes in the storage layer,
-//! ensuring consistency.
+//! # Production Usage (Correct)
 //!
-//! # Concurrency
+//! ```rust,ignore
+//! // Storage owns the database
+//! let storage = StorageManager::new("./data")?;
 //!
-//! This crate provides both traditional Mutex-based and lock-free implementations
-//! for high-performance concurrent access:
+//! // Get DB pointers from storage
+//! let env = storage.get_raw_env();
+//! let structural_dbi = storage.get_or_create_dbi("structural_index")?;
+//! let outgoing_dbi = storage.get_or_create_dbi("graph_outgoing")?;
+//! let incoming_dbi = storage.get_or_create_dbi("graph_incoming")?;
 //!
-//! - **Lock-free HotVectorIndex**: Uses atomic operations and lock-free data structures
-//!   for maximum performance under high concurrent load
-//! - **Lock-free HotGraphIndex**: Provides thread-safe graph operations without traditional locking
+//! // Create IndexManager using storage's DB
+//! let index = IndexManager::new_from_storage(
+//!     env, structural_dbi, outgoing_dbi, incoming_dbi, true
+//! )?;
 //!
-//! # Example
+//! // Index operations (builds into storage's DB!)
+//! // Note: node and edge must be defined first
+//! // index.index_node(&node)?;
+//! // index.index_edge(&edge)?;
 //!
-//! ```no_run
-//! # use indexing::IndexManager;
-//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! // Create index manager with libmdbx
-//! let index_manager = IndexManager::new("my_database")?;
-//!
-//! // Indexes update automatically when nodes are added
-//! // Query by property
-//! let messages = index_manager.get_nodes_by_property("chat_id", "chat_123")?;
-//!
-//! // Traverse graph
-//! let edges = index_manager.get_outgoing_edges("chat_123")?;
-//!
-//! // Semantic search
-//! let query = vec![0.1; 384]; // From Python ML model
-//! let similar = index_manager.search_vectors(&query, 10)?;
-//!
-//! // Use lock-free hot indexes for high-concurrency scenarios
-//! if let Some(hot_vector) = index_manager.get_hot_vector_index() {
-//!     hot_vector.add_vector("vector_123", vec![0.2; 384])?;
-//!     let results = hot_vector.search(&query, 5)?;
-//! }
-//! # Ok(())
-//! # }
-//!
-//! # Comprehensive Documentation
-//!
-//! For comprehensive documentation and examples, see the [docs] module.
+//! // Query operations using accessor methods
+//! let messages = index.structural().get("chat_id", "chat_123")?;
+//! let edges = index.graph().get_outgoing("node_123")?;
+//! ```
 //!
 //! # Modules
 //!
@@ -72,36 +76,133 @@
 //! - [docs]: Comprehensive documentation and examples
 
 // ============================================================================
+// CORE GRAPH TYPES AND ALGORITHMS
+// ============================================================================
+
+/// Edge direction.
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq, Hash)]
+#[repr(usize)]
+pub enum Direction {
+    /// An `Outgoing` edge is an outward edge *from* the current node.
+    Outgoing = 0,
+    /// An `Incoming` edge is an inbound edge *to* the current node.
+    Incoming = 1,
+}
+
+impl Direction {
+    /// Return the opposite `Direction`.
+    #[inline]
+    pub fn opposite(self) -> Direction {
+        match self {
+            Direction::Outgoing => Direction::Incoming,
+            Direction::Incoming => Direction::Outgoing,
+        }
+    }
+
+    /// Return `0` for `Outgoing` and `1` for `Incoming`.
+    #[inline]
+    pub fn index(self) -> usize {
+        (self as usize) & 0x1
+    }
+}
+
+/// Convenience re-exports of Direction variants
+pub use Direction::{Incoming, Outgoing};
+
+/// Marker type for a directed graph.
+#[derive(Clone, Copy, Debug)]
+pub enum Directed {}
+
+/// Marker type for an undirected graph.
+#[derive(Clone, Copy, Debug)]
+pub enum Undirected {}
+
+/// A graph's edge type determines whether it has directed edges or not.
+pub trait EdgeType {
+    fn is_directed() -> bool;
+}
+
+impl EdgeType for Directed {
+    #[inline]
+    fn is_directed() -> bool {
+        true
+    }
+}
+
+impl EdgeType for Undirected {
+    #[inline]
+    fn is_directed() -> bool {
+        false
+    }
+}
+
+// ============================================================================
 // MODULE ORGANIZATION
 // ============================================================================
 
+/// Configuration constants and structures
+pub mod config;
+
 /// Core indexing implementations (essential)
 pub mod core {
-pub mod zero_copy_ffi;
 pub mod structural;
 pub mod graph;
 pub mod vector;
+pub mod csr_graph;
+pub mod dag_index;
     pub mod errors;
 }
 
 /// Lock-free concurrent data structures (high-performance)
 pub mod lock_free {
-pub mod lock_free;
-pub mod lock_free_hot_vector;
-pub mod lock_free_hot_graph;
+    pub mod lock_free_common;
+    pub mod lock_free_hot_vector;
+    pub mod lock_free_hot_graph;
     pub mod lock_free_btree;
     pub mod lock_free_skiplist;
-pub mod lock_free_benchmark;
-    pub mod lock_free_stress_tests;
+    pub mod lock_free_benchmark;
 }
 
-/// Graph algorithms (Dijkstra, community detection, etc.)
-pub mod algorithms {
-    pub mod algorithms;
-    pub mod graph_traits;
-pub mod community_detection;
-pub mod flow_algorithms;
-}
+/// Graph algorithms (Dijkstra, A*, SCC, etc.) adapted for zero-copy MDBX access
+pub mod algorithms;
+
+/// Common imports and types for graph operations
+pub mod prelude;
+
+/// Graph traversal and visit traits
+#[macro_use]
+pub mod visit;
+
+/// Data access traits for graph elements
+pub mod data;
+
+/// Graph index types and utilities
+pub mod graph_types;
+
+/// Iterator utility macros
+#[macro_use]
+pub mod macros;
+
+/// Iterator formatting utilities
+pub mod iter_format;
+
+/// Adjacency list graph implementation
+pub mod adj;
+
+// Note: Petgraph-derived modules were reimplemented for our MDBX zero-copy architecture:
+// - core::dag_index (replaces acyclic - DAG with cycle prevention)
+// - utils::graph_generator (replaces generate - graph generation utilities)
+// - utils::graph_operators (replaces operator - graph transformations)
+// - utils::dot_export (replaces dot - GraphViz DOT format export)
+
+/// Scored types for priority queues
+pub mod scored;
+
+/// Union-Find data structure for disjoint sets
+pub mod unionfind;
+
+// Expose algorithm module contents
+pub use algorithms::*;
 
 /// Advanced features (hybrid indexes, optimized storage, etc.)
 pub mod advanced {
@@ -110,7 +211,6 @@ pub mod advanced {
     pub mod segment;
     pub mod payload_index;
     pub mod vector_storage;
-    pub mod memory_mapping;
     pub mod persistence;
 }
 
@@ -126,10 +226,12 @@ pub mod benchmark;
     pub mod adaptive_concurrency;
 pub mod docs;
     pub mod htm;
+    pub mod graph_generator;
+    pub mod graph_operators;
+    pub mod dot_export;
 }
 
 // Re-export core types for backward compatibility
-pub use core::zero_copy_ffi;
 pub use core::structural;
 pub use core::graph;
 pub use core::vector;
@@ -144,17 +246,23 @@ pub use lock_free::lock_free_hot_graph;
 
 use common::{DbResult, DbError, EdgeId};
 use common::models::{Edge, Embedding, Node};
+
+// Re-export common types for use in tests and external code
+pub use common::{DbResult as IndexResult, DbError as IndexError, EmbeddingId, NodeId};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::thread;
 use std::ptr;
+use hashbrown::HashMap;
+use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 // libmdbx high-level API not used - we use mdbx-sys FFI directly
-use mdbx_sys::{
+use storage::mdbx_base::mdbx_sys::{
     MDBX_env, MDBX_txn, MDBX_dbi,
     MDBX_SUCCESS,
     mdbx_env_create, mdbx_env_set_geometry, mdbx_env_open,
     mdbx_txn_begin_ex, mdbx_txn_commit_ex, mdbx_txn_abort, mdbx_dbi_open, MDBX_CREATE,
+    mdbx_env_set_option, MDBX_opt_max_db,
 };
 use std::path::Path;
 
@@ -163,6 +271,7 @@ use std::path::Path;
 pub use core::structural::{StructuralIndex, StructuralIndexGuard};
 pub use core::graph::{GraphIndex, GraphIndexGuard};
 pub use core::vector::{VectorIndex, SearchResult};
+pub use config::HnswConfig;
 pub use advanced::payload_index::{Payload, PayloadFieldValue, PayloadFilter, PayloadCondition, GeoPoint};
 pub use advanced::hybrid::{HotGraphIndex, HotVectorIndex, DataTemperature, QuantizedVector};
 pub use utils::caching::{LruCache, MultiLevelCache, CacheStats, VectorSearchCache, GraphTraversalCache, WarmGraphCache, WarmVectorCache, WarmGraphCacheConfig, WarmVectorCacheConfig};
@@ -454,31 +563,21 @@ pub struct IndexManager {
 impl IndexManager {
     /// Creates a new `IndexManager` instance with default configuration.
     ///
-    /// This initializes all three index types (structural, graph, vector) using
-    /// the provided libmdbx path.
+    /// **[DEPRECATED - TESTS ONLY]** Creates IndexManager with its own database.
     ///
-    /// # Arguments
-    ///
-    /// * `path` - Path to the libmdbx database
-    ///
-    /// # Errors
-    ///
-    /// Returns `DbError` if any index fails to initialize.
+    /// **WARNING**: Violates architecture! Use `new_from_storage()` in production.
+    #[deprecated(note = "Use new_from_storage() - indexing should NOT own databases!")]
     pub fn new(path: impl AsRef<Path>) -> DbResult<Self> {
+        #[allow(deprecated)]
         Self::new_with_config(path, HybridIndexConfig::default())
     }
     
-    /// Creates a new `IndexManager` instance with custom configuration.
+    /// **[DEPRECATED - TESTS ONLY]** Creates IndexManager with its own database and config.
     ///
-    /// # Arguments
-    ///
-    /// * `path` - Path to the libmdbx database
-    /// * `config` - Configuration for hybrid indexing features
-    ///
-    /// # Errors
-    ///
-    /// Returns `DbError` if any index fails to initialize.
+    /// **WARNING**: Violates architecture! Use `new_from_storage()` in production.
+    #[deprecated(note = "Use new_from_storage() - indexing should NOT own databases!")]
     pub fn new_with_config(path: impl AsRef<Path>, config: HybridIndexConfig) -> DbResult<Self> {
+        #[allow(deprecated)]
         Self::new_with_hybrid(path, config.enabled)
             .map(|mut manager| {
                 manager.config = Arc::new(Mutex::new(config));
@@ -486,7 +585,76 @@ impl IndexManager {
             })
     }
     
-    /// Creates a new `IndexManager` instance with optional hybrid indexes.
+    /// **[CORRECT ARCHITECTURE]** Creates IndexManager using storage's database pointers.
+    ///
+    /// **CRITICAL**: IndexManager does NOT own databases! It receives pointers from storage.
+    ///
+    /// # Arguments
+    ///
+    /// * `storage_env` - MDBX environment pointer from storage
+    /// * `structural_dbi` - DBI for structural index table
+    /// * `outgoing_dbi` - DBI for graph outgoing edges
+    /// * `incoming_dbi` - DBI for graph incoming edges
+    /// * `with_hybrid` - Whether to enable hot/warm layers
+    ///
+    /// # Safety
+    ///
+    /// Caller MUST ensure `storage_env` and DBIs remain valid for IndexManager's lifetime.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DbError` if initialization fails.
+    pub fn new_from_storage(
+        storage_env: *mut MDBX_env,
+        structural_dbi: MDBX_dbi,
+        outgoing_dbi: MDBX_dbi,
+        incoming_dbi: MDBX_dbi,
+        with_hybrid: bool,
+    ) -> DbResult<Self> {
+            // TODO: VectorIndex should also use storage's DB
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|e| DbError::InvalidOperation(format!("System time error: {}", e)))?
+                .as_nanos();
+            let vector_path = std::env::temp_dir().join(format!("vec_idx_{}", timestamp));
+            let vector_index = VectorIndex::new(&vector_path)?;
+            
+            let (hot_graph, hot_vector) = if with_hybrid {
+                (
+                    Some(Arc::new(LockFreeHotGraphIndex::new())),
+                    Some(Arc::new(LockFreeHotVectorIndex::new()))
+                )
+            } else {
+                (None, None)
+            };
+            
+            let (vector_cache, graph_cache, warm_graph_cache, warm_vector_cache) = if with_hybrid {
+                let vector_cache = Arc::new(VectorSearchCache::new(1000, 500));
+                let graph_cache = Arc::new(GraphTraversalCache::new(500, 500, 200));
+                (Some(vector_cache), Some(graph_cache), None, None)
+            } else {
+                (None, None, None, None)
+            };
+            
+        Ok(Self {
+            structural: Arc::new(StructuralIndex::new(storage_env, structural_dbi)),
+            graph: Arc::new(GraphIndex::new(storage_env, outgoing_dbi, incoming_dbi)),
+            vector: Arc::new(Mutex::new(vector_index)),
+            hot_graph,
+            hot_vector,
+            vector_cache,
+            graph_cache,
+            warm_graph_cache,
+            warm_vector_cache,
+            config: Arc::new(Mutex::new(HybridIndexConfig::default())),
+            runtime_state: Arc::new(Mutex::new(RuntimeState::default())),
+        })
+    }
+    
+    /// **[DEPRECATED - TESTS ONLY]** Creates IndexManager with its own database.
+    ///
+    /// **WARNING**: Violates architecture! Use `new_from_storage()` in production.
     ///
     /// # Arguments
     ///
@@ -496,13 +664,16 @@ impl IndexManager {
     /// # Errors
     ///
     /// Returns `DbError` if any index fails to initialize.
+    #[deprecated(note = "Use new_from_storage() - indexing should NOT own databases!")]
     pub fn new_with_hybrid(path: impl AsRef<Path>, with_hybrid: bool) -> DbResult<Self> {
         // Ensure directory exists
         let path = path.as_ref();
-        if !path.exists() {
-            std::fs::create_dir_all(path)
-                .map_err(|e| DbError::InvalidOperation(format!("Failed to create directory: {}", e)))?;
-        }
+        
+        // TempDir already provides unique, clean directories in tests
+        // For production: If stale MDBX files exist, MDBX will handle them
+        // Aggressive cleanup here causes race conditions with TempDir
+        std::fs::create_dir_all(path)
+            .map_err(|e| DbError::InvalidOperation(format!("Failed to create directory: {}", e)))?;
         
         // Create libmdbx environment with raw FFI
         unsafe {
@@ -512,15 +683,23 @@ impl IndexManager {
                 return Err(DbError::InvalidOperation(format!("mdbx_env_create failed: {}", rc)));
             }
             
-            // Set geometry (1GB initial, 100GB max)
+            // Set max_db limit (REQUIRED to avoid -30791 MDBX_DBS_FULL error)
+            // We use 3 DBIs: structural_index, graph_outgoing, graph_incoming
+            // Setting to PLANNED_MAX_DBS (10) for headroom
+            let rc = mdbx_env_set_option(env, MDBX_opt_max_db, config::PLANNED_MAX_DBS as u64);
+            if rc != MDBX_SUCCESS {
+                return Err(DbError::InvalidOperation(format!("mdbx_env_set_option(max_db) failed: {}", rc)));
+            }
+            
+            // Set geometry using configured values
             let rc = mdbx_env_set_geometry(
                 env,
-                -1,                    // size_lower (use default)
-                -1,                    // size_now (use default)
-                100 * 1024 * 1024 * 1024, // size_upper (100GB)
-                -1,                    // growth_step
-                -1,                    // shrink_threshold
-                -1,                    // page_size
+                config::mdbx_geometry::SIZE_LOWER,
+                config::mdbx_geometry::SIZE_NOW,
+                config::mdbx_geometry::SIZE_UPPER,
+                config::mdbx_geometry::GROWTH_STEP,
+                config::mdbx_geometry::SHRINK_THRESHOLD,
+                config::mdbx_geometry::PAGE_SIZE,
             );
             if rc != MDBX_SUCCESS {
                 return Err(DbError::InvalidOperation(format!("mdbx_env_set_geometry failed: {}", rc)));
@@ -541,10 +720,10 @@ impl IndexManager {
                 return Err(DbError::InvalidOperation(format!("Failed to begin txn: {}", rc)));
             }
             
-            // Open/create DBIs
-            let structural_name = std::ffi::CString::new("structural_index").unwrap();
-            let outgoing_name = std::ffi::CString::new("graph_outgoing").unwrap();
-            let incoming_name = std::ffi::CString::new("graph_incoming").unwrap();
+            // Open/create DBIs using configured table names
+            let structural_name = std::ffi::CString::new(config::db_tables::STRUCTURAL_INDEX).unwrap();
+            let outgoing_name = std::ffi::CString::new(config::db_tables::GRAPH_OUTGOING).unwrap();
+            let incoming_name = std::ffi::CString::new(config::db_tables::GRAPH_INCOMING).unwrap();
             
             let mut structural_dbi: MDBX_dbi = 0;
             let mut outgoing_dbi: MDBX_dbi = 0;
@@ -952,7 +1131,7 @@ impl IndexManager {
 
     /// Indexes an edge in the graph index.
     pub fn index_edge(&self, edge: &Edge) -> DbResult<()> {
-        self.graph.add_edge(edge)
+        self.graph.add_edge_with_struct(edge)
     }
 
     /// Removes an edge from the graph index.
@@ -1239,20 +1418,11 @@ impl IndexManager {
     /// A tuple of (path, distance) where path is the sequence of node IDs
     /// and distance is the total path distance.
     pub fn dijkstra_shortest_path(&self, _start: &str, _end: &str) -> DbResult<(Vec<String>, f32)> {
-        if let Some(_hot_graph) = &self.hot_graph {
-            // Note: In a real implementation, we would need to implement Dijkstra's algorithm
-            // for the lock-free graph index. For now, we're returning a placeholder.
-            Err(common::DbError::InvalidOperation(
-                "Dijkstra algorithm not yet implemented for lock-free graph index".to_string()
-            ))
-        } else {
-            // Fallback to simple path finding on persistent graph
-            // This is a simplified implementation - in a real system, you'd want
-            // a more sophisticated algorithm
-            Err(common::DbError::InvalidOperation(
-                "Hot graph index not available for Dijkstra algorithm".to_string()
-            ))
-        }
+        // Hot graph doesn't support Dijkstra (no edge weights in adjacency list)
+        // Use cold graph implementation instead
+        Err(common::DbError::InvalidOperation(
+            "Use dijkstra() method with edge cost function instead".to_string()
+        ))
     }
     
     /// Finds the shortest path between two nodes using A* algorithm.
@@ -1273,17 +1443,11 @@ impl IndexManager {
     where
         F: Fn(&str) -> f32,
     {
-        if let Some(_hot_graph) = &self.hot_graph {
-            // Note: In a real implementation, we would need to implement A* algorithm
-            // for the lock-free graph index. For now, we're returning a placeholder.
-            Err(common::DbError::InvalidOperation(
-                "A* algorithm not yet implemented for lock-free graph index".to_string()
-            ))
-        } else {
-            Err(common::DbError::InvalidOperation(
-                "Hot graph index not available for A* algorithm".to_string()
-            ))
-        }
+        // Hot graph doesn't support A* (no edge weights or heuristics)
+        // Use astar() method with cost and heuristic functions instead
+        Err(common::DbError::InvalidOperation(
+            "Use astar() method with cost and heuristic functions instead".to_string()
+        ))
     }
     
     /// Finds strongly connected components in the graph.
@@ -1295,17 +1459,11 @@ impl IndexManager {
     /// A vector of vectors, where each inner vector represents a strongly
     /// connected component.
     pub fn strongly_connected_components(&self) -> DbResult<Vec<Vec<String>>> {
-        if let Some(_hot_graph) = &self.hot_graph {
-            // Note: In a real implementation, we would need to implement SCC algorithm
-            // for the lock-free graph index. For now, we're returning a placeholder.
-            Err(common::DbError::InvalidOperation(
-                "SCC algorithm not yet implemented for lock-free graph index".to_string()
-            ))
-        } else {
-            Err(common::DbError::InvalidOperation(
-                "Hot graph index not available for SCC algorithm".to_string()
-            ))
-        }
+        // Hot graph doesn't support SCC (would need algorithm port)
+        // Use find_strongly_connected_components() method instead
+        Err(common::DbError::InvalidOperation(
+            "Use find_strongly_connected_components() method instead".to_string()
+        ))
     }
     
     /// Adds a vector to the hot vector index.
@@ -1370,28 +1528,49 @@ impl IndexManager {
     
     /// Migrates graph data from cold indexes to hot graph index.
     fn migrate_graph_data(&self) -> DbResult<()> {
-        if let Some(_hot_graph) = &self.hot_graph {
+        if let Some(hot_graph) = &self.hot_graph {
             log::info!("Migrating graph data to hot index");
             
-            // Since the current GraphIndex doesn't expose iteration methods,
-            // we'll implement a placeholder that can be extended when those methods are added
-            // TODO: Implement actual migration when GraphIndex has get_all_nodes() and get_all_edges()
+            // Get all nodes from cold GraphIndex
+            let nodes = self.graph.get_all_nodes()?;
+            log::info!("Found {} nodes to migrate", nodes.len());
             
-            log::info!("Graph data migration completed (placeholder implementation)");
+            // Migrate edges for each node
+            let mut edge_count = 0;
+            for node in &nodes {
+                // Get outgoing edges
+                let edges = self.graph.get_outgoing_edges(node)?;
+                for (target, _edge_id) in edges {
+                    // Add to hot graph (with default weight 1.0)
+                    hot_graph.add_edge(node, &target.0)?;
+                    edge_count += 1;
+                }
+            }
+            
+            log::info!("Graph data migration completed: {} nodes, {} edges", nodes.len(), edge_count);
         }
         Ok(())
     }
     
     /// Migrates vector data from cold indexes to hot vector index.
     fn migrate_vector_data(&self) -> DbResult<()> {
-        if let Some(_hot_vector) = &self.hot_vector {
+        if let Some(hot_vector) = &self.hot_vector {
             log::info!("Migrating vector data to hot index");
             
-            // Since the current VectorIndex doesn't expose iteration methods,
-            // we'll implement a placeholder that can be extended when those methods are added
-            // TODO: Implement actual migration when VectorIndex has get_all_embeddings()
+            // Get all embeddings from VectorIndex
+            let embeddings_iter = self.vector.lock()
+                .map_err(|e| DbError::Other(format!("Lock poisoned: {}", e)))?
+                .get_all_embeddings()?;
             
-            log::info!("Vector data migration completed (placeholder implementation)");
+            let mut count = 0;
+            for embedding_result in embeddings_iter {
+                let embedding = embedding_result?;
+                // Add to hot vector index
+                hot_vector.add_vector(&embedding.id.0, embedding.vector)?;
+                count += 1;
+            }
+            
+            log::info!("Vector data migration completed: {} embeddings", count);
         }
         Ok(())
     }
@@ -1636,16 +1815,16 @@ impl IndexManager {
     /// For zero-copy access, use `get_outgoing_edges()` directly.
     pub fn get_outgoing_edges_hybrid(&self, node_id: &str) -> DbResult<Vec<EdgeId>> {
         // Try hot layer first if available
-        if let Some(_hot_graph) = &self.hot_graph {
-            // Note: The current HotGraphIndex uses different method signatures
-            // This is a placeholder for when the APIs are aligned
-            log::debug!("Hot graph layer available but API alignment needed");
+        if let Some(hot_graph) = &self.hot_graph {
+            // Hot graph doesn't track EdgeIds, only adjacency
+            // Can't return EdgeIds from hot layer, fall through to cold
+            log::debug!("Hot graph doesn't track EdgeIds, using cold layer");
         }
         
-        // Fall back to cold layer - convert guard to owned Vec
+        // Use cold layer - convert guard to owned Vec
         log::debug!("Query served from cold layer");
         match self.get_outgoing_edges(node_id)? {
-            Some(guard) => guard.to_owned(),
+            Some(guard) => guard.to_owned_edge_ids(),
             None => Ok(Vec::new()),
         }
     }
@@ -1656,16 +1835,16 @@ impl IndexManager {
     /// For zero-copy access, use `get_incoming_edges()` directly.
     pub fn get_incoming_edges_hybrid(&self, node_id: &str) -> DbResult<Vec<EdgeId>> {
         // Try hot layer first if available
-        if let Some(_hot_graph) = &self.hot_graph {
-            // Note: The current HotGraphIndex uses different method signatures
-            // This is a placeholder for when the APIs are aligned
-            log::debug!("Hot graph layer available but API alignment needed");
+        if let Some(hot_graph) = &self.hot_graph {
+            // Hot graph doesn't track EdgeIds, only adjacency
+            // Can't return EdgeIds from hot layer, fall through to cold
+            log::debug!("Hot graph doesn't track EdgeIds, using cold layer");
         }
         
-        // Fall back to cold layer - convert guard to owned Vec
+        // Use cold layer - convert guard to owned Vec
         log::debug!("Query served from cold layer");
         match self.get_incoming_edges(node_id)? {
-            Some(guard) => guard.to_owned(),
+            Some(guard) => guard.to_owned_edge_ids(),
             None => Ok(Vec::new()),
         }
     }
@@ -1767,13 +1946,13 @@ impl IndexManager {
     pub fn get_tier_stats(&self) -> DbResult<TierStats> {
         let mut stats = TierStats::default();
         
-        // Collect hot layer stats
-        if let Some(_hot_graph) = &self.hot_graph {
-            stats.hot_graph_nodes = 0; // Placeholder - would get actual count
+        // Collect hot layer stats - REAL counts, not placeholders!
+        if let Some(hot_graph) = &self.hot_graph {
+            stats.hot_graph_nodes = hot_graph.node_count();
         }
         
-        if let Some(_hot_vector) = &self.hot_vector {
-            stats.hot_vector_count = 0; // Placeholder - would get actual count
+        if let Some(hot_vector) = &self.hot_vector {
+            stats.hot_vector_count = hot_vector.len();
         }
         
         // Collect warm layer stats
@@ -1792,11 +1971,150 @@ impl IndexManager {
             stats.warm_vector_memory = memory;
         }
         
-        // Cold layer stats would come from the base indexes
-        stats.cold_graph_nodes = 0; // Placeholder
+        // Cold layer stats - REAL counts from MDBX!
+        stats.cold_graph_nodes = self.graph.get_all_nodes().map(|nodes| nodes.len()).unwrap_or(0);
         stats.cold_vector_count = self.vector.lock().map(|v| v.len()).unwrap_or(0);
         
         Ok(stats)
+    }
+    
+    // ============================================================================
+    // GRAPH TRANSFORMATIONS & UTILITIES
+    // ============================================================================
+    
+    /// Export graph to GraphViz DOT format for visualization.
+    ///
+    /// # Arguments
+    /// * `graph_name` - Name of the graph in DOT output
+    /// * `nodes` - List of all node IDs to include in the export
+    pub fn export_graph_dot(&self, graph_name: &str, nodes: &[String]) -> DbResult<String> {
+        use crate::utils::dot_export::DotExporter;
+        DotExporter::to_dot(&*self.graph, graph_name, nodes)
+    }
+    
+    /// Compute the complement of the graph.
+    pub fn graph_complement(&self) -> DbResult<core::graph::GraphIndex> {
+        use crate::utils::graph_operators::GraphOperators;
+        GraphOperators::complement(&*self.graph)
+    }
+    
+    /// Compute union of this graph with another.
+    pub fn graph_union(&self, other: &core::graph::GraphIndex) -> DbResult<core::graph::GraphIndex> {
+        use crate::utils::graph_operators::GraphOperators;
+        GraphOperators::union(&*self.graph, other)
+    }
+    
+    /// Compute intersection of this graph with another.
+    pub fn graph_intersection(&self, other: &core::graph::GraphIndex) -> DbResult<core::graph::GraphIndex> {
+        use crate::utils::graph_operators::GraphOperators;
+        GraphOperators::intersection(&*self.graph, other)
+    }
+    
+    /// Convert graph to CSR (Compressed Sparse Row) format for maximum compression.
+    ///
+    /// # Arguments
+    /// * `nodes` - List of all node IDs to include in the CSR representation.
+    ///             Nodes without outgoing edges will still be included (with empty edge lists).
+    ///
+    /// # Note
+    /// This method requires a node list because GraphIndex doesn't yet expose iteration
+    /// over all keys. In the future, this can be enhanced to automatically discover nodes.
+    pub fn to_csr_graph(&self, nodes: &[String]) -> DbResult<core::csr_graph::CsrGraphIndex> {
+        core::csr_graph::CsrGraphIndex::from_graph_index(&*self.graph, nodes)
+    }
+    
+    // ============================================================================
+    // GRAPH ALGORITHMS - Zero-copy MDBX access
+    // ============================================================================
+    
+    /// Find shortest path between two nodes using Dijkstra's algorithm.
+    /// 
+    /// Returns HashMap of distances to all reachable nodes from source.
+    /// For unweighted graphs, use edge_cost = |_,_| 1.0
+    pub fn dijkstra<F, K>(&self, source: &str, target: Option<&str>, edge_cost: F) -> DbResult<HashMap<String, K>>
+    where
+        F: FnMut(&str, &str) -> K,
+        K: algorithms::algo::Measure + Copy,
+    {
+        algorithms::dijkstra_zero_copy(&*self.graph, source, target, edge_cost)
+    }
+    
+    /// Find shortest path with heuristic (A* algorithm).
+    pub fn astar<F, H, K>(&self, source: &str, target: &str, edge_cost: F, heuristic: H) -> DbResult<Option<(K, Vec<String>)>>
+    where
+        F: FnMut(&str, &str) -> K,
+        H: FnMut(&str) -> K,
+        K: algorithms::algo::Measure + Copy,
+    {
+        let target_owned = target.to_string();
+        let is_goal = |node: &str| node == target_owned.as_str();
+        algorithms::astar_zero_copy(&*self.graph, source, is_goal, edge_cost, heuristic)
+    }
+    
+    /// Compute PageRank scores for all nodes.
+    /// 
+    /// # Arguments
+    /// * `nodes` - set of all node IDs to compute PageRank for
+    /// * `damping_factor` - typically 0.85
+    /// * `iterations` - number of iterations
+    pub fn pagerank(&self, nodes: &HashSet<String>, damping_factor: f64, iterations: usize) -> DbResult<HashMap<String, f64>> {
+        algorithms::page_rank_zero_copy(&*self.graph, nodes, damping_factor, iterations)
+    }
+    
+    /// Find strongly connected components using Tarjan's algorithm.
+    pub fn find_strongly_connected_components(&self, nodes: &HashSet<String>) -> DbResult<Vec<Vec<String>>> {
+        algorithms::scc::tarjan_scc_zero_copy(&*self.graph, nodes)
+    }
+    
+    /// Perform breadth-first search from a starting node.
+    pub fn bfs<F>(&self, start: &str, visit: F) -> DbResult<()>
+    where
+        F: FnMut(&str),
+    {
+        algorithms::bfs_zero_copy(&*self.graph, start, visit)
+    }
+    
+    /// Perform depth-first search from a starting node.
+    pub fn dfs<F>(&self, start: &str, visit: F) -> DbResult<()>
+    where
+        F: FnMut(&str),
+    {
+        algorithms::dfs_zero_copy(&*self.graph, start, visit)
+    }
+    
+    /// Detect negative cycles using Bellman-Ford algorithm.
+    /// 
+    /// Returns Ok(distances) if no negative cycle, Err(NegativeCycle) if detected.
+    pub fn bellman_ford<F, K>(&self, nodes: &HashSet<String>, source: &str, edge_cost: F) -> DbResult<Result<HashMap<String, K>, algorithms::algo::NegativeCycle>>
+    where
+        F: FnMut(&str, &str) -> K,
+        K: algorithms::algo::Measure + Copy,
+    {
+        algorithms::bellman_ford_zero_copy(&*self.graph, nodes, source, edge_cost)
+    }
+    
+    /// Compute minimum spanning tree using Prim's algorithm.
+    pub fn minimum_spanning_tree<F, K>(&self, nodes: &HashSet<String>, start: &str, edge_cost: F) -> DbResult<Vec<(String, String, K)>>
+    where
+        F: FnMut(&str, &str) -> K,
+        K: algorithms::algo::Measure + Copy,
+    {
+        algorithms::prim_mst_zero_copy(&*self.graph, nodes, start, edge_cost)
+    }
+    
+    /// Detect communities using Louvain algorithm.
+    pub fn detect_communities(&self, nodes: &HashSet<String>, iterations: usize) -> DbResult<HashMap<String, usize>> {
+        algorithms::louvain_zero_copy(&*self.graph, nodes, iterations)
+    }
+    
+    /// Find bridges (cut edges) in the graph.
+    pub fn find_bridges(&self, nodes: &HashSet<String>) -> DbResult<Vec<(String, String)>> {
+        algorithms::bridges_zero_copy(&*self.graph, nodes)
+    }
+    
+    /// Find articulation points (cut vertices) in the graph.
+    pub fn find_articulation_points(&self, nodes: &HashSet<String>) -> DbResult<Vec<String>> {
+        algorithms::articulation_points_zero_copy(&*self.graph, nodes)
     }
 }
 

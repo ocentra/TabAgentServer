@@ -1,14 +1,18 @@
 # Indexing Crate
 
-**Fast multi-dimensional indexing for graph databases - zero-copy, automatically synchronized.**
+**Universal index building service for MIA's 9+ databases - zero-copy, multi-resolution, semantically aware.**
+
+> **📚 For complete architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md)**  
+> *Explains: What indexing IS, multi-resolution embeddings, how modules work together, the refactoring plan*
 
 ## What This Does
 
-Makes graph database queries **10-100x faster** using three specialized indexes:
+Builds search structures for ALL MIA databases:
 
-1. **Property lookups** → "Find all messages in chat_123" (O(log n))
-2. **Graph traversal** → "Get edges connected to user_5" (O(1))
-3. **Semantic search** → "Find similar embeddings" (O(log n))
+1. **Semantic search** → HNSW indexes for vector similarity (O(log n))
+2. **Graph traversal** → Adjacency lists for relationships (O(1))
+3. **Property lookups** → B-tree indexes for metadata (O(log n))
+4. **Multi-resolution** → Fast (0.6B) + Accurate (8B) embeddings
 
 ## Quick Example
 
@@ -152,16 +156,42 @@ cargo check          # Check compilation
 
 ## Documentation
 
-- **Module READMEs** - See `src/*/README.md` for each module
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - **START HERE!** Complete explanation of what indexing is
+- **Module READMEs** - `src/*/README.md` for each module
 - **TODO.md** - Implementation status
-- **COMPREHENSIVE_PLAN.md** - Future enhancements
+
+## Key Concepts
+
+### Indexing is a SERVICE, not a database owner!
+
+```
+storage owns → knowledge.mdbx
+               ├── nodes (data)
+               ├── edges (data)
+               ├── structural_index ← INDEXING builds this
+               └── graph_outgoing   ← INDEXING builds this
+
+indexing builds indexes IN storage's database!
+```
+
+### Multi-Resolution Embeddings:
+
+```
+embeddings.mdbx
+├── 0.6b_vectors → FAST search (Stage 1: 1M→1K candidates, <1ms)
+└── 8b_vectors   → ACCURATE rerank (Stage 2: 1K→100 best, <10ms)
+```
 
 ## Summary
 
-**TL;DR:**
-1. Create storage: `StorageManager::with_indexing("db")?`
-2. Insert data: indexes update automatically
-3. Query: `idx.get_nodes_by_property(...)`, `idx.get_outgoing_edges(...)`, `idx.search_vectors(...)`
-4. Iterate: Use guards for zero-copy iteration
+**What indexing is:**
+1. Universal index builder for ALL MIA databases
+2. Provides: HNSW (vectors), adjacency lists (graph), B-trees (properties)
+3. Takes storage's env pointers (doesn't create DBs)
+4. Serves 9+ databases with same service
 
-**Start here:** Read `src/core/README.md` for core concepts, then explore other modules as needed.
+**Start reading:**
+1. [ARCHITECTURE.md](ARCHITECTURE.md) - Full explanation
+2. `src/core/README.md` - Core implementations
+3. `src/algorithms/README.md` - Graph algorithms
+4. `src/advanced/README.md` - Enterprise features

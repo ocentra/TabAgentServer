@@ -1,0 +1,124 @@
+    pub fn insert(&self, key: K, value: V) -> DbResult<Option<V>> {
+        let hash = self.hash_key(&key);
+        let bucket_index = (hash as usize) % self.bucket_count;
+
+        let guard = &epoch::pin();
+
+        // Ensure bucket exists (create if absent)
+        let bucket_ptr = self.buckets[bucket_index].load(Ordering::Acquire, guard);
+        let bucket = if bucket_ptr.is_null() {
+            let new_bucket = Owned::new(Bucket { head: Atomic::null() });
+            match self.buckets[bucket_index].compare_exchange_weak(
+                Shared::null(),
+                new_bucket,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+                guard,
+            ) {
+                Ok(shared) => unsafe { shared.as_ref() }.unwrap(),
+                Err(e) => unsafe { e.current.as_ref() }.unwrap(),
+            }
+        } else {
+            unsafe { bucket_ptr.as_ref() }.unwrap()
+        };
+
+        // Try to locate existing entry and update it in-place using Owned properly
+        'search_update: loop {
+            let mut current_ptr = bucket.head.load(Ordering::Acquire, guard);
+            let mut prev_ptr: Shared<'_, Entry<K, V>> = Shared::null();
+
+            while let Some(current) = unsafe { current_ptr.as_ref() } {
+                if current.hash == hash && current.key == key {
+                    // Found existing entry — attempt to replace it atomically.
+                    let old_value = current.value.clone();
+                    let next_ptr = current.next.load(Ordering::Acquire, guard);
+
+                    // Construct an Owned entry that points to the observed next_ptr.
+                    let owned_new = Owned::new(Entry {
+                        hash,
+                        key: key.clone(),
+                        value: value.clone(),
+                        next: Atomic::from(next_ptr),
+                    });
+
+                    // Attempt CAS. Note: compare_exchange[_weak] takes Owned as 'new',
+                    // and returns Err(Owned) on failure — we must recover ownership.
+                    let cas_result = if prev_ptr.is_null() {
+                        // Replace head
+                        bucket
+                            .head
+                            .compare_exchange(
+                                current_ptr,
+                                owned_new,
+                                Ordering::AcqRel,
+                                Ordering::Acquire,
+                                guard,
+                            )
+                    } else {
+                        // Replace middle node
+                        if let Some(prev) = unsafe { prev_ptr.as_ref() } {
+                            prev.next.compare_exchange(
+                                current_ptr,
+                                owned_new,
+                                Ordering::AcqRel,
+                                Ordering::Acquire,
+                                guard,
+                            )
+                        } else {
+                            // Unexpected: restart to be safe
+                            continue 'search_update;
+                        }
+                    };
+
+                    match cas_result {
+                        Ok(_) => {
+                            // Success: schedule old node for destruction and return old value.
+                            unsafe { guard.defer_destroy(current_ptr) };
+                            return Ok(Some(old_value));
+                        }
+                        Err(err_owned) => {
+                            // CAS failed; recover Owned and retry search from scratch to keep consistency.
+                            // err_owned contains the Owned<T> we attempted to insert.
+                            drop(err_owned);
+                            continue 'search_update;
+                        }
+                    }
+                }
+
+                prev_ptr = current_ptr;
+                current_ptr = current.next.load(Ordering::Acquire, guard);
+            }
+
+            // Not found — perform insert at head. Create Owned each attempt so the Err case
+            // returns the Owned back for reuse or drop.
+            'insert_head: loop {
+                let head_ptr = bucket.head.load(Ordering::Acquire, guard);
+                let owned_new = Owned::new(Entry {
+                    hash,
+                    key: key.clone(),
+                    value: value.clone(),
+                    next: Atomic::from(head_ptr),
+                });
+
+                match bucket.head.compare_exchange_weak(
+                    head_ptr,
+                    owned_new,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                    guard,
+                ) {
+                    Ok(_) => {
+                        self.size.fetch_add(1, Ordering::Relaxed);
+                        return Ok(None);
+                    }
+                    Err(err_owned) => {
+                        // Failed to insert because head changed. drop the Owned (or you could recover it)
+                        // and loop to try again with a fresh owned having the new head.
+                        drop(err_owned);
+                        continue 'insert_head;
+                    }
+                }
+            }
+        }
+    }
+

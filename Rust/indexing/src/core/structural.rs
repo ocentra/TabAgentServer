@@ -6,7 +6,7 @@
 //! - NO allocations, NO deserialization - pure pointer access
 //!
 //! **API:**
-//! ```rust
+//! ```rust,ignore
 //! let guard = index.get("chat_id", "chat_123")?;
 //! for node_id_str in guard.iter_strs() {
 //!     // node_id_str is &str borrowed from mmap - ZERO allocation!
@@ -20,15 +20,15 @@
 //! - Memory: ZERO heap allocations on reads
 
 use common::{DbError, DbResult, NodeId};
-use mdbx_sys::{
+use storage::mdbx_base::mdbx_sys::{
     MDBX_env, MDBX_txn, MDBX_dbi, MDBX_val,
     MDBX_SUCCESS, MDBX_NOTFOUND,
     mdbx_txn_begin_ex, mdbx_txn_commit_ex, mdbx_txn_abort, mdbx_del,
-    MDBX_TXN_RDONLY,
 };
 use std::ptr;
 use std::os::raw::c_void;
-use crate::zero_copy_ffi;
+use storage::mdbx_base::zero_copy_ffi;
+use storage::mdbx_base::txn_pool;  // ← USE TRANSACTION POOL to avoid -30783!
 
 /// Structural index - TRUE ZERO-COPY with transaction-backed guards.
 pub struct StructuralIndex {
@@ -46,12 +46,16 @@ unsafe impl Sync for StructuralIndex {}
 pub struct StructuralIndexGuard {
     txn: *mut MDBX_txn,
     archived: &'static rkyv::Archived<Vec<NodeId>>,
+    owns_txn: bool,  // If false, txn is from pool and should NOT be closed
 }
 
 impl Drop for StructuralIndexGuard {
     fn drop(&mut self) {
-        unsafe {
-            mdbx_txn_abort(self.txn);
+        // Only close transaction if we own it (not from pool)
+        if self.owns_txn {
+            unsafe {
+                mdbx_txn_abort(self.txn);
+            }
         }
     }
 }
@@ -173,17 +177,9 @@ impl StructuralIndex {
         let key = format!("prop:{}:{}", property, value);
         
         unsafe {
-            let mut txn: *mut MDBX_txn = ptr::null_mut();
-            let rc = mdbx_txn_begin_ex(
-                self.env,
-                ptr::null_mut(),
-                MDBX_TXN_RDONLY,
-                &mut txn,
-                ptr::null_mut(),
-            );
-            if rc != MDBX_SUCCESS {
-                return Err(DbError::InvalidOperation(format!("Failed to begin RO txn: {}", rc)));
-            }
+            // Use transaction pool to reuse read transaction (fixes -30783)
+            let txn = txn_pool::get_or_create_read_txn(self.env)
+                .map_err(|e| DbError::InvalidOperation(format!("Failed to get pooled txn: {:?}", e)))?;
             
             // TRUE ZERO-COPY READ!
             match zero_copy_ffi::get_zero_copy::<Vec<NodeId>>(txn, self.dbi, key.as_bytes()) {
@@ -195,14 +191,15 @@ impl StructuralIndex {
                     Ok(Some(StructuralIndexGuard {
                         txn,
                         archived: archived_static,
+                        owns_txn: false,  // From pool, don't close in Drop!
                     }))
                 }
                 Ok(None) => {
-                    mdbx_txn_abort(txn);
+                    // txn is from pool, don't abort it
                     Ok(None)
                 }
                 Err(e) => {
-                    mdbx_txn_abort(txn);
+                    // txn is from pool, don't abort it
                     Err(DbError::InvalidOperation(format!("Zero-copy get failed: {}", e)))
                 }
             }
@@ -214,26 +211,16 @@ impl StructuralIndex {
         let key = format!("prop:{}:{}", property, value);
         
         unsafe {
-            let mut txn: *mut MDBX_txn = ptr::null_mut();
-            let rc = mdbx_txn_begin_ex(
-                self.env,
-                ptr::null_mut(),
-                MDBX_TXN_RDONLY,
-                &mut txn,
-                ptr::null_mut(),
-            );
-            if rc != MDBX_SUCCESS {
-                return Err(DbError::InvalidOperation(format!("Failed to begin RO txn: {}", rc)));
-            }
+            // Use transaction pool to reuse read transaction (fixes -30783)
+            let txn = txn_pool::get_or_create_read_txn(self.env)
+                .map_err(|e| DbError::InvalidOperation(format!("Failed to get pooled txn: {:?}", e)))?;
             
-            let result = match zero_copy_ffi::get_zero_copy::<Vec<NodeId>>(txn, self.dbi, key.as_bytes()) {
+            // txn is from pool, don't abort it - just return result
+            match zero_copy_ffi::get_zero_copy::<Vec<NodeId>>(txn, self.dbi, key.as_bytes()) {
                 Ok(Some(archived)) => Ok(archived.len()),  // TRUE zero-copy!
                 Ok(None) => Ok(0),
                 Err(e) => Err(DbError::InvalidOperation(format!("Zero-copy get failed: {}", e))),
-            };
-            
-            mdbx_txn_abort(txn);
-            result
+            }
         }
     }
     

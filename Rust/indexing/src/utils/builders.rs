@@ -13,7 +13,7 @@ use crate::advanced::persistence::EnhancedVectorIndex;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use libmdbx::{Database, NoWriteMap};
+use storage::mdbx_base::libmdbx::{Database, NoWriteMap};
 
 /// Builder for creating vector indexes with custom configurations.
 pub struct VectorIndexBuilder {

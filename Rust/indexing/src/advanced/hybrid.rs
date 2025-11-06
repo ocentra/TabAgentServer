@@ -60,7 +60,7 @@ use wide::f32x4; // SIMD operations on 4 f32 values at once
 /// Temperature classification for data tiering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DataTemperature {
-    /// Frequently accessed data in memory (Redis/petgraph style)
+    /// Frequently accessed data in memory (hot cache)
     Hot,
     
     /// Occasionally accessed data with lazy loading
@@ -378,7 +378,7 @@ impl AccessTracker {
 
 /// Hot Graph Index with advanced algorithms.
 ///
-/// This index uses internal implementations inspired by petgraph for complex
+/// This index uses optimized graph structures for complex
 /// graph algorithms while maintaining fast neighbor lookups.
 pub struct HotGraphIndex {
     /// Adjacency list representation for fast lookups
@@ -1470,7 +1470,6 @@ impl HotGraphIndex {
     /// Fast approximate centrality computation using sampling
     pub fn approximate_centrality(&mut self, sample_size: usize) -> HashMap<String, f32> {
         use rand::prelude::IndexedRandom;
-        use rand::Rng;
         
         let mut centrality: HashMap<String, f32> = self.adjacency_list.keys()
             .map(|node| (node.clone(), 0.0))
@@ -1861,7 +1860,6 @@ impl HotVectorIndex {
         let sample_size = sample_size.max(1).min(self.vectors.len());
         
         use rand::prelude::IndexedRandom;
-        use rand::Rng;
         
         let mut rng = rand::rng();
         let vector_ids: Vec<String> = self.vectors.keys().cloned().collect();

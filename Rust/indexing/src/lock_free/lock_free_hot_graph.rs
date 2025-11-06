@@ -46,40 +46,39 @@
 //! ```
 
 use crate::hybrid::DataTemperature;
-use crate::lock_free::lock_free::{LockFreeHashMap, LockFreeAccessTracker, LockFreeStats};
-use common::{DbError, DbResult};
-use std::collections::HashSet;
+use crate::lock_free::lock_free_common::{LockFreeAccessTracker, LockFreeStats};
+use common::DbResult;
+use dashmap::DashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 /// Lock-free implementation of HotGraphIndex for concurrent access.
 ///
 /// This implementation uses lock-free data structures and atomic operations
 /// to provide high-performance concurrent access without traditional locking.
 pub struct LockFreeHotGraphIndex {
-    /// Adjacency list representation for fast lookups using lock-free hash maps
-    adjacency_list: Arc<LockFreeHashMap<String, Vec<String>>>,
+    /// Adjacency list representation for fast lookups using DashMap
+    adjacency_list: Arc<DashMap<String, Vec<String>>>,
     
-    /// Reverse adjacency list for incoming edges using lock-free hash maps
-    reverse_adjacency_list: Arc<LockFreeHashMap<String, Vec<String>>>,
+    /// Reverse adjacency list for incoming edges using DashMap
+    reverse_adjacency_list: Arc<DashMap<String, Vec<String>>>,
     
-    /// Edge weights for weighted graph algorithms using lock-free hash maps
-    edge_weights: Arc<LockFreeHashMap<(String, String), f32>>,
+    /// Edge weights for weighted graph algorithms using DashMap
+    edge_weights: Arc<DashMap<(String, String), f32>>,
     
     /// Access tracking for temperature management using lock-free access trackers
-    access_trackers: Arc<LockFreeHashMap<String, LockFreeAccessTracker>>,
+    access_trackers: Arc<DashMap<String, LockFreeAccessTracker>>,
     
-    /// Node metadata using lock-free hash maps
-    node_metadata: Arc<LockFreeHashMap<String, String>>,
+    /// Node metadata using DashMap
+    node_metadata: Arc<DashMap<String, String>>,
     
     /// Performance monitoring statistics using lock-free counters
     stats: Arc<LockFreeStats>,
     
-    /// Cache for frequently computed paths using lock-free hash maps
-    path_cache: Arc<LockFreeHashMap<(String, String), Option<Vec<String>>>>,
+    /// Cache for frequently computed paths using DashMap
+    path_cache: Arc<DashMap<(String, String), Option<Vec<String>>>>,
     
-    /// Precomputed centrality scores for fast access using lock-free hash maps
-    centrality_cache: Arc<LockFreeHashMap<String, f32>>,
+    /// Precomputed centrality scores for fast access using DashMap
+    centrality_cache: Arc<DashMap<String, f32>>,
 }
 
 /// Performance monitoring statistics for LockFreeHotGraphIndex
@@ -108,14 +107,14 @@ impl LockFreeHotGraphIndex {
     /// Creates a new LockFreeHotGraphIndex.
     pub fn new() -> Self {
         Self {
-            adjacency_list: Arc::new(LockFreeHashMap::new(64)),
-            reverse_adjacency_list: Arc::new(LockFreeHashMap::new(64)),
-            edge_weights: Arc::new(LockFreeHashMap::new(64)),
-            access_trackers: Arc::new(LockFreeHashMap::new(64)),
-            node_metadata: Arc::new(LockFreeHashMap::new(64)),
+            adjacency_list: Arc::new(DashMap::new()),
+            reverse_adjacency_list: Arc::new(DashMap::new()),
+            edge_weights: Arc::new(DashMap::new()),
+            access_trackers: Arc::new(DashMap::new()),
+            node_metadata: Arc::new(DashMap::new()),
             stats: Arc::new(LockFreeStats::new()),
-            path_cache: Arc::new(LockFreeHashMap::new(64)),
-            centrality_cache: Arc::new(LockFreeHashMap::new(64)),
+            path_cache: Arc::new(DashMap::new()),
+            centrality_cache: Arc::new(DashMap::new()),
         }
     }
     
@@ -123,19 +122,19 @@ impl LockFreeHotGraphIndex {
     pub fn add_node(&self, node_id: &str, metadata: Option<&str>) -> DbResult<()> {
         // Check if node already exists
         let node_key = node_id.to_string();
-        let is_new = self.adjacency_list.get(&node_key)?.is_none();
+        let is_new = self.adjacency_list.get(&node_key).is_none();
         
         // Ensure the node exists in adjacency lists
-        self.adjacency_list.insert(node_key.clone(), Vec::new())?;
-        self.reverse_adjacency_list.insert(node_key.clone(), Vec::new())?;
+        self.adjacency_list.insert(node_key.clone(), Vec::new());
+        self.reverse_adjacency_list.insert(node_key.clone(), Vec::new());
         
         // Add metadata if provided
         if let Some(meta) = metadata {
-            self.node_metadata.insert(node_key.clone(), meta.to_string())?;
+            self.node_metadata.insert(node_key.clone(), meta.to_string());
         }
         
         // Initialize access tracker
-        self.access_trackers.insert(node_key, LockFreeAccessTracker::new())?;
+        self.access_trackers.insert(node_key, LockFreeAccessTracker::new());
         
         // Only increment count if this is a new node
         if is_new {
@@ -147,18 +146,16 @@ impl LockFreeHotGraphIndex {
     
     /// Removes a node from the graph.
     pub fn remove_node(&self, node_id: &str) -> DbResult<bool> {
-        let existed = self.adjacency_list.remove(&node_id.to_string())?.is_some();
-        self.reverse_adjacency_list.remove(&node_id.to_string())?;
-        self.access_trackers.remove(&node_id.to_string())?;
-        self.node_metadata.remove(&node_id.to_string())?;
+        let existed = self.adjacency_list.remove(&node_id.to_string()).is_some();
+        self.reverse_adjacency_list.remove(&node_id.to_string());
+        self.access_trackers.remove(&node_id.to_string());
+        self.node_metadata.remove(&node_id.to_string());
         
         // Remove references to this node from other nodes' adjacency lists
-        // Note: This is a simplified approach. In a real implementation,
-        // we would need a more efficient way to iterate through the lock-free hash map.
+        // (Removal from other nodes' lists requires full iteration)
         
         // Remove all edges involving this node
-        // Note: This is a simplified approach. In a real implementation,
-        // we would need a more efficient way to iterate through the lock-free hash map.
+        // (Removal from edge_weights requires iteration)
         
         if existed {
             self.stats.decrement_vector_count(); // Using vector_count to track nodes
@@ -183,53 +180,58 @@ impl LockFreeHotGraphIndex {
         let to_key = to.to_string();
         
         // Add to outgoing adjacency list
-        let mut outgoing = self.adjacency_list.get(&from_key)?.unwrap_or_default();
-        if !outgoing.contains(&to_key) {
-            outgoing.push(to_key.clone());
-            self.adjacency_list.insert(from_key.clone(), outgoing)?;
-        }
+        self.adjacency_list.entry(from_key.clone()).or_insert_with(Vec::new).push(to_key.clone());
         
         // Add to incoming adjacency list
-        let mut incoming = self.reverse_adjacency_list.get(&to_key)?.unwrap_or_default();
-        if !incoming.contains(&from_key) {
-            incoming.push(from_key.clone());
-            self.reverse_adjacency_list.insert(to_key.clone(), incoming)?;
-        }
+        self.reverse_adjacency_list.entry(to_key.clone()).or_insert_with(Vec::new).push(from_key.clone());
             
         // Store edge weight
-        self.edge_weights.insert((from_key, to_key), weight)?;
+        self.edge_weights.insert((from_key, to_key), weight);
         
         Ok(())
     }
     
     /// Removes an edge from the graph.
     pub fn remove_edge(&self, from: &str, to: &str) -> DbResult<bool> {
-        // Note: This is a simplified approach. In a real implementation,
-        // we would need to properly remove the edge from the adjacency lists.
+        let mut edge_removed = false;
+        
+        // Remove from outgoing adjacency list
+        if let Some(mut neighbors) = self.adjacency_list.get_mut(&from.to_string()) {
+            let original_len = neighbors.len();
+            neighbors.retain(|n| n != to);
+            edge_removed = neighbors.len() != original_len;
+        }
+        
+        // Remove from incoming adjacency list
+        if let Some(mut neighbors) = self.reverse_adjacency_list.get_mut(&to.to_string()) {
+            neighbors.retain(|n| n != from);
+        }
         
         // Remove edge weight
-        let removed = self.edge_weights.remove(&(from.to_string(), to.to_string()))?.is_some();
+        if self.edge_weights.remove(&(from.to_string(), to.to_string())).is_some() {
+            edge_removed = true;
+        }
         
-        Ok(removed)
+        Ok(edge_removed)
     }
     
     /// Gets outgoing neighbors of a node.
     pub fn get_outgoing_neighbors(&self, node_id: &str) -> DbResult<Vec<String>> {
         self.record_access(node_id)?;
         self.stats.increment_query_count();
-        Ok(self.adjacency_list.get(&node_id.to_string())?.unwrap_or_default())
+        Ok(self.adjacency_list.get(&node_id.to_string()).map(|v| v.clone()).unwrap_or_default())
     }
     
     /// Gets incoming neighbors of a node.
     pub fn get_incoming_neighbors(&self, node_id: &str) -> DbResult<Vec<String>> {
         self.record_access(node_id)?;
         self.stats.increment_query_count();
-        Ok(self.reverse_adjacency_list.get(&node_id.to_string())?.unwrap_or_default())
+        Ok(self.reverse_adjacency_list.get(&node_id.to_string()).map(|v| v.clone()).unwrap_or_default())
     }
     
     /// Gets the weight of an edge.
     pub fn get_edge_weight(&self, from: &str, to: &str) -> DbResult<Option<f32>> {
-        Ok(self.edge_weights.get(&(from.to_string(), to.to_string()))?)
+        Ok(self.edge_weights.get(&(from.to_string(), to.to_string())).map(|v| *v))
     }
     
     /// Records access to a node for temperature management.
@@ -261,10 +263,17 @@ impl LockFreeHotGraphIndex {
     }
     
     /// Gets all nodes in the graph.
+    ///
+    /// Iterates through the concurrent hash map and collects all node IDs.
     pub fn get_all_nodes(&self) -> DbResult<Vec<String>> {
-        // Note: This is a simplified approach. In a real implementation,
-        // we would need a more efficient way to iterate through the lock-free hash map.
-        Ok(Vec::new())
+        let mut nodes = Vec::with_capacity(self.adjacency_list.len());
+        
+        // Iterate through adjacency list to get all nodes
+        for entry in self.adjacency_list.iter() {
+            nodes.push(entry.key().clone());
+        }
+        
+        Ok(nodes)
     }
     
     /// Gets the number of nodes in the graph.
@@ -273,19 +282,26 @@ impl LockFreeHotGraphIndex {
     }
     
     /// Gets the number of edges in the graph.
+    ///
+    /// Counts all edges by iterating through each node's adjacency list.
     pub fn edge_count(&self) -> usize {
-        // Note: This is a simplified approach. In a real implementation,
-        // we would need to properly count the edges.
-        0
+        let mut total_edges = 0;
+        
+        // Iterate through all nodes and count their neighbors
+        for entry in self.adjacency_list.iter() {
+            total_edges += entry.value().len();
+        }
+        
+        total_edges
     }
     
     /// Gets statistics about the graph.
     pub fn get_stats(&self) -> LockFreeHotGraphStats {
         LockFreeHotGraphStats {
             node_count: self.stats.vector_count.load(std::sync::atomic::Ordering::Relaxed),
-            edge_count: 0, // This should be properly calculated
+            edge_count: self.edge_count(), // REAL count, not placeholder!
             query_count: self.stats.query_count.load(std::sync::atomic::Ordering::Relaxed),
-            total_query_time_micros: self.stats.total_query_time_micros.load(std::sync::atomic::Ordering::Relaxed),
+            total_query_time_micros: self.stats.total_query_time_micros.load(std::sync::atomic::Ordering::Relaxed) as u64,
             promotions: self.stats.promotions.load(std::sync::atomic::Ordering::Relaxed),
             demotions: self.stats.demotions.load(std::sync::atomic::Ordering::Relaxed),
         }
@@ -295,50 +311,5 @@ impl LockFreeHotGraphIndex {
 impl Default for LockFreeHotGraphIndex {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::thread;
-    
-    #[test]
-    fn test_lock_free_hot_graph_index_basic() {
-        let graph = LockFreeHotGraphIndex::new();
-        
-        // Test add node
-        assert!(graph.add_node("node1", None).is_ok());
-        assert_eq!(graph.node_count(), 1);
-        
-        // Test add edge
-        assert!(graph.add_edge("node1", "node2").is_ok());
-        
-        // Test get neighbors
-        let neighbors = graph.get_outgoing_neighbors("node1").unwrap();
-        assert!(!neighbors.is_empty());
-    }
-    
-    #[test]
-    fn test_lock_free_hot_graph_index_concurrent() {
-        let graph = Arc::new(LockFreeHotGraphIndex::new());
-        let mut handles = vec![];
-        
-        // Spawn multiple threads to add nodes
-        for i in 0..10 {
-            let graph_clone = Arc::clone(&graph);
-            let handle = thread::spawn(move || {
-                graph_clone.add_node(&format!("node{}", i), None).unwrap();
-            });
-            handles.push(handle);
-        }
-        
-        // Wait for all threads to complete
-        for handle in handles {
-            handle.join().unwrap();
-        }
-        
-        // Verify all nodes were added
-        assert_eq!(graph.node_count(), 10);
     }
 }

@@ -5,10 +5,9 @@
 //! These implementations follow the Rust Architecture Guidelines for safety,
 //! performance, and clarity.
 
-use crate::hybrid::{HotVectorIndex, HotGraphIndex};
 use crate::lock_free_hot_vector::LockFreeHotVectorIndex;
 use crate::lock_free_hot_graph::LockFreeHotGraphIndex;
-use common::{DbError, DbResult};
+use common::DbResult;
 use std::collections::HashMap;
 use std::sync::Arc;
 

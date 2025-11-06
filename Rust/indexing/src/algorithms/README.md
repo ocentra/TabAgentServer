@@ -1,143 +1,221 @@
 # Graph Algorithms Module
 
-**Advanced graph analysis algorithms (shortest path, community detection, flow, etc.).**
+**Zero-copy graph algorithms operating directly on MDBX memory-mapped storage.**
 
-## What's Here
+## 🔥 Key Innovation: Tuple Guard Pattern
 
-- `algorithms.rs` - Core algorithms (Dijkstra, A*, MST, etc.)
-- `graph_traits.rs` - Generic graph trait definitions
-- `community_detection.rs` - Community/clustering algorithms
-- `flow_algorithms.rs` - Network flow algorithms
-
-## What This Does
-
-Provides **graph algorithms** that work on top of the core GraphIndex:
-
-- **Shortest Path**: Dijkstra, A*, Bellman-Ford
-- **Spanning Trees**: Kruskal's MST, Prim's MST
-- **Flow**: Edmonds-Karp, Dinic's algorithm
-- **Community**: Louvain, label propagation
-- **Traversal**: BFS, DFS, topological sort
-
-## When to Use
-
-**Use when you need:**
-- Path finding between nodes
-- Analyzing graph structure
-- Detecting communities/clusters
-- Computing centrality metrics
-- Network flow problems
-
-**Don't use:** For simple neighbor lookups (use core GraphIndex instead).
-
-## How to Use
-
-### Shortest Path
+All algorithms use **zero-copy iteration** via `GraphIndexGuard`:
 
 ```rust
-use indexing::algorithms::algorithms::{dijkstra, astar};
+// GraphIndex stores Vec<(EdgeId, NodeId)> in MDBX
+pub struct GraphIndexGuard {
+    archived: &'static rkyv::Archived<Vec<(EdgeId, NodeId)>>,
+}
 
-// Dijkstra's algorithm
-let (path, cost) = dijkstra(&graph, "start_node", "end_node")?;
+impl GraphIndexGuard {
+    // Zero-copy: iterate (edge, target) pairs from mmap
+    pub fn iter_edges(&self) -> impl Iterator<Item = (&str, &str)>;
+    pub fn iter_edge_ids(&self) -> impl Iterator<Item = &str>;
+    pub fn iter_targets(&self) -> impl Iterator<Item = &str>;
+}
+```
 
-// A* (with heuristic)
-let (path, cost) = astar(&graph, "start_node", "end_node", |node| {
-    // Heuristic function
-    estimated_distance_to_goal(node)
+**Benefits:**
+- ✅ **Zero allocations** during graph traversal
+- ✅ **Direct mmap access** - strings borrowed from disk
+- ✅ **Multiple iteration modes** - choose what you need
+- ✅ **No deserialization** - rkyv archived types accessed in-place
+
+## Available Algorithms
+
+### Shortest Path (Single-Source)
+- **Dijkstra** - Non-negative weights, optimal for sparse graphs
+- **Bellman-Ford** - Handles negative weights, detects negative cycles
+- **A*** - Heuristic-guided, optimal with admissible heuristic
+- **SPFA** - Shortest Path Faster Algorithm, queue-based Bellman-Ford
+
+### All-Pairs Shortest Path
+- **Floyd-Warshall** - Dense graphs, all pairs
+- **Johnson** - Sparse graphs, reweighting technique
+
+### Traversal
+- **BFS** - Breadth-first search, unweighted shortest path
+- **DFS** - Depth-first search, cycle detection
+
+### Strongly Connected Components
+- **Tarjan SCC** - Linear time, single-pass
+- **Kosaraju SCC** - Two-pass, simpler to understand
+
+### Spanning Trees
+- **Prim MST** - Minimum spanning tree, greedy
+- **Kruskal MST** - Edge-based, union-find
+- **Steiner Tree** - Approximation for terminal nodes
+
+### Network Flow
+- **Ford-Fulkerson** - Augmenting paths
+- **Dinics** - Blocking flow, faster for unit capacities
+- **Min-Cost Max-Flow** - Optimize both flow and cost
+
+### Graph Structure
+- **Bridges** - Cut edges (removing disconnects graph)
+- **Articulation Points** - Cut vertices
+- **Feedback Arc Set** - Edges to remove for DAG
+- **Transitive Reduction** - Minimal equivalent graph
+- **Transitive Closure** - All reachable pairs
+
+### Centrality & Ranking
+- **PageRank** - Node importance, random walk
+- **Dominators** - Control flow analysis
+
+### Clustering & Coloring
+- **Louvain** - Community detection, modularity optimization
+- **DSATUR** - Graph coloring, degree saturation
+- **Bron-Kerbosch** - Maximal cliques
+
+### Other
+- **Simple Paths** - All paths from source to target
+- **K-Shortest Paths** - Top-K paths by weight
+- **Isomorphism** - Structural equivalence check
+- **Max Weight Matching** - Greedy approximation
+
+## Usage Examples
+
+### Example 1: Zero-Copy Dijkstra
+
+```rust
+use indexing::algorithms::dijkstra_zero_copy;
+use std::collections::HashSet;
+
+let graph = GraphIndex::open(&env, "my_graph")?;
+let nodes: HashSet<String> = /* ... */;
+
+// Edge cost function - receives &str from mmap!
+let edge_cost = |edge_id: &str, _target: &str| -> f64 {
+    // Parse edge ID or lookup weight - no allocation during iteration!
+    1.0  // Unweighted
+};
+
+// Returns HashMap<String, f64> of distances
+let distances = dijkstra_zero_copy(
+    &graph,
+    "start_node",
+    Some("end_node"),  // Or None for all distances
+    edge_cost
+)?;
+
+println!("Distance: {}", distances.get("end_node").unwrap());
+```
+
+### Example 2: PageRank with Zero-Copy
+
+```rust
+use indexing::algorithms::page_rank_zero_copy;
+
+let ranks = page_rank_zero_copy(
+    &graph,
+    &nodes,
+    0.85,      // Damping factor
+    100,       // Max iterations
+    1e-6       // Convergence tolerance
+)?;
+
+for (node, rank) in ranks.iter().take(10) {
+    println!("{}: {:.6}", node, rank);
+}
+```
+
+### Example 3: BFS Traversal
+
+```rust
+use indexing::algorithms::bfs_zero_copy;
+
+// BFS from node, visitor called for each node
+bfs_zero_copy(&graph, "start", |node_str| {
+    println!("Visited: {}", node_str);  // node_str is &str from mmap!
 })?;
 ```
 
-### Community Detection
+### Example 4: Strongly Connected Components
 
 ```rust
-use indexing::algorithms::community_detection::louvain;
+use indexing::algorithms::tarjan_scc;
 
-// Detect communities
-let communities = louvain(&graph)?;
+// Returns Vec<Vec<String>> - each inner vec is an SCC
+let sccs = tarjan_scc(&graph, &nodes)?;
 
-for (community_id, nodes) in communities.iter().enumerate() {
-    println!("Community {}: {} nodes", community_id, nodes.len());
+println!("Found {} strongly connected components", sccs.len());
+for (i, scc) in sccs.iter().enumerate() {
+    println!("SCC {}: {} nodes", i, scc.len());
 }
 ```
 
-### Maximum Flow
+## Architecture
 
-```rust
-use indexing::algorithms::flow_algorithms::edmonds_karp;
+All algorithms operate on `GraphIndex` which stores edges in MDBX:
 
-// Compute max flow
-let max_flow = edmonds_karp(
-    &graph,
-    "source",
-    "sink",
-    |edge_id| capacity_of_edge(edge_id)
-)?;
+```
+IndexManager
+  ├── structural: StructuralIndex
+  │   └── libmdbx DBI (property → Vec<NodeId>)
+  │
+  ├── graph: GraphIndex
+  │   ├── outgoing: libmdbx DBI (node_id → Vec<(EdgeId, NodeId)>)
+  │   └── incoming: libmdbx DBI (node_id → Vec<(EdgeId, NodeId)>)
+  │
+  └── vector: VectorIndex
+      └── libmdbx DBI (embedding_id → Vector)
 ```
 
-### Minimum Spanning Tree
+### Zero-Copy Read Path
 
-```rust
-use indexing::algorithms::algorithms::kruskal_mst;
+1. **MDBX Transaction** - Opens read transaction (mmap access)
+2. **GraphIndexGuard** - Wraps `&'static Archived<Vec<(EdgeId, NodeId)>>`
+3. **iter_edges()** - Returns iterator of `(&str, &str)` from mmap
+4. **Algorithm** - Processes strings directly, allocates only for results
 
-// Find MST
-let mst_edges = kruskal_mst(&graph, |edge| weight_of_edge(edge))?;
-```
+### Write Path (Justified Allocation)
 
-## Graph Traits
+When adding/removing edges:
+1. Deserialize `Archived<Vec<(EdgeId, NodeId)>>` → owned `Vec<(EdgeId, NodeId)>`
+2. Modify owned vector
+3. Serialize back with rkyv → MDBX
 
-All algorithms work on any type implementing `GraphTrait`:
+**Trade-off:** Write-heavy for modifications, but algorithms stay zero-copy!
 
-```rust
-pub trait GraphTrait {
-    type NodeId: Clone + Eq + Hash;
-    type EdgeId: Clone + Eq + Hash;
-    
-    fn nodes(&self) -> Vec<Self::NodeId>;
-    fn edges(&self) -> Vec<Self::EdgeId>;
-    fn neighbors(&self, node: &Self::NodeId) -> Vec<Self::NodeId>;
-    // ... more methods
-}
-```
+## Performance Characteristics
 
-This means algorithms work on:
-- The core GraphIndex
-- OptimizedGraphIndex  
-- Your custom graph structures
+| Algorithm | Time | Space | Zero-Copy? | Notes |
+|-----------|------|-------|------------|-------|
+| Dijkstra | O((V+E) log V) | O(V) | ✅ | Priority queue, min-heap |
+| Bellman-Ford | O(VE) | O(V) | ✅ | Detects negative cycles |
+| Floyd-Warshall | O(V³) | O(V²) | ✅ | All-pairs dense graphs |
+| BFS/DFS | O(V+E) | O(V) | ✅ | Linear traversal |
+| Tarjan SCC | O(V+E) | O(V) | ✅ | Single-pass DFS |
+| PageRank | O(kE) | O(V) | ✅ | k = iterations |
+| Prim MST | O((V+E) log V) | O(V) | ✅ | Greedy, priority queue |
+| Dinic Flow | O(V²E) | O(V+E) | ✅ | Blocking flow layers |
 
-## Performance
+**All algorithms avoid copying graph data during traversal!**
 
-| Algorithm | Time Complexity | Space | Use Case |
-|-----------|----------------|-------|----------|
-| Dijkstra | O((V+E) log V) | O(V) | Weighted shortest path |
-| A* | O((V+E) log V) | O(V) | Heuristic shortest path |
-| BFS/DFS | O(V+E) | O(V) | Traversal, reachability |
-| Louvain | O(V log V) | O(V+E) | Community detection |
-| Edmonds-Karp | O(VE²) | O(V+E) | Max flow |
-| Kruskal MST | O(E log E) | O(V+E) | Minimum spanning tree |
+## Attribution
 
-## Examples
+These algorithms are **adapted from petgraph** (MIT/Apache-2.0) to work directly with our MDBX+rkyv stack:
 
-### Find Shortest Path in Chat Graph
+- Original: Generic trait-based implementations
+- Our version: Direct `GraphIndex` integration for zero-copy
 
-```rust
-// Find path from user to message
-let (path, distance) = dijkstra(
-    &idx.get_hot_graph_index().unwrap(),
-    "user_5",
-    "msg_123"
-)?;
+See `ATTRIBUTION.md` for full licensing details.
 
-println!("Path length: {} hops", path.len());
-```
+## When NOT to Use
 
-### Detect Message Communities
+❌ **Don't use algorithms for:**
+- Simple neighbor lookups → Use `graph.get_outgoing()` directly
+- Single edge checks → Use `graph.get_outgoing()` and iterate
+- Full graph materialization → These are zero-copy, no need!
 
-```rust
-// Find clusters of related messages
-let communities = louvain(&graph)?;
-
-for community in communities {
-    println!("Found {} related messages", community.len());
-}
-```
-
+✅ **DO use algorithms for:**
+- Complex graph analysis
+- Path finding
+- Ranking/centrality
+- Community detection
+- Flow problems
